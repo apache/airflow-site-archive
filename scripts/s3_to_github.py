@@ -18,107 +18,45 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "rich"
+#     "rich",
 #     "boto3",
 # ]
 # ///
 
 from rich.console import Console
 
+from transfer_utils import CommonTransferUtils
+
 console = Console(width=200, color_system="standard")
 
 import argparse
-import subprocess
 import sys
-from functools import cached_property
-from multiprocessing import Pool
 
-import boto3
-import urllib3
 
-class S3TOGithub:
-
-    s3_client  = boto3.client('s3')
+class S3TOGithub(CommonTransferUtils):
 
     def __init__(self, bucket, local_path):
-        self.bucket = bucket
-        self.local_path = local_path
-
-    @cached_property
-    def bucket_name(self):
-        try:
-            bucket = urllib3.util.parse_url(self.bucket).netloc
-            return bucket
-        except Exception as e:
-            console.print(f"[red] Error: {e}[/]")
-            sys.exit(1)
-
-    @cached_property
-    def prefix(self):
-        try:
-            pref = urllib3.util.parse_url(self.bucket).path
-            if pref.startswith('/'):
-                pref = pref[1:]
-            return pref
-        except Exception as e:
-            console.print(f"[red] Error: {e}[/]")
-            sys.exit(1)
-
-    def check_bucket(self):
-        try:
-            response = self.s3_client.head_bucket(Bucket=self.bucket_name)
-            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-                console.print(f"[blue] Bucket {self.bucket} exists.[/]")
-        except Exception as e:
-            console.print(f"[red] Error: {e}[/]")
-            sys.exit(1)
+        super().__init__(bucket, local_path)
 
     def verify_document_folder(self, document_folder):
         response= self.s3_client.list_objects_v2(
             Bucket=self.bucket_name,
-            Prefix=self.prefix+document_folder,
+            Prefix=self.prefix.rstrip("/") + "/" + document_folder,
         )
         return response["KeyCount"] > 0
 
-    def get_list_of_folders(self):
-        folders = []
-        try:
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix=self.prefix,
-                Delimiter='/'
-            )
-            if 'CommonPrefixes' in response:
-                for cur_prefix in response['CommonPrefixes']:
-                    folders.append(cur_prefix['Prefix'])
-            return folders
-        except Exception as e:
-            console.print(f"[yellow] Error: {e}[/]")
-            return []
-
-    def sync(self, bucket, bucket_prefix, destination):
-
-        source = f"s3://{bucket}/{bucket_prefix}"
-
-        # The source bucket folder may contain patterns like "docs/apache-airflow-providers-snowflake"
-        # and we want to sync it to "docs-archive/apache-airflow-providers-snowflake"
-
-        destination = destination.rstrip("/") + "/" + bucket_prefix.replace("docs/", "")
-
-        console.print(f"[blue] Syncing {source} to {destination} [/]")
-
-        subprocess.run(
-            ["aws", "s3", "sync", "--delete", source, destination], capture_output=True, text=True, check=True
-        )
-        console.print(f"[blue] Sync completed for {source} to {destination} [/]")
-
-    def run_sync(self):
-
+    def sync_to_s3(self):
         console.print("[blue] Syncing files from S3 to GitHub...[/]")
         prefixes = self.get_list_of_folders()
+        pool_args = []
+        for pref in prefixes:
+            source_bucket_path = f"s3://{self.bucket_name}/{pref}"
 
-        with Pool(processes=4) as pool:
-            pool.starmap(self.sync, [(self.bucket_name, doc_prefix, self.local_path) for doc_prefix in prefixes])
+            # we want to store the files in the github under docs-archive/
+            destination = self.local_path + pref.replace("docs/", "")
+            pool_args.append((source_bucket_path, destination))
+
+        self.run_with_pool(self.sync, pool_args)
 
 
 
@@ -134,15 +72,18 @@ if __name__ == "__main__":
     syncer.check_bucket()
     document_folder = args.document_folder
 
-    if document_folder:
+    if document_folder and document_folder != "NO_DOCS":
         if syncer.verify_document_folder(document_folder):
             console.print(f"[blue] Document folder {document_folder} exists in bucket {args.bucket_path}.[/]")
-            syncer.sync(syncer.bucket_name, syncer.prefix+document_folder, args.local_path)
+            source_prefix = syncer.prefix.rstrip("/") + "/" + document_folder
+            source = f"s3://{syncer.bucket_name}/{syncer.prefix}{document_folder}"
+            syncer.sync(source=source, destination=args.local_path)
             sys.exit(0)
         else:
-            console.print(f"[yellow] Document folder {document_folder} does not exist in bucket {args.bucket_path}.[/]")
+            console.print(f"[red] Document folder {document_folder} does not exist in bucket {args.bucket_path}.[/]")
+            sys.exit(1)
 
-    syncer.run_sync()
+    syncer.sync_to_s3()
 
 
 
