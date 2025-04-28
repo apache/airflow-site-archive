@@ -9,7 +9,7 @@ It has the following command line arguments:
 - `--document-folder`: The folder in the S3 bucket where the documentation is stored (This is optional if any particular 
                       folder need to be synced, provide the folder name ex: `apache-airflow-providers-amazon`).
 ```bash
-uv run ./scripts/s3_to_github.py.py --bucket-path s3://staging-docs-airflow-apache-org/docs/ --local-path ./docs-archive
+uv run ./scripts/s3_to_github.py --bucket-path s3://staging-docs-airflow-apache-org/docs/ --local-path ./docs-archive
 ```
 
 
