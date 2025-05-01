@@ -74,7 +74,10 @@ class CommonTransferUtils:
     def run_with_pool(func, args):
 
         with Pool(processes=4) as pool:
-            pool.starmap(func, args)
+            if all(isinstance(arg, tuple) for arg in args):
+                pool.starmap(func, args)
+            else:
+                pool.map(func, args)
 
     @staticmethod
     def copy(source, destination):
