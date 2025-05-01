@@ -77,7 +77,8 @@ if __name__ == "__main__":
             console.print(f"[blue] Document folder {document_folder} exists in bucket {args.bucket_path}.[/]")
             source_prefix = syncer.prefix.rstrip("/") + "/" + document_folder
             source = f"s3://{syncer.bucket_name}/{syncer.prefix}{document_folder}"
-            syncer.sync(source=source, destination=args.local_path)
+            local_path = args.local_path.rstrip("/") + "/" + document_folder
+            syncer.sync(source=source, destination=local_path)
             sys.exit(0)
         else:
             console.print(f"[red] Document folder {document_folder} does not exist in bucket {args.bucket_path}.[/]")
