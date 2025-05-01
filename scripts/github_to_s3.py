@@ -53,10 +53,6 @@ class GithubToS3(CommonTransferUtils):
             f"--diff-filter={diff_filter}"
         ]
         result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-        console.print(f"[blue] Running command: {' '.join(cmd)} [/]")
-        console.print(f"[blue] Result: {result.stdout} [/]")
-        console.print(f"[blue] Error: {result.stderr} [/]")
-        console.print(f"[blue] Return code: {result.returncode} [/]")
 
         if result.returncode != 0:
             console.print(
