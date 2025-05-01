@@ -48,6 +48,7 @@ class GithubToS3(CommonTransferUtils):
             "--no-commit-id",
             "--name-only",
             "-r",
+            commit_sha + "^",
             commit_sha,
             f"--diff-filter={diff_filter}"
         ]
