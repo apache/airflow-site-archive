@@ -2,6 +2,7 @@ import subprocess
 import sys
 from functools import cached_property
 from multiprocessing import Pool
+from pathlib import Path
 
 import boto3
 import urllib3
@@ -65,9 +66,13 @@ class CommonTransferUtils:
 
         console.print(f"[blue] Syncing {source} to {destination} [/]")
 
-        subprocess.run(
-            ["aws", "s3", "sync", "--delete", source, destination], capture_output=True, text=True, check=True
-        )
+        if Path(source).is_dir():
+            subprocess.run(
+                ["aws", "s3", "sync", "--delete", source, destination], capture_output=True, text=True, check=True
+            )
+        else:
+            self.copy(source, destination)
+
         console.print(f"[blue] Sync completed for {source} to {destination} [/]")
 
     @staticmethod
