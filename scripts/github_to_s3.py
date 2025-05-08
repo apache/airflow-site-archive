@@ -18,8 +18,8 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "rich",
-#     "boto3",
+#   "boto3>=1.38.11",
+#   "rich>=14.0.0",
 # ]
 # ///
 
@@ -61,7 +61,7 @@ class GithubToS3(CommonTransferUtils):
             return []
         return result.stdout.splitlines() if result.stdout else []
 
-    def sync_last_commit_files(self, commit_sha: str):
+    def sync_last_commit_files(self, commit_sha: str, processes: int):
         '''
         There are two parts here.
         1. When any file gets removed under docs folder, we will remove from target location
@@ -88,10 +88,10 @@ class GithubToS3(CommonTransferUtils):
             dest = f"s3://{self.bucket_name}/{destination_prefix}"
             delete_files_pool_args.append(dest)
 
-        self.run_with_pool(self.remove, delete_files_pool_args)
-        self.run_with_pool(self.copy, copy_files_pool_args)
+        self.run_with_pool(self.remove, delete_files_pool_args, processes=processes)
+        self.run_with_pool(self.copy, copy_files_pool_args, processes=processes)
 
-    def full_sync(self):
+    def full_sync(self, processes: int):
         console.print(f"[blue] Syncing all files from {self.local_path} to {self.bucket_name} [/]")
         list_of_folders = os.listdir(self.local_path)
         pool_args = []
@@ -100,7 +100,7 @@ class GithubToS3(CommonTransferUtils):
             dest = f"s3://{self.bucket_name}/{self.prefix}".rstrip("/") + "/" + folder
             pool_args.append((source, dest))
 
-        self.run_with_pool(self.sync, pool_args)
+        self.run_with_pool(self.sync, pool_args, processes=processes)
 
 
 
@@ -111,6 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--document-folder", help="Document folder to sync", default="")
     parser.add_argument("--commit-sha", help="Commit SHA to sync", default="")
     parser.add_argument("--sync-type", help="Sync type", default="last_commit")
+    parser.add_argument("--processes", help="Number of processes", type=int, default=8)
 
     args = parser.parse_args()
 
@@ -133,11 +134,11 @@ if __name__ == "__main__":
 
     if args.sync_type == "last_commit" and args.commit_sha:
         console.print(f"[blue] Syncing last commit {args.commit_sha} from {args.local_path} [/]")
-        syncer.sync_last_commit_files(args.commit_sha)
+        syncer.sync_last_commit_files(args.commit_sha, processes=int(args.processes))
         sys.exit(0)
 
     if args.sync_type == "full_sync":
-        syncer.full_sync()
+        syncer.full_sync(processes=int(args.processes))
         sys.exit(0)
 
     console.print(f"[red] Invalid sync type {args.sync_type} [/]")

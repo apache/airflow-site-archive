@@ -3,6 +3,7 @@ import sys
 from functools import cached_property
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Callable, Any
 
 import boto3
 import urllib3
@@ -83,9 +84,9 @@ class CommonTransferUtils:
         console.print(f"[blue] Sync completed for {source} to {destination} [/]")
 
     @staticmethod
-    def run_with_pool(func, args):
+    def run_with_pool(func: Callable, args: Any, processes: int = 4):
 
-        with Pool(processes=4) as pool:
+        with Pool(processes=processes) as pool:
             if all(isinstance(arg, tuple) for arg in args):
                 pool.starmap(func, args)
             else:
