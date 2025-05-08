@@ -66,6 +66,13 @@ class CommonTransferUtils:
 
         console.print(f"[blue] Syncing {source} to {destination} [/]")
 
+        if source.startswith("s3://"):
+            subprocess.run(
+                ["aws", "s3", "sync", "--delete", source, destination], capture_output=True, text=True, check=True
+            )
+            console.print(f"[blue] Sync completed for {source} to {destination} [/]")
+            return
+
         if Path(source).is_dir():
             subprocess.run(
                 ["aws", "s3", "sync", "--delete", source, destination], capture_output=True, text=True, check=True
