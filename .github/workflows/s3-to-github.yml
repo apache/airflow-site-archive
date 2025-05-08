@@ -60,17 +60,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Create /mnt/airflow-site-archive directory
+      - name: Create /mnt/archive-dir directory
         run: |
-          sudo mkdir -p /mnt/airflow-site-archive && sudo chown -R "${USER}" /mnt/airflow-site-archive
-          ln -s /mnt/airflow-site-archive airflow-site-archive
+          sudo mkdir -p /mnt/archive-dir && sudo chown -R "${USER}" /mnt/archive-dir
+          ln -s /mnt/archive-dir
 
       - name: "Checkout ${{ github.ref }} ( ${{ github.sha }} )"
         uses: actions/checkout@v4
         with:
           # we want to persist credentials so that we can push back the changes
           persist-credentials: true
-          path: airflow-site-archive
+          path: archive-dir
 
       - name: "Check space available"
         run: df -h
@@ -79,7 +79,7 @@ jobs:
         run: |
           python3 -m pip install uv
           uv run ./scripts/s3_to_github.py --bucket-path ${{inputs.source-location}} --local-path ${{inputs.local-destination}} --document-folder ${{inputs.document-folder}}
-        working-directory: /mnt/airflow-site-archive
+        working-directory: /mnt/archive-dir/airflow-site-archive
 
       - name: Commiting changes
         run: |
@@ -91,4 +91,4 @@ jobs:
           echo "Running git commit"
           git commit -m "Sync S3 to GitHub" || echo "No changes to commit"
           git push --force origin main
-        working-directory: /mnt/airflow-site-archive
+        working-directory: /mnt/archive-dir/airflow-site-archive
