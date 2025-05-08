@@ -18,8 +18,8 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "rich",
-#     "boto3",
+#   "boto3>=1.38.11",
+#   "rich>=14.0.0",
 # ]
 # ///
 
@@ -45,7 +45,7 @@ class S3TOGithub(CommonTransferUtils):
         )
         return response["KeyCount"] > 0
 
-    def sync_to_s3(self):
+    def sync_to_s3(self, processes: int):
         console.print("[blue] Syncing files from S3 to GitHub...[/]")
         prefixes = self.get_list_of_folders()
         pool_args = []
@@ -56,7 +56,7 @@ class S3TOGithub(CommonTransferUtils):
             destination = self.local_path + pref.replace("docs/", "")
             pool_args.append((source_bucket_path, destination))
 
-        self.run_with_pool(self.sync, pool_args)
+        self.run_with_pool(self.sync, pool_args, processes=processes)
 
 
 
@@ -65,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("--bucket-path", required=True, help="S3 bucket name with path")
     parser.add_argument("--local-path", required=True, help="local path to sync")
     parser.add_argument("--document-folder", help="Document folder to sync", default="")
+    parser.add_argument("--processes", help="Number of processes", type=int, default=8)
 
     args = parser.parse_args()
 
@@ -84,7 +85,7 @@ if __name__ == "__main__":
             console.print(f"[red] Document folder {document_folder} does not exist in bucket {args.bucket_path}.[/]")
             sys.exit(1)
 
-    syncer.sync_to_s3()
+    syncer.sync_to_s3(processes=int(args.processes))
 
 
 
