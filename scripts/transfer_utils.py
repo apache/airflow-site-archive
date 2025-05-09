@@ -63,7 +63,7 @@ class CommonTransferUtils:
             console.print(f"[yellow] Error: {e}[/]")
             return []
 
-    def sync(self, source, destination):
+    def sync(self, source: str, destination: str):
 
         console.print(f"[blue] Syncing {source} to {destination} [/]")
 

@@ -25,24 +25,24 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: "s3://live-docs-airflow-apache-org/docs/"
         type: string
-      local-path:
-        description: "The location of the local folder to sync"
-        required: false
-        default: "./docs-archive"
-        type: string
       document-folder:
         description: "Provide any specific package document folder to sync"
         required: false
-        default: "NO_DOCS"
+        default: ""
         type: string
       sync-type:
         description: "Perform a full sync or just sync the last commit"
         required: false
-        default: "last_commit"
+        default: "single_commit"
         type: choice
         options:
-          - last_commit
+          - single_commit
           - full_sync
+      commit-sha:
+        description: "If specified, commit SHA used for single_commit (default is latest commit)"
+        required: false
+        default: ""
+        type: string
       processes:
         description: "Number of processes to use for syncing"
         required: false
@@ -57,6 +57,13 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
+      - uses: actions/checkout@v4
+        # Checkout only workflow and scripts directory to run scripts from
+        with:
+          sparse-checkout: |
+            .github
+            scripts
 
       - name: Install AWS CLI v2
         run: |
@@ -80,20 +87,64 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
+      - name: "Checkout ${{ github.ref }} ( ${{ github.sha }} ) for scripts"
+        uses: actions/checkout@v4
+        # Checkout only workflow and scripts directory to run scripts from
+        with:
+          sparse-checkout: |
+            .github
+            scripts
+
       - name: Create /mnt/airflow-site-archive directory
-        run: sudo mkdir -p /mnt/airflow-site-archive && sudo chown -R "${USER}" /mnt/airflow-site-archive
-
-      - name: "Checkout ${{ github.ref }} ( ${{ github.sha }} )"
         run: |
-          git clone --depth 2 https://github.com/apache/airflow-site-archive.git /mnt/airflow-site-archive
+          sudo mkdir -pv /mnt/airflow-site-archive
+          sudo chown -R "${USER}" /mnt/airflow-site-archive
+          ln -v -s /mnt/airflow-site-archive ./airflow-site-archive
 
-      - name: "Syncing ${{ github.ref }} ( ${{ github.sha }} )"
+      - name: Pre-process docs folder
         env:
-          COMMIT_SHA: ${{ github.sha }}
+          DOCUMENTS_FOLDER: ${{ inputs.document-folder }}
+        id: docs-folder
         run: |
-          ls -la
+          echo "docs-folder=${DOCUMENTS_FOLDER}" >> ${GITHUB_OUTPUT}
+          if [[ "${DOCUMENTS_FOLDER}" != "" ]]; then
+            echo "Preprocessing docs folder: ${DOCUMENTS_FOLDER}"
+            if [[ "${DOCUMENTS_FOLDER}" != apache-airflow-providers* ]]; then
+              echo "docs-folder=apache-airflow-providers-${DOCUMENTS_FOLDER/./-}" >> ${GITHUB_OUTPUT}
+            fi
+          fi
+
+      - name: >
+          Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/airflow-site-archive
+          with docs: ${{ steps.docs-folder.outputs.docs-folder }}"
+        uses: actions/checkout@v4
+        with:
+          path: ./airflow-site-archive
+          fetch-depth: 2
+          sparse-checkout: |
+            docs-archive/${{ steps.docs-folder.outputs.docs-folder }}
+          ref: ${{ inputs.commit-sha || github.sha }}
+
+      - name: >
+          Syncing ${{ inputs.commit-sha || github.sha }}:
+          ${{ inputs.sync-type }} ${{ steps.docs-folder.outputs.docs-folder }}"
+        env:
+          COMMIT_SHA: ${{ inputs.commit-sha || github.sha }}
+          SYNC_TYPE: ${{ inputs.sync-type }}
+          PROCESSES: ${{ inputs.processes }}
+          DOCUMENTS_FOLDER: ${{ steps.docs-folder.outputs.docs-folder }}
+          DESTINATION_LOCATION: ${{ inputs.destination-location }}
+        run: |
+          if [[ "${SYNC_TYPE}" == "single_commit" ]]; then
+            echo "Syncing ${COMMIT_SHA}"
+          else
+            echo "Syncing whole repo"
+          fi
+          ls -la /mnt/airflow-site-archive/*
           python3 -m pip install uv
-          uv run ./scripts/github_to_s3.py --bucket-path ${{inputs.destination-location}} --local-path ${{inputs.local-path}} \
-          --document-folder ${{inputs.document-folder}} --commit-sha ${COMMIT_SHA} --sync-type ${{ inputs.sync-type }} \
-          --processes ${{ inputs.processes }}
-        working-directory: /mnt/airflow-site-archive
+          uv run ./scripts/github_to_s3.py \
+            --bucket-path ${DESTINATION_LOCATION} \
+            --local-path /mnt/airflow-site-archive/docs-archive \
+            --document-folder "${DOCUMENTS_FOLDER}" \
+            --commit-sha ${COMMIT_SHA} --sync-type ${SYNC_TYPE} \
+            --processes ${PROCESSES}
