@@ -289,7 +289,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">1.1.0</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">0.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -348,7 +348,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-standard/1.1.0/providers/standard/tests/system/standard">Example DAGs</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-standard/0.4.0/providers/standard/tests/system/standard">Example DAGs</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-standard/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../_api/airflow/providers/standard/index.html">Python API</a></li>
@@ -439,7 +439,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">1.1.0</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">0.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -498,7 +498,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-standard/1.1.0/providers/standard/tests/system/standard">Example DAGs</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-standard/0.4.0/providers/standard/tests/system/standard">Example DAGs</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-standard/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../_api/airflow/providers/standard/index.html">Python API</a></li>
@@ -641,6 +641,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.utils.sensor_helper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_get_count</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.triggers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseTrigger</span><span class="p">,</span> <span class="n">TriggerEvent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">provide_session</span>
 
 <span class="k">if</span> <span class="n">typing</span><span class="o">.</span><span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
@@ -787,27 +788,15 @@
 
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_get_count_af_3</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">states</span><span class="p">):</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.utils.sensor_helper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_get_count_by_matched_states</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.execution_time.task_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">RuntimeTaskInstance</span>
 
-        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;dag_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
-            <span class="s2">&quot;logical_dates&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_dates</span><span class="p">,</span>
-            <span class="s2">&quot;run_ids&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_ids</span><span class="p">,</span>
-        <span class="p">}</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_group_id</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">sync_to_async</span><span class="p">(</span><span class="n">RuntimeTaskInstance</span><span class="o">.</span><span class="n">get_ti_count</span><span class="p">)(</span>
-                <span class="n">task_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
-                <span class="n">states</span><span class="o">=</span><span class="n">states</span><span class="p">,</span>
-                <span class="o">**</span><span class="n">params</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_group_id</span><span class="p">:</span>
-            <span class="n">run_id_task_state_map</span> <span class="o">=</span> <span class="k">await</span> <span class="n">sync_to_async</span><span class="p">(</span><span class="n">RuntimeTaskInstance</span><span class="o">.</span><span class="n">get_task_states</span><span class="p">)(</span>
+                <span class="n">dag_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
+                <span class="n">task_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">,</span>
                 <span class="n">task_group_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_group_id</span><span class="p">,</span>
-                <span class="o">**</span><span class="n">params</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="n">count</span> <span class="o">=</span> <span class="k">await</span> <span class="n">sync_to_async</span><span class="p">(</span><span class="n">_get_count_by_matched_states</span><span class="p">)(</span>
-                <span class="n">run_id_task_state_map</span><span class="o">=</span><span class="n">run_id_task_state_map</span><span class="p">,</span>
+                <span class="n">logical_dates</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">logical_dates</span><span class="p">,</span>
+                <span class="n">run_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_ids</span><span class="p">,</span>
                 <span class="n">states</span><span class="o">=</span><span class="n">states</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
@@ -817,9 +806,11 @@
                 <span class="n">run_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_ids</span><span class="p">,</span>
                 <span class="n">states</span><span class="o">=</span><span class="n">states</span><span class="p">,</span>
             <span class="p">)</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">count</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">count</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">count</span>
 
     <span class="nd">@sync_to_async</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">states</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -946,30 +937,27 @@
             <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span></div>
 
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">provide_session</span>  <span class="c1"># type: ignore[misc]</span>
-
-        <span class="nd">@sync_to_async</span>
-        <span class="nd">@provide_session</span>
+    <span class="nd">@sync_to_async</span>
+    <span class="nd">@provide_session</span>
 <div class="viewcode-block" id="DagStateTrigger.count_dags">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/triggers/external_task/index.html#airflow.providers.standard.triggers.external_task.DagStateTrigger.count_dags">[docs]</a>
-        <span class="k">def</span><span class="w"> </span><span class="nf">count_dags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Count how many dag runs in the database match our criteria.&quot;&quot;&quot;</span>
-            <span class="n">_dag_run_date_condition</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="n">DagRun</span><span class="o">.</span><span class="n">run_id</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_ids</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
-                <span class="k">else</span> <span class="n">DagRun</span><span class="o">.</span><span class="n">execution_date</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">execution_dates</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count_dags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count how many dag runs in the database match our criteria.&quot;&quot;&quot;</span>
+        <span class="n">_dag_run_date_condition</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">DagRun</span><span class="o">.</span><span class="n">run_id</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_ids</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
+            <span class="k">else</span> <span class="n">DagRun</span><span class="o">.</span><span class="n">execution_date</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">execution_dates</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">))</span>  <span class="c1"># .count() is inefficient</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+                <span class="n">DagRun</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
+                <span class="n">DagRun</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">),</span>
+                <span class="n">_dag_run_date_condition</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">count</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="n">session</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">))</span>  <span class="c1"># .count() is inefficient</span>
-                <span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-                    <span class="n">DagRun</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                    <span class="n">DagRun</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">states</span><span class="p">),</span>
-                    <span class="n">_dag_run_date_condition</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="o">.</span><span class="n">scalar</span><span class="p">()</span>
-            <span class="p">)</span>
-            <span class="k">return</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span></div>
+            <span class="o">.</span><span class="n">scalar</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">typing</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span></div>
 </div>
 
 </pre></div>
@@ -1174,7 +1162,7 @@
     <script src="/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="/external/js/cdnjs.cloudflare.com-1.14.3-popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
     <script src="/external/js/stackpath.bootstrapcdn.com-4.1.3-bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
-        <script src="../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../_static/documentation_options.js?v=6c02275b"></script>
         <script src="../../../../../_static/doctools.js?v=9a2dae69"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
