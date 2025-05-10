@@ -134,7 +134,7 @@ def convert_short_name_to_folder_name(short_name: str) -> str:
     return short_name
 
 # start with those folders first
-PRIORITY_FOLDERS = ["apache-airflow-providers-google", "apache-airflow-providers-amazon"]
+PRIORITY_FOLDERS = ["apache-airflow-providers-google", "apache-airflow-providers-amazon", "apache-airflow"]
 
 def sort_priority_folders(folders: list[str]) -> list[str]:
     """
