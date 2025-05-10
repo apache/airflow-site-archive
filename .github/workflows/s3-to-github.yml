@@ -21,30 +21,40 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
       source-location:
-        description: "The destination location in S3"
-        required: false
+        description: "The source location in S3"
+        required: true
+        type: choice
+        options:
+          - s3://live-docs-airflow-apache-org/docs/
+          - s3://staging-docs-airflow-apache-org/docs/
         default: "s3://live-docs-airflow-apache-org/docs/"
-        type: string
-      local-destination:
-        description: "The local destination location"
+      document-folders:
+        description: "Document folders to sync or short package ids (separated with spaces)"
         required: false
-        default: "./docs-archive"
+        default: "all"
         type: string
-      document-folder:
-        description: "Provide any specific package document folder to sync"
+      commit-changes:
+        description: "Commit changes to GitHub (forced to false if not main)"
         required: false
-        default: ""
-        type: string
+        default: true
+        type: boolean
       processes:
         description: "Number of processes to use for syncing"
         required: false
-        default: "8"
+        default: "4"
         type: string
 jobs:
   s3-to-github:
     name: S3 to GitHub
     runs-on: ubuntu-latest
     steps:
+      - name: Summarize parameters
+        run: |
+          echo "Source location: ${{ inputs.source-location }}"
+          echo "Document folders: ${{ inputs.document-folders }}"
+          echo "Commit changes: ${{ inputs.commit-changes }}"
+          echo "Processes: ${{ inputs.processes }}"
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -65,32 +75,84 @@ jobs:
           aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
+      - name: Pre-process docs folders
+        env:
+          DOCUMENTS_FOLDERS: ${{ inputs.document-folders }}
+        id: docs-folders-processed
+        run: |
+          echo "sparse-checkout<<EOF" >> ${GITHUB_OUTPUT}
+          echo ".github" >> ${GITHUB_OUTPUT}
+          echo "scripts" >> ${GITHUB_OUTPUT}
+          if [[ "${DOCUMENTS_FOLDERS}" != "all" ]]; then
+            echo "Preprocessing docs folders: ${DOCUMENTS_FOLDERS}"
+            folders=""
+            sparse_checkout=""
+            separator=""
+            for folder in ${DOCUMENTS_FOLDERS}; do
+              if [[ "${folder}" != apache-airflow-providers* ]]; then
+                folders="${folders}${separator}apache-airflow-providers-${folder/./-}"
+                echo "docs-archive/apache-airflow-providers-${folder/./-}" >> ${GITHUB_OUTPUT}
+              else
+                folders="${folders}${separator}${folder}"
+                echo "docs-archive/${folder}" >> ${GITHUB_OUTPUT}
+              fi
+              separator=" "
+            done
+          else
+            folders="all"
+            echo "docs-archive" >> ${GITHUB_OUTPUT}
+          fi
+          echo "EOF" >> ${GITHUB_OUTPUT}
+          echo "docs-folders-processed=${folders}"
+          echo "docs-folders-processed=${folders}" >> ${GITHUB_OUTPUT}
+
       - name: Create /mnt/cloned-airflow-site-archive directory
         run: |
           sudo mkdir -pv /mnt/cloned-airflow-site-archive && sudo chown -R "${USER}" /mnt/cloned-airflow-site-archive
           ln -sv /mnt/cloned-airflow-site-archive cloned-airflow-site-archive
 
-      - name: "Checkout ${{ github.ref }} ( ${{ github.sha }} )"
+      - name: >
+          Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive
+          with docs: ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
         uses: actions/checkout@v4
         with:
-          # we want to persist credentials so that we can push back the changes
-          persist-credentials: true
-          path: cloned-airflow-site-archive
+          path: ./cloned-airflow-site-archive
+          fetch-depth: 1
+          sparse-checkout: |
+            ${{ steps.docs-folders-processed.outputs.sparse-checkout }}
+        if: steps.docs-folders-processed.outputs.docs-folders-processed != 'all'
+
+      - name: >
+          Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive (whole repo)
+        uses: actions/checkout@v4
+        with:
+          path: ./cloned-airflow-site-archive
+          fetch-depth: 1
+        if: steps.docs-folders-processed.outputs.docs-folders-processed == 'all'
 
       - name: "Check space available"
         run: df -h
 
-      - name: Syncing
+      - name: Syncing ${{inputs.source-location}} (${{ inputs.document-folders }})
+        env:
+          PROCESSES: ${{ inputs.processes }}
         run: |
+          set -x
           python3 -m pip install uv
+          aws configure set default.s3.max_concurrent_requests 10
           uv run ./scripts/s3_to_github.py \
             --bucket-path ${{inputs.source-location}} \
-            --local-path ${{inputs.local-destination}} \
-            --document-folder "${{inputs.document-folder}}" \
-            --processes ${{inputs.processes}}
+            --local-path ./docs-archive \
+            --document-folders "${{inputs.document-folders}}" \
+            --processes "${{inputs.processes}}"
         working-directory: /mnt/cloned-airflow-site-archive
 
-      - name: Commiting changes
+      - name: Diff summary
+        run : |
+          git diff --stat
+        working-directory: /mnt/cloned-airflow-site-archive
+
+      - name: Committing changes
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
@@ -101,3 +163,4 @@ jobs:
           git commit -m "Sync S3 to GitHub" || echo "No changes to commit"
           git push --force origin main
         working-directory: /mnt/cloned-airflow-site-archive
+        if: inputs.commit-changes == 'true' && github.ref == 'refs/heads/main'
