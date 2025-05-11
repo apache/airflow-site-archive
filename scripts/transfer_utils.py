@@ -16,9 +16,11 @@ console = Console(width=200, color_system="standard")
 
 def track_progress(folder: str, file_path: Path):
     while file_path.exists():
-        num_lines = file_path.read_text().count("\n")
-        console.print(f"{folder}: [blue] Processed {num_lines} files[/]")
         sleep(10)
+        if not file_path.exists():
+            break
+        num_lines = file_path.read_text().count("\n")
+        console.print(f"{folder}:[blue] Processed {num_lines} files[/]")
 
 
 class CommonTransferUtils:
@@ -75,7 +77,7 @@ class CommonTransferUtils:
 
 
     def sync(self, source: str, destination: str):
-        console.print(f"[blue] Syncing {source} to {destination} [/]")
+        console.print(f"{source}[yellow] Sync started to   [/]{destination}")
         with tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".out") as output_file:
             thread = Thread(target=track_progress, args=(source, Path(output_file.name),))
             thread.start()
@@ -85,7 +87,6 @@ class CommonTransferUtils:
                     stdout=output_file,
                     text=True, check=True
                 )
-                console.print(f"[blue] Sync completed for {source} to {destination} [/]")
             elif Path(source).is_dir():
                 subprocess.run(
                     ["aws", "s3", "sync", "--delete",  "--no-progress", source, destination],
@@ -95,7 +96,7 @@ class CommonTransferUtils:
             else:
                 self.copy(source, destination)
         Path(output_file.name).unlink(missing_ok=True)
-        console.print(f"[blue] Sync completed for {source} to {destination} [/]")
+        console.print(f"{source}:[green] Sync completed to [/]{destination} [/]")
 
     @staticmethod
     def run_with_pool(func: Callable, args: Any, processes: int = 4):
@@ -108,7 +109,7 @@ class CommonTransferUtils:
 
     @staticmethod
     def copy(source, destination):
-        console.print(f"[blue] Copying {source} to {destination} [/]")
+        console.print(f"{source}[blue] Copying started to   [/]{destination}")
         with tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".out") as output_file:
             thread = Thread(target=track_progress, args=(source, Path(output_file.name),))
             thread.start()
@@ -118,15 +119,15 @@ class CommonTransferUtils:
                 text=True, check=True
             )
         Path(output_file.name).unlink(missing_ok=True)
-        console.print(f"[blue] Copy completed for {source} to {destination} [/]")
+        console.print(f"{source}[green] Copying completed to [/]{destination}")
 
     @staticmethod
     def remove(file_to_delete: str):
-        console.print(f"[blue] Deleting {file_to_delete} [/]")
+        console.print(f"{file_to_delete}[yellow] Deleting[/]")
         subprocess.run(
             ["aws", "s3", "rm", file_to_delete], capture_output=True, text=True, check=True
         )
-        console.print(f"[blue] Delete completed for {file_to_delete} [/]")
+        console.print(f"{file_to_delete}[green] Delete completed[/]")
 
 def convert_short_name_to_folder_name(short_name: str) -> str:
     if not short_name.startswith("apache-airflow-providers-"):
