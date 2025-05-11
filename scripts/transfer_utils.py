@@ -96,7 +96,8 @@ class CommonTransferUtils:
             else:
                 self.copy(source, destination)
         Path(output_file.name).unlink(missing_ok=True)
-        console.print(f"{source}:[green] Sync completed to [/]{destination} [/]")
+        thread.join()
+        console.print(f"{source}:[green] Sync completed to [/]{destination}")
 
     @staticmethod
     def run_with_pool(func: Callable, args: Any, processes: int = 4):
@@ -119,6 +120,7 @@ class CommonTransferUtils:
                 text=True, check=True
             )
         Path(output_file.name).unlink(missing_ok=True)
+        thread.join()
         console.print(f"{source}[green] Copying completed to [/]{destination}")
 
     @staticmethod
