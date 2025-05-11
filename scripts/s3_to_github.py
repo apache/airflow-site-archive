@@ -24,15 +24,15 @@
 # ///
 import os
 from pathlib import Path
+import argparse
+import sys
 
 from rich.console import Console
 
-from transfer_utils import CommonTransferUtils, convert_short_name_to_folder_name, sort_priority_folders
+from transfer_utils import CommonTransferUtils, convert_short_name_to_folder_name, sort_priority_folders, \
+    sort_priority_tuples
 
 console = Console(width=200, color_system="standard")
-
-import argparse
-import sys
 
 
 class S3TOGithub(CommonTransferUtils):
@@ -59,7 +59,7 @@ class S3TOGithub(CommonTransferUtils):
             # we want to store the files in the github under local_path
             destination = self.local_path + pref.replace(remote_prefix, "")
             pool_args.append((source_bucket_path, destination))
-
+        pool_args = sort_priority_tuples(pool_args)
         self.run_with_pool(self.sync, pool_args, processes=processes)
 
 
@@ -96,6 +96,3 @@ if __name__ == "__main__":
         syncer.sync_s3_to_github(processes=int(args.processes), folders=folders_to_sync)
     else:
         syncer.sync_s3_to_github(processes=int(args.processes))
-
-
-

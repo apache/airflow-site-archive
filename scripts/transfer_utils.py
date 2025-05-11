@@ -149,3 +149,15 @@ def sort_priority_folders(folders: list[str]) -> list[str]:
             sorted_folders.append(folder)
             folders.remove(folder)
     return sorted_folders + sorted(folders)
+
+def sort_priority_tuples(tuples: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """
+    Sort the tuples in a way that the priority folders are at the top
+    """
+    sorted_tuples = []
+    for folder in PRIORITY_FOLDERS:
+        for tup in tuples:
+            if tup[0].endswith(folder +"/"):
+                sorted_tuples.append(tup)
+                tuples.remove(tup)
+    return sorted_tuples + sorted(tuples, key=lambda x: x[0])
