@@ -59,7 +59,9 @@ class S3TOGithub(CommonTransferUtils):
             # we want to store the files in the github under local_path
             destination = self.local_path + pref.replace(remote_prefix, "")
             pool_args.append((source_bucket_path, destination))
+        console.print("[blue]Sorting[/]", pool_args)
         pool_args = sort_priority_tuples(pool_args)
+        console.print("[blue]Sorted args[/]", pool_args)
         self.run_with_pool(self.sync, pool_args, processes=processes)
 
 
