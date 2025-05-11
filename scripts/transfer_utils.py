@@ -101,12 +101,15 @@ class CommonTransferUtils:
 
     @staticmethod
     def run_with_pool(func: Callable, args: Any, processes: int = 4):
-
+        # Chunksize is set to 1 - otherwise map / starmap will send tasks in chunks
+        # and the prioritization we set for folders will be lost.
+        # Our tasks are big enough to not cause overhead of sending
+        # them one at a time.
         with Pool(processes=processes) as pool:
             if all(isinstance(arg, tuple) for arg in args):
-                pool.starmap(func, args)
+                pool.starmap(func, args, 1)
             else:
-                pool.map(func, args)
+                pool.map(func, args, 1)
 
     @staticmethod
     def copy(source, destination):
