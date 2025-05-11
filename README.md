@@ -6,7 +6,7 @@
 It has the following command line arguments:
 - `--bucket-path`: The S3 bucket path where the documentation is stored.
 - `--local-path`: The local path where the documentation will be downloaded.
-- `--document-folder`: The folder in the S3 bucket where the documentation is stored (This is optional if any particular 
+- `--document-folder`: The folder in the S3 bucket where the documentation is stored (This is optional if any particular
                       folder need to be synced, provide the folder name ex: `apache-airflow-providers-amazon`).
 ```bash
 uv run ./scripts/s3_to_github.py --bucket-path s3://staging-docs-airflow-apache-org/docs/ --local-path ./docs-archive
@@ -22,7 +22,7 @@ It has the following command line arguments:
 
 - `--bucket-path`: The S3 bucket path where the documentation will be stored.
 - `--local-path`: The local path where the documentation is stored.
-- `--document-folder`: The folder in the local path where the documentation is stored (This is optional if any particular 
+- `--document-folder`: The folder in the local path where the documentation is stored (This is optional if any particular
                       folder need to be synced, provide the folder name ex: `apache-airflow-providers-amazon`).
 - `--sync-type`: The type of sync to perform. Can be either `last_commit` or `full_sync`.
 - `--commit-sha`: The commit sha to sync to S3. This is only required if the sync type is `last_commit`.
