@@ -47,14 +47,17 @@ class S3TOGithub(CommonTransferUtils):
         )
         return response["KeyCount"] > 0
 
-    def sync_to_s3(self, processes: int, folders: list[str] | None = None):
+    def sync_s3_to_github(self, processes: int, folders: list[str] | None = None,
+                          remote_prefix: str = "docs/"):
         console.print("[blue] Syncing files from S3 to GitHub...[/]")
-        prefixes = self.get_list_of_folders() if not folders else folders
+        prefixes = self.get_list_of_folders() if not folders else [
+            f"{remote_prefix}{folder}" for folder in folders
+        ]
         pool_args = []
         for pref in prefixes:
             source_bucket_path = f"s3://{self.bucket_name}/{pref}"
-            # we want to store the files in the github under docs-archive/
-            destination = self.local_path + pref.replace("docs/", "")
+            # we want to store the files in the github under local_path
+            destination = self.local_path + pref.replace(remote_prefix, "")
             pool_args.append((source_bucket_path, destination))
 
         self.run_with_pool(self.sync, pool_args, processes=processes)
@@ -90,9 +93,9 @@ if __name__ == "__main__":
                 sys.exit(1)
 
         folders_to_sync = sort_priority_folders(folders_to_sync)
-        syncer.sync_to_s3(processes=int(args.processes), folders=folders_to_sync)
+        syncer.sync_s3_to_github(processes=int(args.processes), folders=folders_to_sync)
     else:
-        syncer.sync_to_s3(processes=int(args.processes))
+        syncer.sync_s3_to_github(processes=int(args.processes))
 
 
 
