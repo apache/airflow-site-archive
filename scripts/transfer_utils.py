@@ -12,6 +12,8 @@ import boto3
 import urllib3
 from rich.console import Console
 
+KNOWN_PACKAGES = ["apache-airflow", "helm-chart", "docker-stack"]
+
 console = Console(width=200, color_system="standard")
 
 def track_progress(folder: str, file_path: Path):
@@ -135,7 +137,7 @@ class CommonTransferUtils:
         console.print(f"{file_to_delete}[green] Delete completed[/]")
 
 def convert_short_name_to_folder_name(short_name: str) -> str:
-    if not short_name.startswith("apache-airflow-providers-"):
+    if not short_name.startswith("apache-airflow-providers-") and short_name not in KNOWN_PACKAGES:
         return f"apache-airflow-providers-{short_name.replace('.', '-')}"
     return short_name
 
