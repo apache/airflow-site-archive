@@ -20,14 +20,14 @@ name: Sync S3 to GitHub
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
-      source-location:
+      source:
         description: "The source location in S3"
         required: true
         type: choice
         options:
-          - s3://live-docs-airflow-apache-org/docs/
-          - s3://staging-docs-airflow-apache-org/docs/
-        default: "s3://live-docs-airflow-apache-org/docs/"
+          - live
+          - staging
+        default: live
       document-folders:
         description: "Document folders to sync or short package ids (separated with spaces)"
         required: false
@@ -47,18 +47,29 @@ jobs:
   s3-to-github:
     name: S3 to GitHub
     runs-on: ubuntu-latest
+    env:
+      SOURCE: ${{ inputs.source }}
+      DOCUMENT_FOLDERS: ${{ inputs.document-folders }}
+      COMMIT_CHANGES: ${{ inputs.commit-changes }}
+      PROCESSES: ${{ inputs.processes }}
     steps:
       - name: Summarize parameters
+        id: parameters
         run: |
-          echo "Source location: ${{ inputs.source-location }}"
-          echo "Document folders: ${{ inputs.document-folders }}"
-          echo "Commit changes: ${{ inputs.commit-changes }}"
-          echo "Processes: ${{ inputs.processes }}"
+          echo "Input parameters summary"
+          echo "========================="
+          echo "Source: ${SOURCE}"
+          echo "Document folders: ${DOCUMENT_FOLDERS}"
+          echo "Commit changes: ${COMMIT_CHANGES}"
+          echo "Processes: ${PROCESSES}"
+          if [[ "${SOURCE}"  == "live" ]]; then
+             echo "source-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+          else
+             echo "source-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+          fi
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+      - name: "Install uv"
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
       - name: Install AWS CLI v2
         run: |
@@ -134,18 +145,19 @@ jobs:
       - name: "Check space available"
         run: df -h
 
-      - name: Syncing ${{inputs.source-location}} (${{ inputs.document-folders }})
+      - name: Syncing ${{ inputs.source }} (${{ inputs.document-folders }})
         env:
           PROCESSES: ${{ inputs.processes }}
+          DOCUMENTS_FOLDERS: ${{ inputs.document-folders }}
+          SOURCE_LOCATION: ${{ steps.parameters.outputs.source-location }}
         run: |
           set -x
-          python3 -m pip install uv
           aws configure set default.s3.max_concurrent_requests 10
           uv run ./scripts/s3_to_github.py \
-            --bucket-path ${{inputs.source-location}} \
+            --bucket-path ${SOURCE_LOCATION} \
             --local-path ./docs-archive \
-            --document-folders "${{inputs.document-folders}}" \
-            --processes "${{inputs.processes}}"
+            --document-folders "${DOCUMENT_FOLDERS}" \
+            --processes "${PROCESSES}"
         working-directory: /mnt/cloned-airflow-site-archive
 
       - name: Show files that will be committed

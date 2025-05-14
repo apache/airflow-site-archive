@@ -20,14 +20,14 @@ name: Sync GitHub to S3
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
-      destination-location:
+      destination:
         description: "The destination location in S3"
         required: true
         type: choice
         options:
-          - s3://live-docs-airflow-apache-org/docs/
-          - s3://staging-docs-airflow-apache-org/docs/
-        default: "s3://live-docs-airflow-apache-org/docs/"
+          - live
+          - staging
+        default: live
       sync-type:
         description: "Perform a full sync or just sync the last commit"
         required: false
@@ -57,17 +57,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Summarize parameters
+        id: parameters
+        env:
+          DOCUMENT_FOLDERS: ${{ inputs.document-folders }}
+          SYNC_TYPE: ${{ inputs.sync-type }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          PROCESSES: ${{ inputs.processes }}
+          DESTINATION: ${{ iputs.destination }}}
         run: |
-          echo "Destination location: ${{ inputs.destination-location }}"
-          echo "Document folders: ${{ inputs.document-folders }}"
-          echo "Sync type: ${{ inputs.sync-type }}"
-          echo "Commit SHA: ${{ inputs.commit-sha }}"
-          echo "Processes: ${{ inputs.processes }}"
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+          echo "Input parameters summary"
+          echo "========================="
+          echo "Document folders: ${DOCUMENT_FOLDER}"
+          echo "Sync type: ${SYNC_TYPE}"
+          echo "Commit SHA: ${COMMIT_SHA}"
+          echo "Processes: ${PROCESSES}"
+          echo "Destination: ${DESTINATION}"
+          if [[ "${DESTINATION}"  == "live" ]]; then
+             echo "destination-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+          else
+             echo "destination-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+          fi
 
       - uses: actions/checkout@v4
         # Checkout only workflow and scripts directory to run scripts from
@@ -151,7 +160,6 @@ jobs:
             ${{ steps.docs-folders-processed.outputs.sparse-checkout }}
           ref: ${{ inputs.commit-sha || github.sha }}
         if: steps.docs-folders-processed.outputs.docs-folders-processed != 'all'
-
       - name: >
           Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive (whole repo)
         uses: actions/checkout@v4
@@ -160,9 +168,20 @@ jobs:
           fetch-depth: 2
           ref: ${{ inputs.commit-sha || github.sha }}
         if: steps.docs-folders-processed.outputs.docs-folders-processed == 'all'
-
+      - name: "Install uv"
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Add staging watermarks
+        # yamllint disable rule:line-length
+        run: |
+          curl -sSf -o add_watermark.py https://raw.githubusercontent.com/apache/airflow-site/refs/heads/main/.github/scripts/add_watermark.py
+          chmod a+x add_watermark.py
+          mkdir -p images
+          curl -sSf -o images/staging.png https://raw.githubusercontent.com/apache/airflow-site/refs/heads/main/.github/scripts/images/staging.png
+          uv run scripts/add_watermark.py --pattern 'main.min.*.css' --folder docs-archive \
+          --image-directory images --url-prefix /docs/images
+        if: inputs.destination == 'staging'
       - name: >
-          Syncing ${{ inputs.commit-sha || github.sha }}: ${{ inputs.destination-location }}:
+          Syncing ${{ inputs.commit-sha || github.sha }}: ${{ inputs.destination }}:
           ${{ inputs.sync-type }} ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
           wih parallel aws cli methods = ${{ inputs.processes }}
         env:
@@ -170,7 +189,7 @@ jobs:
           SYNC_TYPE: ${{ inputs.sync-type }}
           PROCESSES: ${{ inputs.processes }}
           DOCUMENTS_FOLDERS: ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
-          DESTINATION_LOCATION: ${{ inputs.destination-location }}
+          DESTINATION_LOCATION: ${{ steps.parameters.outputs.destination-location }}
         run: |
           # show what's being run
           set -x
@@ -180,7 +199,6 @@ jobs:
             echo "Syncing whole repo"
           fi
           ls -la /mnt/cloned-airflow-site-archive/*
-          python3 -m pip install uv
           # we run inputs.processes aws cli commands - each command uploading files in parallel
           # that seems to be the fastest way to upload files to S3
           aws configure set default.s3.max_concurrent_requests 10
