@@ -28,24 +28,21 @@ on: # yamllint disable-line rule:truthy
           - live
           - staging
         default: live
-      sync-type:
-        description: "Perform a full sync or just sync the last commit"
-        required: false
-        default: "single_commit"
-        type: choice
-        options:
-          - single_commit
-          - full_sync
-      commit-sha:
-        description: "For single-commit - SHA/tag/branch (default: latest in selected branch)"
-        required: false
-        default: ""
-        type: string
-      document-folders:
-        description: "For full-sync, you can select which packages to upload - space separated"
+      document-packages:
+        description: "Packages (long or short) separated with spaces"
         required: false
         default: "all"
         type: string
+      commit-reference:
+        description: "Reference of commit used for the operation"
+        required: false
+        default: "main"
+        type: string
+      full-sync:
+        description: "Sync everything rather than only changes from commit."
+        required: false
+        default: false
+        type: boolean
       processes:
         description: "Number of processes to use for syncing"
         required: false
@@ -59,24 +56,31 @@ jobs:
       - name: Summarize parameters
         id: parameters
         env:
-          DOCUMENT_FOLDERS: ${{ inputs.document-folders }}
-          SYNC_TYPE: ${{ inputs.sync-type }}
-          COMMIT_SHA: ${{ inputs.commit-sha }}
+          DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
           PROCESSES: ${{ inputs.processes }}
-          DESTINATION: ${{ inputs.destination }}}
+          DESTINATION: ${{ inputs.destination }}
+          COMMIT_REFERENCE: ${{ inputs.commit-reference }}
+          FULL_SYNC: ${{ inputs.full-sync }}
         run: |
           echo "Input parameters summary"
           echo "========================="
-          echo "Document folders: ${DOCUMENT_FOLDER}"
-          echo "Sync type: ${SYNC_TYPE}"
-          echo "Commit SHA: ${COMMIT_SHA}"
-          echo "Processes: ${PROCESSES}"
           echo "Destination: ${DESTINATION}"
+          echo "Document packages: ${DOCUMENT_PACKAGES}"
+          echo "Full sync: ${FULL_SYNC}"
+          echo "Commit reference: ${COMMIT_REFERENCE}"
+          echo "Processes: ${PROCESSES}"
+          set -x
           if [[ "${DESTINATION}"  == "live" ]]; then
              echo "destination-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
           else
              echo "destination-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
           fi
+          if [[ "${FULL_SYNC}" == "true" ]] ; then
+            echo "sync-type=full-sync" >> ${GITHUB_OUTPUT}
+          else
+            echo "sync-type=single-commit" >> ${GITHUB_OUTPUT}
+          fi
+          echo "commit-ref=${{ env.COMMIT_REFERENCE }}" >> ${GITHUB_OUTPUT}
 
       - uses: actions/checkout@v4
         # Checkout only workflow and scripts directory to run scripts from
@@ -121,53 +125,53 @@ jobs:
           sudo chown -R "${USER}" /mnt/cloned-airflow-site-archive
           ln -v -s /mnt/cloned-airflow-site-archive ./cloned-airflow-site-archive
 
-      - name: Pre-process docs folders
+      - name: Pre-process docs packages
         env:
-          DOCUMENTS_FOLDERS: ${{ inputs.document-folders }}
-        id: docs-folders-processed
+          DOCUMENTS_PACKAGES: ${{ inputs.document-packages }}
+        id: docs-packages-processed
         run: |
           echo "sparse-checkout<<EOF" >> ${GITHUB_OUTPUT}
-          if [[ "${DOCUMENTS_FOLDERS}" != "all" ]]; then
-            echo "Preprocessing docs folders: ${DOCUMENTS_FOLDERS}"
-            folders=""
+          if [[ "${DOCUMENTS_PACKAGES}" != "all" ]]; then
+            echo "Preprocessing docs packages: ${DOCUMENTS_PACKAGES}"
+            packages=""
             sparse_checkout=""
             separator=""
-            for folder in ${DOCUMENTS_FOLDERS}; do
-              if [[ "${folder}" != apache-airflow-providers* ]]; then
-                folders="${folders}${separator}apache-airflow-providers-${folder/./-}"
-                echo "docs-archive/apache-airflow-providers-${folder/./-}" >> ${GITHUB_OUTPUT}
+            for package in ${DOCUMENTS_PACKAGES}; do
+              if [[ "${package}" != apache-airflow-providers* ]]; then
+                packages="${packages}${separator}apache-airflow-providers-${package/./-}"
+                echo "docs-archive/apache-airflow-providers-${package/./-}" >> ${GITHUB_OUTPUT}
               else
-                folders="${folders}${separator}${folder}"
-                echo "docs-archive/${folder}" >> ${GITHUB_OUTPUT}
+                packages="${packages}${separator}${package}"
+                echo "docs-archive/${package}" >> ${GITHUB_OUTPUT}
               fi
               separator=" "
             done
           else
-            folders="all"
+            packages="all"
             echo "docs-archive" >> ${GITHUB_OUTPUT}
           fi
           echo "EOF" >> ${GITHUB_OUTPUT}
-          echo "docs-folders-processed=${folders}"
-          echo "docs-folders-processed=${folders}" >> ${GITHUB_OUTPUT}
+          set -x
+          echo "docs-packages-processed=${packages}" >> ${GITHUB_OUTPUT}
       - name: >
-          Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive
-          with docs: ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
+          Checkout (${{  steps.parameters.outputs.commit-ref }}) to /mnt/cloned-airflow-site-archive
+          with docs packages: ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
         uses: actions/checkout@v4
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 2
           sparse-checkout: |
-            ${{ steps.docs-folders-processed.outputs.sparse-checkout }}
-          ref: ${{ inputs.commit-sha || github.sha }}
-        if: steps.docs-folders-processed.outputs.docs-folders-processed != 'all'
+            ${{ steps.docs-packages-processed.outputs.sparse-checkout }}
+          ref: ${{ steps.parameters.outputs.commit-ref }}
+        if: steps.docs-packages-processed.outputs.docs-packages-processed != 'all'
       - name: >
-          Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive (whole repo)
+          Checkout (${{  steps.parameters.outputs.commit-ref }}) to /mnt/cloned-airflow-site-archive (all packages)
         uses: actions/checkout@v4
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 2
-          ref: ${{ inputs.commit-sha || github.sha }}
-        if: steps.docs-folders-processed.outputs.docs-folders-processed == 'all'
+          ref: ${{ steps.parameters.outputs.commit-ref }}
+        if: steps.docs-packages-processed.outputs.docs-packages-processed == 'all'
       - name: "Install uv"
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Add staging watermarks
@@ -177,24 +181,24 @@ jobs:
           chmod a+x add_watermark.py
           mkdir -p images
           curl -sSf -o images/staging.png https://raw.githubusercontent.com/apache/airflow-site/refs/heads/main/.github/scripts/images/staging.png
-          uv run add_watermark.py --pattern 'main.min.*.css' --folder docs-archive \
-          --image-directory images --url-prefix /docs/images
+          uv run add_watermark.py --pattern 'main.min*css' --folder /mnt/cloned-airflow-site-archive/ \
+          --image-directory images --url-prefix /images
         if: inputs.destination == 'staging'
       - name: >
-          Syncing ${{ inputs.commit-sha || github.sha }}: ${{ inputs.destination }}:
-          ${{ inputs.sync-type }} ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
-          wih parallel aws cli methods = ${{ inputs.processes }}
+          Syncing ${{ steps.parameters.outputs.commit-ref }}: ${{ inputs.destination }}:
+          ${{ steps.parameters.outputs.sync-type }} ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
+          wih parallel aws cli = ${{ inputs.processes }}
         env:
-          COMMIT_SHA: ${{ inputs.commit-sha || github.sha }}
-          SYNC_TYPE: ${{ inputs.sync-type }}
-          PROCESSES: ${{ inputs.processes }}
-          DOCUMENTS_FOLDERS: ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
+          COMMIT_REF: ${{ steps.parameters.outputs.commit-ref }}
+          SYNC_TYPE: ${{ steps.parameters.outputs.sync-type }}
+          DOCUMENTS_PACKAGES: ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
           DESTINATION_LOCATION: ${{ steps.parameters.outputs.destination-location }}
+          PROCESSES: ${{ inputs.processes }}
         run: |
           # show what's being run
           set -x
           if [[ "${SYNC_TYPE}" == "single_commit" ]]; then
-            echo "Syncing ${COMMIT_SHA}"
+            echo "Syncing ${COMMIT_REF}"
           else
             echo "Syncing whole repo"
           fi
@@ -205,6 +209,6 @@ jobs:
           uv run ./scripts/github_to_s3.py \
             --bucket-path ${DESTINATION_LOCATION} \
             --local-path /mnt/cloned-airflow-site-archive/docs-archive \
-            --document-folders "${DOCUMENTS_FOLDERS}" \
-            --commit-sha ${COMMIT_SHA} --sync-type ${SYNC_TYPE} \
+            --document-packages "${DOCUMENTS_PACKAGES}" \
+            --commit-ref ${COMMIT_REF} --sync-type ${SYNC_TYPE} \
             --processes ${PROCESSES}

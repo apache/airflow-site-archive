@@ -31,7 +31,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from transfer_utils import CommonTransferUtils, convert_short_name_to_folder_name, sort_priority_folders
+from transfer_utils import CommonTransferUtils, convert_short_name_to_full_package_name, sort_priority_packages
 
 console = Console(width=200, color_system="standard")
 
@@ -40,16 +40,16 @@ class GithubToS3(CommonTransferUtils):
         super().__init__(bucket, local_path)
 
     @staticmethod
-    def fetch_commit_files(commit_sha: str, diff_filter: str="ACM"):
-        console.print(f"[blue] Fetching files from last commit {commit_sha} [/]")
+    def fetch_commit_files(commit_ref: str, diff_filter: str="ACM"):
+        console.print(f"[blue] Fetching files from last commit {commit_ref} [/]")
         cmd = [
             "git",
             "diff-tree",
             "--no-commit-id",
             "--name-only",
             "-r",
-            commit_sha + "^",
-            commit_sha,
+            commit_ref + "^",
+            commit_ref,
             f"--diff-filter={diff_filter}"
         ]
         result = subprocess.run(cmd, check=False, capture_output=True, text=True)
@@ -61,17 +61,17 @@ class GithubToS3(CommonTransferUtils):
             sys.exit(1)
         return result.stdout.splitlines() if result.stdout else []
 
-    def sync_single_commit_files(self, commit_sha: str, processes: int):
+    def sync_single_commit_files(self, commit_ref: str, processes: int):
         '''
         There are two parts here.
-        1. When any file gets removed under docs folder, we will remove from target location
-        2. When any file gets added/changed/modified under docs folder, we will copy from source to target location
+        1. When any file gets removed under docs package, we will remove from target location
+        2. When any file gets added/changed/modified under docs package, we will copy from source to target location
         '''
         # Fetching `d` excludes deleted files
         # Fetching `D` includes deleted files
 
-        files_cp_required = self.fetch_commit_files(commit_sha, diff_filter="d")
-        files_del_required = self.fetch_commit_files(commit_sha, diff_filter="D")
+        files_cp_required = self.fetch_commit_files(commit_ref, diff_filter="d")
+        files_del_required = self.fetch_commit_files(commit_ref, diff_filter="D")
 
         files_cp_required_under_docs = [f for f in files_cp_required if f.startswith("docs-archive/")]
         files_del_required_required_under_docs = [f for f in files_del_required if f.startswith("docs-archive/")]
@@ -91,16 +91,16 @@ class GithubToS3(CommonTransferUtils):
         self.run_with_pool(self.remove, delete_files_pool_args, processes=processes)
         self.run_with_pool(self.copy, copy_files_pool_args, processes=processes)
 
-    def full_sync(self, processes: int, folders: list[str] | None = None):
-        if folders:
-            console.print(f"[blue] Syncing folders {folders} from {self.local_path} to {self.bucket_name} [/]")
+    def full_sync(self, processes: int, packages: list[str] | None = None):
+        if packages:
+            console.print(f"[blue] Syncing packages {packages} from {self.local_path} to {self.bucket_name} [/]")
         else:
             console.print(f"[blue] Syncing all files from {self.local_path} to {self.bucket_name} [/]")
-        list_of_folders = os.listdir(self.local_path) if not folders else folders
+        list_of_packages = os.listdir(self.local_path) if not packages else packages
         pool_args = []
-        for folder in sort_priority_folders(list_of_folders):
-            source = os.path.join(self.local_path, folder)
-            dest = f"s3://{self.bucket_name}/{self.prefix}".rstrip("/") + "/" + folder
+        for package in sort_priority_packages(list_of_packages):
+            source = os.path.join(self.local_path, package)
+            dest = f"s3://{self.bucket_name}/{self.prefix}".rstrip("/") + "/" + package
             pool_args.append((source, dest))
 
         self.run_with_pool(self.sync, pool_args, processes=processes)
@@ -111,11 +111,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sync GitHub to S3")
     parser.add_argument("--bucket-path", required=True, help="S3 bucket name with path")
     parser.add_argument("--local-path", required=True, help="local path to sync")
-    parser.add_argument("--document-folders", help="Document folders to sync "
-                                                   "(or short provider-ids) separated with spaces "
-                                                   "('all' means all folders)", default="")
-    parser.add_argument("--commit-sha", help="Commit SHA to sync", default="")
-    parser.add_argument("--sync-type", help="Sync type", default="single_commit")
+    parser.add_argument("--document-packages", help="Document package ids to sync "
+                                                   "(long or short) separated with spaces "
+                                                   "('all' means all packages)", default="")
+    parser.add_argument("--commit-ref", help="Commit ref to sync (sha/HEAD/branch)", default="")
+    parser.add_argument("--sync-type", help="Sync type", choices=('full-sync', 'single-commit'),
+                        default="single-commit")
     parser.add_argument("--processes", help="Number of processes", type=int, default=8)
 
     args = parser.parse_args()
@@ -123,36 +124,36 @@ if __name__ == "__main__":
     syncer = GithubToS3(bucket=args.bucket_path, local_path=args.local_path)
     syncer.check_bucket()
 
-    document_folders = args.document_folders
+    document_packages = args.document_packages
     # Make sure you are in the right directory for git commands
     os.chdir(Path(args.local_path).parent.as_posix())
     # Force color
     os.environ["FORCE_COLOR"] = "1"
 
-    if document_folders != "all" and args.sync_type == "single_commit":
-        console.print(f"[red] Invalid folder name {document_folders} for sync type {args.sync_type} - only "
-                      f"all can be used with single_commit[/]")
+    if document_packages != "all" and args.sync_type == "single-commit":
+        console.print(f"[red] Invalid package name {document_packages} for sync type {args.sync_type} - only "
+                      f"all can be used with single-commit[/]")
         sys.exit(1)
 
-    if document_folders and document_folders != "all" and args.sync_type == "full_sync":
-        folders_to_sync = []
-        for _folder in document_folders.split(" "):
-            full_local_path = Path(f"{args.local_path}/{_folder}")
+    if document_packages and document_packages != "all" and args.sync_type == "full-sync":
+        packages_to_sync = []
+        for _package in document_packages.split(" "):
+            full_local_path = Path(f"{args.local_path}/{_package}")
             if not full_local_path.exists():
-                full_local_path = Path(f"{args.local_path}/{convert_short_name_to_folder_name(_folder)}")
+                full_local_path = Path(f"{args.local_path}/{convert_short_name_to_full_package_name(_package)}")
             if full_local_path.exists():
-                console.print(f"[blue] Document folder {_folder} exists in bucket {args.bucket_path}.[/]")
-                folders_to_sync.append(_folder)
+                console.print(f"[blue] Document package {_package} exists in bucket {args.bucket_path}.[/]")
+                packages_to_sync.append(_package)
             else:
-                console.print(f"[red] Document folder {full_local_path} does not exist.[/]")
+                console.print(f"[red] Document package {full_local_path} does not exist.[/]")
                 sys.exit(1)
-        syncer.full_sync(processes=int(args.processes), folders=folders_to_sync)
-    elif args.sync_type == "full_sync":
+        syncer.full_sync(processes=int(args.processes), packages=packages_to_sync)
+    elif args.sync_type == "full-sync":
         syncer.full_sync(processes=int(args.processes))
-    elif args.sync_type == "single_commit" and args.commit_sha and document_folders == "all":
-        console.print(f"[blue] Syncing last commit {args.commit_sha} from {args.local_path} [/]")
-        syncer.sync_single_commit_files(args.commit_sha, processes=int(args.processes))
+    elif args.sync_type == "single-commit" and args.commit_ref and document_packages == "all":
+        console.print(f"[blue] Syncing last commit {args.commit_ref} from {args.local_path} [/]")
+        syncer.sync_single_commit_files(args.commit_ref, processes=int(args.processes))
     else:
-        console.print(f"[red] Invalid sync type {args.sync_type} with document folders {document_folders} "
-                      f"and commit sha {args.commit_sha}[/]")
+        console.print(f"[red] Invalid sync type {args.sync_type} with document packages {document_packages} "
+                      f"and commit ref {args.commit_ref}[/]")
         sys.exit(1)
