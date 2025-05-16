@@ -1,32 +1,58 @@
-# airflow-site-archive
+# Airflow sync archive
 
-### Documentation Syncing Process
-### S3 To GitHub
-**Sync S3 to Github**: Use the `scripts/s3_to_github.py` script to download the latest documentation from S3 to your ./docs-archive folder.
-It has the following command line arguments:
-- `--bucket-path`: The S3 bucket path where the documentation is stored.
-- `--local-path`: The local path where the documentation will be downloaded.
-- `--document-folder`: The folder in the S3 bucket where the documentation is stored (This is optional if any particular
-                      folder need to be synced, provide the folder name ex: `apache-airflow-providers-amazon`).
-```bash
-uv run ./scripts/s3_to_github.py --bucket-path s3://staging-docs-airflow-apache-org/docs/ --local-path ./docs-archive
+The repository stores the archive of generated documentation from Apache Airflow.
+
+The scripts and workflows here allow to keep the repository in sync with the S3 buckets - both live and
+sync - wehre the documentation is stored. Sync in both direction is possible.
+
+In the future we will automate synchronization of the repoitory after any change to the buckets, currently
+manual synchronization S3 -> Bucket for the `live` ucket documentation is done using the `S3 to GitHub workflow`
+that subsequently uses `s3-to-github.py`, and syncing the repository to the `staging` bucket is done
+using the `GitHub to S3 workflow` that uses `github-to-s3.py` script. The scripts can also be used to
+perform manual syncs of changes when we modify the documentation in the repository and want to
+sync it to either of the S3 buckets.
+
+You can see the arguments for the scripts in the `s3-to-github.py` and `github-to-s3.py` by passing `--help`
+options:
+
+* ``uv run scripts/s3_to_github.py --help``:
+
+```
+usage: s3_to_github.py [-h] --bucket-path BUCKET_PATH --local-path LOCAL_PATH [--document-packages DOCUMENT_PACKAGES] [--processes PROCESSES]
+
+Sync S3 to GitHub
+
+options:
+  -h, --help            show this help message and exit
+  --bucket-path BUCKET_PATH
+                        S3 bucket name with path
+  --local-path LOCAL_PATH
+                        local path to sync
+  --document-packages DOCUMENT_PACKAGES
+                        Document packages to sync
+  --processes PROCESSES
+                        Number of processes
 ```
 
+* ``uv run scripts/github_to_s3.py --help``:
 
-### GitHub To S3
-**Sync Github to S3**: Use the `scripts/github_to_s3.py` script to upload the latest documentation from your ./docs-archive folder to S3.
-It has two modes:
-1. **Last commit**: Syncs only last commit changes to S3.
-2. **Full sync**: Syncs all files under `./docs-archive` to S3.
-It has the following command line arguments:
+```
+usage: github_to_s3.py [-h] --bucket-path BUCKET_PATH --local-path LOCAL_PATH [--document-packages DOCUMENT_PACKAGES] [--commit-ref COMMIT_REF] [--sync-type {full-sync,single-commit}] [--processes PROCESSES]
 
-- `--bucket-path`: The S3 bucket path where the documentation will be stored.
-- `--local-path`: The local path where the documentation is stored.
-- `--document-folder`: The folder in the local path where the documentation is stored (This is optional if any particular
-                      folder need to be synced, provide the folder name ex: `apache-airflow-providers-amazon`).
-- `--sync-type`: The type of sync to perform. Can be either `last_commit` or `full_sync`.
-- `--commit-sha`: The commit sha to sync to S3. This is only required if the sync type is `last_commit`.
+Sync GitHub to S3
 
-```bash
-uv run ./scripts/github_to_s3.py --bucket-path s3://staging-docs-airflow-apache-org/docs/ --local-path ./docs-archive --sync-type last-commit
+options:
+  -h, --help            show this help message and exit
+  --bucket-path BUCKET_PATH
+                        S3 bucket name with path
+  --local-path LOCAL_PATH
+                        local path to sync
+  --document-packages DOCUMENT_PACKAGES
+                        Document package ids to sync (long or short) separated with spaces ('all' means all packages)
+  --commit-ref COMMIT_REF
+                        Commit ref to sync (sha/HEAD/branch)
+  --sync-type {full-sync,single-commit}
+                        Sync type
+  --processes PROCESSES
+                        Number of processes
 ```

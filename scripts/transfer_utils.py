@@ -16,13 +16,13 @@ KNOWN_PACKAGES = ["apache-airflow", "helm-chart", "docker-stack"]
 
 console = Console(width=200, color_system="standard")
 
-def track_progress(folder: str, file_path: Path):
+def track_progress(package: str, file_path: Path):
     while file_path.exists():
         sleep(10)
         if not file_path.exists():
             break
         num_lines = file_path.read_text().count("\n")
-        console.print(f"{folder}:[blue] Processed {num_lines} files[/]")
+        console.print(f"{package}:[blue] Processed {num_lines} files[/]")
 
 
 class CommonTransferUtils:
@@ -61,8 +61,8 @@ class CommonTransferUtils:
             console.print(f"[red] Error: {e}[/]")
             sys.exit(1)
 
-    def get_list_of_folders(self) -> list[str]:
-        folders = []
+    def get_list_of_packages(self) -> list[str]:
+        packages = []
         try:
             response = self.s3_client.list_objects_v2(
                 Bucket=self.bucket_name,
@@ -71,8 +71,8 @@ class CommonTransferUtils:
             )
             if 'CommonPrefixes' in response:
                 for cur_prefix in response['CommonPrefixes']:
-                    folders.append(cur_prefix['Prefix'])
-            return sorted(folders)
+                    packages.append(cur_prefix['Prefix'])
+            return sorted(packages)
         except Exception as e:
             console.print(f"[yellow] Error: {e}[/]")
             return []
@@ -104,7 +104,7 @@ class CommonTransferUtils:
     @staticmethod
     def run_with_pool(func: Callable, args: Any, processes: int = 4):
         # Chunksize is set to 1 - otherwise map / starmap will send tasks in chunks
-        # and the prioritization we set for folders will be lost.
+        # and the prioritization we set for packages will be lost.
         # Our tasks are big enough to not cause overhead of sending
         # them one at a time.
         with Pool(processes=processes) as pool:
@@ -136,33 +136,33 @@ class CommonTransferUtils:
         )
         console.print(f"{file_to_delete}[green] Delete completed[/]")
 
-def convert_short_name_to_folder_name(short_name: str) -> str:
+def convert_short_name_to_full_package_name(short_name: str) -> str:
     if not short_name.startswith("apache-airflow-providers-") and short_name not in KNOWN_PACKAGES:
         return f"apache-airflow-providers-{short_name.replace('.', '-')}"
     return short_name
 
-# start with those folders first
-PRIORITY_FOLDERS = ["apache-airflow-providers-google", "apache-airflow-providers-amazon", "apache-airflow"]
+# start with those packages first
+PRIORITY_PACKAGES = ["apache-airflow-providers-google", "apache-airflow-providers-amazon", "apache-airflow"]
 
-def sort_priority_folders(folders: list[str]) -> list[str]:
+def sort_priority_packages(packages: list[str]) -> list[str]:
     """
-    Sort the folders in a way that the priority folders are at the top
+    Sort the packages in a way that the priority packages are at the top
     """
-    sorted_folders = []
-    for folder in PRIORITY_FOLDERS:
-        if folder in folders:
-            sorted_folders.append(folder)
-            folders.remove(folder)
-    return sorted_folders + sorted(folders)
+    sorted_packages = []
+    for package in PRIORITY_PACKAGES:
+        if package in packages:
+            sorted_packages.append(package)
+            packages.remove(package)
+    return sorted_packages + sorted(packages)
 
 def sort_priority_tuples(tuples: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """
-    Sort the tuples in a way that the priority folders are at the top
+    Sort the tuples in a way that the priority packages are at the top
     """
     sorted_tuples = []
-    for folder in PRIORITY_FOLDERS:
+    for package in PRIORITY_PACKAGES:
         for tup in tuples:
-            if tup[0].endswith(folder +"/"):
+            if tup[0].endswith(package +"/"):
                 sorted_tuples.append(tup)
                 tuples.remove(tup)
     return sorted_tuples + sorted(tuples, key=lambda x: x[0])

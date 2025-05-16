@@ -28,8 +28,8 @@ on: # yamllint disable-line rule:truthy
           - live
           - staging
         default: live
-      document-folders:
-        description: "Document folders to sync or short package ids (separated with spaces)"
+      document-packages:
+        description: "Document packages - long or short seprated by spaces"
         required: false
         default: "all"
         type: string
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SOURCE: ${{ inputs.source }}
-      DOCUMENT_FOLDERS: ${{ inputs.document-folders }}
+      DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
       COMMIT_CHANGES: ${{ inputs.commit-changes }}
       PROCESSES: ${{ inputs.processes }}
     steps:
@@ -59,7 +59,7 @@ jobs:
           echo "Input parameters summary"
           echo "========================="
           echo "Source: ${SOURCE}"
-          echo "Document folders: ${DOCUMENT_FOLDERS}"
+          echo "Document packages: ${DOCUMENT_PACKAGES}"
           echo "Commit changes: ${COMMIT_CHANGES}"
           echo "Processes: ${PROCESSES}"
           if [[ "${SOURCE}"  == "live" ]]; then
@@ -86,37 +86,37 @@ jobs:
           aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Pre-process docs folders
+      - name: Pre-process docs packages
         env:
-          DOCUMENTS_FOLDERS: ${{ inputs.document-folders }}
-        id: docs-folders-processed
+          DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
+        id: docs-packages-processed
         run: |
           echo "sparse-checkout<<EOF" >> ${GITHUB_OUTPUT}
           echo ".github" >> ${GITHUB_OUTPUT}
           echo "scripts" >> ${GITHUB_OUTPUT}
-          if [[ "${DOCUMENTS_FOLDERS}" != "all" ]]; then
-            echo "Preprocessing docs folders: ${DOCUMENTS_FOLDERS}"
-            folders=""
+          if [[ "${DOCUMENT_PACKAGES}" != "all" ]]; then
+            echo "Preprocessing docs packages: ${DOCUMENT_PACKAGES}"
+            packages=""
             sparse_checkout=""
             separator=""
-            for folder in ${DOCUMENTS_FOLDERS}; do
-              if [[ "${folder}" != apache-airflow-providers* && "${folder}" != "apache-airflow" \
-                 && "${folder}" != "docker-stack" && "${folder}" != "helm-chart" ]]; then
-                folders="${folders}${separator}apache-airflow-providers-${folder/./-}"
-                echo "docs-archive/apache-airflow-providers-${folder/./-}" >> ${GITHUB_OUTPUT}
+            for package in ${DOCUMENT_PACKAGES}; do
+              if [[ "${package}" != apache-airflow-providers* && "${package}" != "apache-airflow" \
+                 && "${package}" != "docker-stack" && "${package}" != "helm-chart" ]]; then
+                packages="${packages}${separator}apache-airflow-providers-${package/./-}"
+                echo "docs-archive/apache-airflow-providers-${package/./-}" >> ${GITHUB_OUTPUT}
               else
-                folders="${folders}${separator}${folder}"
-                echo "docs-archive/${folder}" >> ${GITHUB_OUTPUT}
+                packages="${packages}${separator}${package}"
+                echo "docs-archive/${package}" >> ${GITHUB_OUTPUT}
               fi
               separator=" "
             done
           else
-            folders="all"
+            packages="all"
             echo "docs-archive" >> ${GITHUB_OUTPUT}
           fi
           echo "EOF" >> ${GITHUB_OUTPUT}
-          echo "docs-folders-processed=${folders}"
-          echo "docs-folders-processed=${folders}" >> ${GITHUB_OUTPUT}
+          echo "docs-packages-processed=${packages}"
+          echo "docs-packages-processed=${packages}" >> ${GITHUB_OUTPUT}
 
       - name: Create /mnt/cloned-airflow-site-archive directory
         run: |
@@ -125,14 +125,14 @@ jobs:
 
       - name: >
           Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive
-          with docs: ${{ steps.docs-folders-processed.outputs.docs-folders-processed }}
+          with docs: ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
         uses: actions/checkout@v4
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 1
           sparse-checkout: |
-            ${{ steps.docs-folders-processed.outputs.sparse-checkout }}
-        if: steps.docs-folders-processed.outputs.docs-folders-processed != 'all'
+            ${{ steps.docs-packages-processed.outputs.sparse-checkout }}
+        if: steps.docs-packages-processed.outputs.docs-packages-processed != 'all'
 
       - name: >
           Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive (whole repo)
@@ -140,15 +140,15 @@ jobs:
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 1
-        if: steps.docs-folders-processed.outputs.docs-folders-processed == 'all'
+        if: steps.docs-packages-processed.outputs.docs-packages-processed == 'all'
 
       - name: "Check space available"
         run: df -h
 
-      - name: Syncing ${{ inputs.source }} (${{ inputs.document-folders }})
+      - name: Syncing ${{ inputs.source }} (${{ inputs.document-packages }})
         env:
           PROCESSES: ${{ inputs.processes }}
-          DOCUMENTS_FOLDERS: ${{ inputs.document-folders }}
+          DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
           SOURCE_LOCATION: ${{ steps.parameters.outputs.source-location }}
         run: |
           set -x
@@ -156,7 +156,7 @@ jobs:
           uv run ./scripts/s3_to_github.py \
             --bucket-path ${SOURCE_LOCATION} \
             --local-path ./docs-archive \
-            --document-folders "${DOCUMENT_FOLDERS}" \
+            --document-packages "${DOCUMENT_PACKAGES}" \
             --processes "${PROCESSES}"
         working-directory: /mnt/cloned-airflow-site-archive
 
