@@ -78,20 +78,21 @@ class CommonTransferUtils:
             return []
 
 
-    def sync(self, source: str, destination: str):
+    def sync(self, source: str, destination: str, skip_delete: bool = False):
         console.print(f"{source}[yellow] Sync started to   [/]{destination}")
         with tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".out") as output_file:
             thread = Thread(target=track_progress, args=(source, Path(output_file.name),))
             thread.start()
+            delete= ["--delete"] if not skip_delete else []
             if source.startswith("s3://"):
                 subprocess.run(
-                    ["aws", "s3", "sync", "--delete", "--no-progress", source, destination],
+                    ["aws", "s3", "sync", *delete, "--no-progress", source, destination],
                     stdout=output_file,
                     text=True, check=True
                 )
             elif Path(source).is_dir():
                 subprocess.run(
-                    ["aws", "s3", "sync", "--delete",  "--no-progress", source, destination],
+                    ["aws", "s3", "sync", *delete,  "--no-progress", source, destination],
                     stdout=output_file,
                     text=True, check=True
                 )

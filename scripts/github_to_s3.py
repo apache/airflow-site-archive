@@ -91,7 +91,7 @@ class GithubToS3(CommonTransferUtils):
         self.run_with_pool(self.remove, delete_files_pool_args, processes=processes)
         self.run_with_pool(self.copy, copy_files_pool_args, processes=processes)
 
-    def full_sync(self, processes: int, packages: list[str] | None = None):
+    def full_sync(self, processes: int, packages: list[str] | None = None, skip_delete: bool = False):
         if packages:
             console.print(f"[blue] Syncing packages {packages} from {self.local_path} to {self.bucket_name} [/]")
         else:
@@ -101,7 +101,7 @@ class GithubToS3(CommonTransferUtils):
         for package in sort_priority_packages(list_of_packages):
             source = os.path.join(self.local_path, package)
             dest = f"s3://{self.bucket_name}/{self.prefix}".rstrip("/") + "/" + package
-            pool_args.append((source, dest))
+            pool_args.append((source, dest, skip_delete))
 
         self.run_with_pool(self.sync, pool_args, processes=processes)
 
@@ -118,6 +118,7 @@ if __name__ == "__main__":
     parser.add_argument("--sync-type", help="Sync type", choices=('full-sync', 'single-commit'),
                         default="single-commit")
     parser.add_argument("--processes", help="Number of processes", type=int, default=8)
+    parser.add_argument("--skip-delete", help="Skip deleting missing files", action='store_true')
 
     args = parser.parse_args()
 
@@ -147,9 +148,10 @@ if __name__ == "__main__":
             else:
                 console.print(f"[red] Document package {full_local_path} does not exist.[/]")
                 sys.exit(1)
-        syncer.full_sync(processes=int(args.processes), packages=packages_to_sync)
+        syncer.full_sync(processes=int(args.processes), packages=packages_to_sync,
+                         skip_delete=args.skip_delete)
     elif args.sync_type == "full-sync":
-        syncer.full_sync(processes=int(args.processes))
+        syncer.full_sync(processes=int(args.processes), skip_delete=args.skip_delete)
     elif args.sync_type == "single-commit" and args.commit_ref and document_packages == "all":
         console.print(f"[blue] Syncing last commit {args.commit_ref} from {args.local_path} [/]")
         syncer.sync_single_commit_files(args.commit_ref, processes=int(args.processes))
