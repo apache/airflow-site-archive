@@ -38,6 +38,11 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: true
         type: boolean
+      sync-back-references:
+        description: "Sync generated back-references to S3"
+        required: false
+        default: true
+        type: boolean
       processes:
         description: "Number of processes to use for syncing"
         required: false
@@ -52,6 +57,8 @@ jobs:
       DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
       COMMIT_CHANGES: ${{ inputs.commit-changes }}
       PROCESSES: ${{ inputs.processes }}
+      AIRFLOW_SITE_DIRECTORY:  /mnt/cloned-airflow-site-archive
+
     steps:
       - name: Summarize parameters
         id: parameters
@@ -160,11 +167,58 @@ jobs:
             --processes "${PROCESSES}"
         working-directory: /mnt/cloned-airflow-site-archive
 
+      - uses: actions/checkout@v4
+        # Checkout airflow to run breeze
+        with:
+          repository: 'apache/airflow'
+          path: airflow
+          fetch-depth: 1
+
+      - name: "Install breeze"
+        run: uv tool install -e ./dev/breeze
+        working-directory: airflow
+
+      - name: "Generate back references for providers"
+        run: breeze release-management add-back-references all-providers
+        working-directory: airflow
+
+      - name: "Generate back references for apache-airflow"
+        run: breeze release-management add-back-references apache-airflow
+        working-directory: airflow
+
+      - name: "Generate back references for docker-stack"
+        run: breeze release-management add-back-references docker-stack
+        working-directory: airflow
+
+      - name: "Generate back references for helm-chart"
+        run: breeze release-management add-back-references helm-chart
+        working-directory: airflow
+
       - name: Show files that will be committed
         run : git add --dry-run .
         working-directory: /mnt/cloned-airflow-site-archive
 
-      - name: Committing changes
+      - name: Syncing back-reference changes to ${{ inputs.source }} (${{ inputs.document-packages }})
+        env:
+          PROCESSES: ${{ inputs.processes }}
+          DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
+          SOURCE_LOCATION: ${{ steps.parameters.outputs.source-location }}
+        run: |
+          set -x
+          aws configure set default.s3.max_concurrent_requests 10
+          uv run ./scripts/github_to_s3.py \
+            --bucket-path ${SOURCE_LOCATION} \
+            --local-path /mnt/cloned-airflow-site-archive/docs-archive \
+            --document-packages "${DOCUMENTS_PACKAGES}" \
+            --commit-ref "main" --sync-type full-sync --skip-delete \
+            --processes ${PROCESSES}
+        working-directory: /mnt/cloned-airflow-site-archive
+        if: >
+          inputs.sync-back-references == true && (
+             github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+          ) && inputs.commit-changes == true
+
+      - name: Committing live changes
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
@@ -175,4 +229,17 @@ jobs:
           git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
           git push --force origin main
         working-directory: /mnt/cloned-airflow-site-archive
-        if: inputs.commit-changes == true && github.ref == 'refs/heads/main'
+        if: inputs.commit-changes == true && github.ref == 'refs/heads/main' && inputs.source == 'live'
+
+      - name: Committing staging changes
+        run: |
+          echo "Running git config"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@users.noreply.github.com"
+          echo "Running git add"
+          git add --verbose .
+          echo "Running git commit"
+          git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
+          git push --force origin main
+        working-directory: /mnt/cloned-airflow-site-archive
+        if: inputs.commit-changes == true && github.ref == 'refs/heads/staging' && inputs.source == 'staging'
