@@ -639,6 +639,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.configuration</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
@@ -838,6 +839,21 @@
 <span class="k">except</span> <span class="n">AirflowConfigException</span><span class="p">:</span>
     <span class="n">EDGE_EXECUTOR_ACTIVE</span> <span class="o">=</span> <span class="kc">False</span>
 
+<span class="c1"># Load the API endpoint only on api-server (Airflow 3.x) or webserver (Airflow 2.x)</span>
+<span class="c1"># todo(jscheffl): Remove this check when the discussion in</span>
+<span class="c1">#                 https://lists.apache.org/thread/w170czq6r7bslkqp1tk6bjjjo0789wgl</span>
+<span class="c1">#                 resulted in a proper API to selective initialize. Maybe backcompat-shim</span>
+<span class="c1">#                 is also needed to support Airflow-versions prior the rework.</span>
+<span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+<div class="viewcode-block" id="RUNNING_ON_APISERVER">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/plugins/edge_executor_plugin/index.html#airflow.providers.edge3.plugins.edge_executor_plugin.RUNNING_ON_APISERVER">[docs]</a>
+    <span class="n">RUNNING_ON_APISERVER</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;api-server&quot;</span><span class="p">])</span> <span class="ow">or</span> <span class="p">(</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;airflow-core/src/airflow/api_fastapi/main.py&quot;</span>
+    <span class="p">)</span></div>
+
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">RUNNING_ON_APISERVER</span> <span class="o">=</span> <span class="s2">&quot;gunicorn&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">and</span> <span class="s2">&quot;airflow-webserver&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span>
+
 
 <div class="viewcode-block" id="EdgeExecutorPlugin">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/plugins/edge_executor_plugin/index.html#airflow.providers.edge3.plugins.edge_executor_plugin.EdgeExecutorPlugin">[docs]</a>
@@ -848,7 +864,7 @@
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/plugins/edge_executor_plugin/index.html#airflow.providers.edge3.plugins.edge_executor_plugin.EdgeExecutorPlugin.name">[docs]</a>
     <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;edge_executor&quot;</span></div>
 
-    <span class="k">if</span> <span class="n">EDGE_EXECUTOR_ACTIVE</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">EDGE_EXECUTOR_ACTIVE</span> <span class="ow">and</span> <span class="n">RUNNING_ON_APISERVER</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
 <div class="viewcode-block" id="EdgeExecutorPlugin.fastapi_apps">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/plugins/edge_executor_plugin/index.html#airflow.providers.edge3.plugins.edge_executor_plugin.EdgeExecutorPlugin.fastapi_apps">[docs]</a>

@@ -813,7 +813,7 @@
     <span class="nd">@property</span>
 <div class="viewcode-block" id="EdgeWorkerModel.sysinfo_json">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/models/edge_worker/index.html#airflow.providers.edge3.models.edge_worker.EdgeWorkerModel.sysinfo_json">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">sysinfo_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sysinfo_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sysinfo</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sysinfo</span> <span class="k">else</span> <span class="kc">None</span></div>
 
 
@@ -1024,6 +1024,46 @@
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">UNKNOWN</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">SHUTDOWN_REQUEST</span></div>
+
+
+
+<span class="nd">@provide_session</span>
+<div class="viewcode-block" id="add_worker_queues">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/models/edge_worker/index.html#airflow.providers.edge3.models.edge_worker.add_worker_queues">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">add_worker_queues</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">queues</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add queues to an edge worker.&quot;&quot;&quot;</span>
+    <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">UNKNOWN</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">error_message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Cannot add queues to edge worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> as it is in </span><span class="si">{</span><span class="n">worker</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2"> state!&quot;</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_message</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">error_message</span><span class="p">)</span>
+    <span class="n">worker</span><span class="o">.</span><span class="n">add_queues</span><span class="p">(</span><span class="n">queues</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@provide_session</span>
+<div class="viewcode-block" id="remove_worker_queues">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/models/edge_worker/index.html#airflow.providers.edge3.models.edge_worker.remove_worker_queues">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">remove_worker_queues</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">queues</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove queues from an edge worker.&quot;&quot;&quot;</span>
+    <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
+        <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">UNKNOWN</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">error_message</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Cannot remove queues from edge worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> as it is in </span><span class="si">{</span><span class="n">worker</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2"> state!&quot;</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_message</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">error_message</span><span class="p">)</span>
+    <span class="n">worker</span><span class="o">.</span><span class="n">remove_queues</span><span class="p">(</span><span class="n">queues</span><span class="p">)</span></div>
 
 </pre></div>
 
