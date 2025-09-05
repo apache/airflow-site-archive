@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=016086f5" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=24ed3fb0" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=ad330701" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=957f1c83" />
@@ -351,7 +351,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-kylin/3.9.2/providers/apache/kylin/tests/system/apache/kylin">Example DAGs</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-kylin/3.9.2/providers/apache/kylin/tests/system/apache/kylin">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-apache-kylin/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -503,7 +503,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-kylin/3.9.2/providers/apache/kylin/tests/system/apache/kylin">Example DAGs</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-kylin/3.9.2/providers/apache/kylin/tests/system/apache/kylin">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-apache-kylin/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -644,6 +644,11 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.apache.kylin.operators.kylin_cube</span><span class="w"> </span><span class="kn">import</span> <span class="n">KylinCubeOperator</span>
 
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.baseoperator</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain</span>  <span class="c1"># type: ignore[no-redef]</span>
+
 <div class="viewcode-block" id="ENV_ID">
 <a class="viewcode-back" href="../../../../../_api/tests/system/apache/kylin/example_kylin_dag/index.html#tests.system.apache.kylin.example_kylin_dag.ENV_ID">[docs]</a>
 <span class="n">ENV_ID</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;SYSTEM_TESTS_ENV_ID&quot;</span><span class="p">)</span></div>
@@ -674,21 +679,19 @@
 
 
     <span class="n">gen_build_time_task</span> <span class="o">=</span> <span class="n">gen_build_time</span><span class="p">()</span>
-    <span class="n">gen_build_time_output_date_start</span> <span class="o">=</span> <span class="n">gen_build_time_task</span><span class="p">[</span><span class="s2">&quot;date_start&quot;</span><span class="p">]</span>
-    <span class="n">gen_build_time_output_date_end</span> <span class="o">=</span> <span class="n">gen_build_time_task</span><span class="p">[</span><span class="s2">&quot;date_end&quot;</span><span class="p">]</span>
 
     <span class="n">build_task1</span> <span class="o">=</span> <span class="n">KylinCubeOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;kylin_build_1&quot;</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="s2">&quot;build&quot;</span><span class="p">,</span>
-        <span class="n">start_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_start</span><span class="p">,</span>
-        <span class="n">end_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_end</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_start&#39;] }}&quot;</span><span class="p">,</span>
+        <span class="n">end_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_end&#39;] }}&quot;</span><span class="p">,</span>
         <span class="n">is_track_job</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="n">build_task2</span> <span class="o">=</span> <span class="n">KylinCubeOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;kylin_build_2&quot;</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="s2">&quot;build&quot;</span><span class="p">,</span>
-        <span class="n">start_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_end</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_start&#39;] }}&quot;</span><span class="p">,</span>
         <span class="n">end_time</span><span class="o">=</span><span class="s2">&quot;1325520000000&quot;</span><span class="p">,</span>
         <span class="n">is_track_job</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
@@ -696,15 +699,15 @@
     <span class="n">refresh_task1</span> <span class="o">=</span> <span class="n">KylinCubeOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;kylin_refresh_1&quot;</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="s2">&quot;refresh&quot;</span><span class="p">,</span>
-        <span class="n">start_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_start</span><span class="p">,</span>
-        <span class="n">end_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_end</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_start&#39;] }}&quot;</span><span class="p">,</span>
+        <span class="n">end_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_end&#39;] }}&quot;</span><span class="p">,</span>
         <span class="n">is_track_job</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="n">merge_task</span> <span class="o">=</span> <span class="n">KylinCubeOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;kylin_merge&quot;</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="s2">&quot;merge&quot;</span><span class="p">,</span>
-        <span class="n">start_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_start</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_start&#39;] }}&quot;</span><span class="p">,</span>
         <span class="n">end_time</span><span class="o">=</span><span class="s2">&quot;1325520000000&quot;</span><span class="p">,</span>
         <span class="n">is_track_job</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
@@ -722,11 +725,20 @@
     <span class="n">build_task3</span> <span class="o">=</span> <span class="n">KylinCubeOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;kylin_build_3&quot;</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="s2">&quot;build&quot;</span><span class="p">,</span>
-        <span class="n">start_time</span><span class="o">=</span><span class="n">gen_build_time_output_date_end</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="s2">&quot;{{ task_instance.xcom_pull(task_ids=&#39;gen_build_time&#39;)[&#39;date_start&#39;] }}&quot;</span><span class="p">,</span>
         <span class="n">end_time</span><span class="o">=</span><span class="s2">&quot;1328730000000&quot;</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="n">build_task1</span> <span class="o">&gt;&gt;</span> <span class="n">build_task2</span> <span class="o">&gt;&gt;</span> <span class="n">refresh_task1</span> <span class="o">&gt;&gt;</span> <span class="n">merge_task</span> <span class="o">&gt;&gt;</span> <span class="n">disable_task</span> <span class="o">&gt;&gt;</span> <span class="n">purge_task</span> <span class="o">&gt;&gt;</span> <span class="n">build_task3</span>
+    <span class="n">chain</span><span class="p">(</span>
+        <span class="n">gen_build_time_task</span><span class="p">,</span>
+        <span class="n">build_task1</span><span class="p">,</span>
+        <span class="n">build_task2</span><span class="p">,</span>
+        <span class="n">refresh_task1</span><span class="p">,</span>
+        <span class="n">merge_task</span><span class="p">,</span>
+        <span class="n">disable_task</span><span class="p">,</span>
+        <span class="n">purge_task</span><span class="p">,</span>
+        <span class="n">build_task3</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="c1"># Task dependency created via `XComArgs`:</span>
     <span class="c1">#   gen_build_time &gt;&gt; build_task1</span>
