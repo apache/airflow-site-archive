@@ -105,7 +105,7 @@ The following config options support this ``_cmd`` and ``_secret`` version:
 * ``result_backend`` in ``[celery]`` section
 * ``password`` in ``[atlas]`` section
 * ``smtp_password`` in ``[smtp]`` section
-* ``secret_key`` in ``[webserver]`` section
+* ``secret_key`` in ``[api]`` section
 
 The ``_cmd`` config options can also be set using a corresponding environment variable
 the same way the usual config options can. For example:
@@ -159,7 +159,7 @@ the example below.
 .. note::
     Use the same configuration across all the Airflow components. While each component
     does not require all, some configurations need to be same otherwise they would not
-    work as expected. A good example for that is :ref:`secret_key<config:webserver__secret_key>` which
+    work as expected. A good example for that is :ref:`secret_key<config:api__secret_key>` which
     should be same on the Webserver and Worker to allow Webserver to fetch logs from Worker.
 
     The webserver key is also used to authorize requests to Celery workers when logs are retrieved. The token
@@ -192,7 +192,7 @@ Example settings you can configure this way:
 * :ref:`Advanced logging configuration <write-logs-advanced>`
 * :ref:`Dag serialization <dag-serialization>`
 * :ref:`Pod mutation hook in Kubernetes Executor<kubernetes:pod_mutation_hook>`
-* :ref:`Control DAG parsing time <faq:how-to-control-dag-file-parsing-timeout>`
+* :ref:`Control Dag parsing time <faq:how-to-control-dag-file-parsing-timeout>`
 * :ref:`Customize your UI <customizing-the-ui>`
 * :ref:`Configure more variables to export <export_dynamic_environment_variables>`
 * :ref:`Customize your DB configuration <set-up-database-backend>`

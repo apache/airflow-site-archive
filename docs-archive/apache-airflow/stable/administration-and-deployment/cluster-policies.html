@@ -10,13 +10,13 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title>Cluster Policies &mdash; Airflow 3.0.6 Documentation</title>
+        <title>Cluster Policies &mdash; Airflow 3.1.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=016086f5" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=24ed3fb0" />
-            <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=ad330701" />
+            <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
             <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=957f1c83" />
             <link rel="index" title="Index" href="../genindex.html" />
@@ -50,7 +50,7 @@
 
 <header>
     <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2025 is coming October 07-09. Register now for early bird ticket!
+        Airflow Summit 2025 is coming October 07-09. Register now to secure your spot!
     </a>
     <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
@@ -292,7 +292,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.0.6</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -452,7 +452,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.0.6</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -636,17 +636,18 @@
 <div></div></blockquote>
 <section id="cluster-policies">
 <h1>Cluster Policies<a class="headerlink" href="#cluster-policies" title="Link to this heading">¶</a></h1>
-<p>If you want to check or mutate dags or Tasks on a cluster-wide level, then a Cluster Policy will let you do
-that. They have three main purposes:</p>
+<p>If you want to check or mutate Dags or Tasks on a cluster-wide level, then a Cluster Policy will let you do
+it. They also let you apply cluster-wide settings to Dags based on the dag_id or other properties.</p>
+<p>Common use-cases include:</p>
 <ul class="simple">
-<li><p>Checking that dags / tasks meet a certain standard</p></li>
-<li><p>Setting default arguments on dags / tasks</p></li>
+<li><p>Checking that Dags / tasks meet a certain standard</p></li>
+<li><p>Setting default arguments on Dags / tasks</p></li>
 <li><p>Performing custom routing logic</p></li>
 </ul>
 <p>There are three main types of cluster policy:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">dag_policy</span></code>: Takes a <code class="xref py py-class docutils literal notranslate"><span class="pre">DAG</span></code> parameter called <code class="docutils literal notranslate"><span class="pre">dag</span></code>. Runs at load time of the
-DAG from DagBag <code class="xref py py-class docutils literal notranslate"><span class="pre">DagBag</span></code>.</p></li>
+Dag from DagBag <code class="xref py py-class docutils literal notranslate"><span class="pre">DagBag</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">task_policy</span></code>: Takes a <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseOperator</span></code> parameter called <code class="docutils literal notranslate"><span class="pre">task</span></code>. The
 policy gets executed when the task is created during parsing of the task from DagBag at load time. This
 means that the whole task definition can be altered in the task policy. It does not relate to a specific
@@ -654,17 +655,17 @@ task running in a DagRun. The <code class="docutils literal notranslate"><span c
 executed in the future.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">task_instance_mutation_hook</span></code>: Takes a <code class="xref py py-class docutils literal notranslate"><span class="pre">TaskInstance</span></code> parameter called
 <code class="docutils literal notranslate"><span class="pre">task_instance</span></code>. The <code class="docutils literal notranslate"><span class="pre">task_instance_mutation_hook</span></code> applies not to a task but to the instance of a task that
-relates to a particular DagRun. It is executed in a “worker”, not in the dag file processor, just before the
+relates to a particular DagRun. It is executed in a “worker”, not in the Dag file processor, just before the
 task instance is executed. The policy is only applied to the currently executed run (i.e. instance) of that
 task.</p></li>
 </ul>
-<p>The DAG and Task cluster policies can raise the  <a class="reference internal" href="../_api/airflow/exceptions/index.html#airflow.exceptions.AirflowClusterPolicyViolation" title="airflow.exceptions.AirflowClusterPolicyViolation"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowClusterPolicyViolation</span></code></a>
-exception to indicate that the dag/task they were passed is not compliant and should not be loaded.</p>
+<p>The Dag and Task cluster policies can raise the  <a class="reference internal" href="../_api/airflow/exceptions/index.html#airflow.exceptions.AirflowClusterPolicyViolation" title="airflow.exceptions.AirflowClusterPolicyViolation"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowClusterPolicyViolation</span></code></a>
+exception to indicate that the Dag/task they were passed is not compliant and should not be loaded.</p>
 <p>They can also raise the <a class="reference internal" href="../_api/airflow/exceptions/index.html#airflow.exceptions.AirflowClusterPolicySkipDag" title="airflow.exceptions.AirflowClusterPolicySkipDag"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowClusterPolicySkipDag</span></code></a> exception
-when skipping that DAG is needed intentionally. Unlike <a class="reference internal" href="../_api/airflow/exceptions/index.html#airflow.exceptions.AirflowClusterPolicyViolation" title="airflow.exceptions.AirflowClusterPolicyViolation"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowClusterPolicyViolation</span></code></a>,
+when skipping that Dag is needed intentionally. Unlike <a class="reference internal" href="../_api/airflow/exceptions/index.html#airflow.exceptions.AirflowClusterPolicyViolation" title="airflow.exceptions.AirflowClusterPolicyViolation"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowClusterPolicyViolation</span></code></a>,
 this exception is not displayed on the Airflow web UI (Internally, it’s not recorded on <code class="docutils literal notranslate"><span class="pre">import_error</span></code> table on meta database.)</p>
-<p>Any extra attributes set by a cluster policy take priority over those defined in your DAG file; for example,
-if you set an <code class="docutils literal notranslate"><span class="pre">sla</span></code> on your Task in the DAG file, and then your cluster policy also sets an <code class="docutils literal notranslate"><span class="pre">sla</span></code>, the
+<p>Any extra attributes set by a cluster policy take priority over those defined in your Dag file; for example,
+if you set an <code class="docutils literal notranslate"><span class="pre">sla</span></code> on your Task in the Dag file, and then your cluster policy also sets an <code class="docutils literal notranslate"><span class="pre">sla</span></code>, the
 cluster policy’s value will take precedence.</p>
 <section id="how-do-define-a-policy-function">
 <span id="administration-and-deployment-cluster-policies-define"></span><h2>How do define a policy function<a class="headerlink" href="#how-do-define-a-policy-function" title="Link to this heading">¶</a></h2>
@@ -710,7 +711,7 @@ in a custom module using the <a class="reference external" href="https://pluggy.
 <span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;my_airflow_plugin.policies&#39;</span>
 </pre></div>
 </div>
-<p>The entrypoint group must be <code class="docutils literal notranslate"><span class="pre">airflow.policy</span></code>, and the name is ignored. The value should be your module (or class) decorated with the <code class="docutils literal notranslate"><span class="pre">&#64;hookimpl</span></code> marker.</p>
+<p>The entrypoint group must be <code class="docutils literal notranslate"><span class="pre">airflow.policy</span></code>, and the name must be unique per entry, otherwise duplicate entries will be ignored by pluggy. The value should be your module (or class) decorated with the <code class="docutils literal notranslate"><span class="pre">&#64;hookimpl</span></code> marker.</p>
 <p>Once you have done that, and you have installed your distribution into your Airflow env, the policy functions will get called by the various Airflow components. (The exact call order is undefined, so don’t rely on any particular calling order if you have multiple plugins).</p>
 </li>
 </ol>
@@ -733,7 +734,7 @@ make sure that these tasks get wired to the right workers</p></li>
 </ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>task</strong> (<em>airflow.models.baseoperator.BaseOperator</em>) – task to be mutated</p>
+<dd class="field-odd"><p><strong>task</strong> – task to be mutated</p>
 </dd>
 </dl>
 </dd></dl>
@@ -752,7 +753,7 @@ to stop DAG from being executed.</p>
 </ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dag</strong> (<em>airflow.models.dag.DAG</em>) – dag to be mutated</p>
+<dd class="field-odd"><p><strong>dag</strong> – dag to be mutated</p>
 </dd>
 </dl>
 </dd></dl>
@@ -799,8 +800,8 @@ tasks dag_id, task_id, logical_date, dag_run_id, try_number are reserved keys.</
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
 <section id="dag-policies">
-<h3>DAG policies<a class="headerlink" href="#dag-policies" title="Link to this heading">¶</a></h3>
-<p>This policy checks if each DAG has at least one tag defined:</p>
+<h3>Dag policies<a class="headerlink" href="#dag-policies" title="Link to this heading">¶</a></h3>
+<p>This policy checks if each Dag has at least one tag defined:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">dag_policy</span><span class="p">(</span><span class="n">dag</span><span class="p">:</span> <span class="n">DAG</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Ensure that DAG has at least one tag and skip the DAG with `only_for_beta` tag.&quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">dag</span><span class="o">.</span><span class="n">tags</span><span class="p">:</span>
@@ -822,7 +823,7 @@ tasks dag_id, task_id, logical_date, dag_run_id, try_number are reserved keys.</
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>DAG policies are applied after the DAG has been completely loaded, so overriding the <code class="docutils literal notranslate"><span class="pre">default_args</span></code> parameter has no effect. If you want to override the default operator settings, use task policies instead.</p>
+<p>Dag policies are applied after the Dag has been completely loaded, so overriding the <code class="docutils literal notranslate"><span class="pre">default_args</span></code> parameter has no effect. If you want to override the default operator settings, use task policies instead.</p>
 </div>
 </section>
 <section id="task-policies">
@@ -989,7 +990,7 @@ configure local settings.</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#examples">Examples</a><ul>
-<li><a class="reference internal" href="#dag-policies">DAG policies</a></li>
+<li><a class="reference internal" href="#dag-policies">Dag policies</a></li>
 <li><a class="reference internal" href="#task-policies">Task policies</a></li>
 <li><a class="reference internal" href="#task-instance-mutation">Task instance mutation</a></li>
 </ul>
@@ -1150,8 +1151,8 @@ configure local settings.</p>
     <script src="/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="/external/js/cdnjs.cloudflare.com-1.14.3-popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
     <script src="/external/js/stackpath.bootstrapcdn.com-4.1.3-bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
-        <script src="../_static/documentation_options.js?v=c3365b21"></script>
-        <script src="../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../_static/documentation_options.js?v=dd1205ac"></script>
+        <script src="../_static/doctools.js?v=9bcbadda"></script>
         <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>

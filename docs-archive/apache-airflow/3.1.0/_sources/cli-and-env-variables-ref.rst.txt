@@ -24,7 +24,7 @@ Command Line Interface
 ''''''''''''''''''''''
 
 Airflow has a very rich command line interface that allows for
-many types of operation on a DAG, starting services, and supporting
+many types of operation on a Dag, starting services, and supporting
 development and testing.
 
 .. note::
@@ -77,7 +77,7 @@ Environment Variables
 * ``result_backend`` in ``[celery]`` section
 * ``password`` in ``[atlas]`` section
 * ``smtp_password`` in ``[smtp]`` section
-* ``secret_key`` in ``[webserver]`` section
+* ``secret_key`` in ``[api]`` section
 
 .. envvar:: AIRFLOW__{SECTION}__{KEY}_SECRET
 
@@ -104,7 +104,7 @@ Environment Variables
 .. envvar:: AIRFLOW_HOME
 
   The root directory for the Airflow content.
-  This is the default parent directory for Airflow assets such as dags and logs.
+  This is the default parent directory for Airflow assets such as Dags and logs.
 
 .. envvar:: AIRFLOW_VAR_{KEY}
 

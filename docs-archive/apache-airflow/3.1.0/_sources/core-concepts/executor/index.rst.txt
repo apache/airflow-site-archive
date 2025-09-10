@@ -112,6 +112,8 @@ Airflow tasks are executed ad hoc inside containers/pods. Each task is isolated 
 
     New Airflow users may assume they need to run a separate executor process using one of the Local or Remote Executors. This is not correct. The executor logic runs *inside* the scheduler process, and will run the tasks locally or not depending on the executor selected.
 
+.. _using-multiple-executors-concurrently:
+
 Using Multiple Executors Concurrently
 -------------------------------------
 
@@ -123,7 +125,7 @@ Configuration
 Configuring multiple executors uses the same configuration option (as described :ref:`here <executor-basic-configuration>`) as single executor use cases, leveraging a comma separated list notation to specify multiple executors.
 
 .. note::
-    The first executor in the list (either on its own or along with other executors) will behave the same as it did in pre-2.10.0 releases. In other words, this will be the default executor for the environment. Any Airflow Task or DAG that does not specify a specific executor will use this environment level executor. All other executors in the list will be initialized and ready to run tasks if specified on an Airflow Task or DAG. If you do not specify an executor in this configuration list, it cannot be used to run tasks.
+    The first executor in the list (either on its own or along with other executors) will behave the same as it did in pre-2.10.0 releases. In other words, this will be the default executor for the environment. Any Airflow Task or Dag that does not specify a specific executor will use this environment level executor. All other executors in the list will be initialized and ready to run tasks if specified on an Airflow Task or Dag. If you do not specify an executor in this configuration list, it cannot be used to run tasks.
 
 Some examples of valid multiple executor configuration:
 
@@ -146,7 +148,7 @@ Some examples of valid multiple executor configuration:
 .. note::
     Using two instances of the _same_ executor class is not currently supported.
 
-To make it easier to specify executors on tasks and dags, executor configuration now supports aliases. You may then use this alias to refer to the executor in your dags (see below).
+To make it easier to specify executors on tasks and Dags, executor configuration now supports aliases. You may then use this alias to refer to the executor in your Dags (see below).
 
 .. code-block:: ini
 
@@ -154,9 +156,9 @@ To make it easier to specify executors on tasks and dags, executor configuration
     executor = LocalExecutor,ShortName:my.custom.module.ExecutorClass
 
 .. note::
-    If a DAG specifies a task to use an executor that is not configured, the DAG will fail to parse and a warning dialog will be shown in the Airflow UI. Please ensure that all executors you wish to use are specified in Airflow configuration on *any* host/container that is running an Airflow component (scheduler, workers, etc).
+    If a Dag specifies a task to use an executor that is not configured, the Dag will fail to parse and a warning dialog will be shown in the Airflow UI. Please ensure that all executors you wish to use are specified in Airflow configuration on *any* host/container that is running an Airflow component (scheduler, workers, etc).
 
-Writing dags and tasks
+Writing Dags and Tasks
 ^^^^^^^^^^^^^^^^^^^^^^
 
 To specify an executor for a task, make use of the executor parameter on Airflow Operators:
@@ -175,7 +177,7 @@ To specify an executor for a task, make use of the executor parameter on Airflow
     def hello_world():
         print("hello world!")
 
-To specify an executor for an entire DAG, make use of the existing Airflow mechanism of default arguments. All tasks in the DAG will then use the specified executor (unless explicitly overridden by a specific task):
+To specify an executor for an entire Dag, make use of the existing Airflow mechanism of default arguments. All tasks in the Dag will then use the specified executor (unless explicitly overridden by a specific task):
 
 .. code-block:: python
 
@@ -189,14 +191,14 @@ To specify an executor for an entire DAG, make use of the existing Airflow mecha
 
     with DAG(
         dag_id="hello_worlds",
-        default_args={"executor": "LocalExecutor"},  # Applies to all tasks in the DAG
+        default_args={"executor": "LocalExecutor"},  # Applies to all tasks in the Dag
     ) as dag:
         # All tasks will use the executor from default args automatically
         hw = hello_world()
         hw_again = hello_world_again()
 
 .. note::
-    Tasks store the executor they were configured to run on in the Airflow database. Changes are reflected after each parsing of a DAG.
+    Tasks store the executor they were configured to run on in the Airflow database. Changes are reflected after each parsing of a Dag.
 
 Monitoring
 ^^^^^^^^^^
@@ -208,11 +210,13 @@ Logging works the same as the single executor use case.
 Statically-coded Hybrid Executors
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are currently two "statically coded" executors, these executors are hybrids of two different executors: the :doc:`LocalKubernetesExecutor <apache-airflow-providers-cncf-kubernetes:local_kubernetes_executor>` and the :doc:`CeleryKubernetesExecutor <apache-airflow-providers-celery:celery_kubernetes_executor>`. Their implementation is not native or intrinsic to core Airflow. These hybrid executors instead make use of the ``queue`` field on Task Instances to indicate and persist which sub-executor to run on. This is a misuse of the ``queue`` field and makes it impossible to use it for its intended purpose when using these hybrid executors.
+There were two "statically coded" executors, but they are no longer supported starting from Airflow 3.0.0.
+
+These executors are hybrids of two different executors: the :doc:`LocalKubernetesExecutor <apache-airflow-providers-cncf-kubernetes:local_kubernetes_executor>` and the :doc:`CeleryKubernetesExecutor <apache-airflow-providers-celery:celery_kubernetes_executor>`. Their implementation is not native or intrinsic to core Airflow. These hybrid executors instead make use of the ``queue`` field on Task Instances to indicate and persist which sub-executor to run on. This is a misuse of the ``queue`` field and makes it impossible to use it for its intended purpose when using these hybrid executors.
 
 Executors such as these also require hand crafting new "concrete" classes to create each permutation of possible combinations of executors. This is untenable as more executors are created and leads to more maintenance overhead. Bespoke coding effort should not be required to use any combination of executors.
 
-Therefore using these types of executors is no longer recommended.
+Therefore using these types of executors is no longer supported starting from Airflow 3.0.0. It's recommended to use the :ref:`Using Multiple Executors Concurrently <using-multiple-executors-concurrently>` feature instead.
 
 
 Writing Your Own Executor
@@ -303,7 +307,7 @@ Compatibility Attributes
 
 The ``BaseExecutor`` class interface contains a set of attributes that Airflow core code uses to check the features that your executor is compatible with. When writing your own Airflow executor be sure to set these correctly for your use case. Each attribute is simply a boolean to enable/disable a feature or indicate that a feature is supported/unsupported by the executor:
 
-* ``supports_pickling``: Whether or not the executor supports reading pickled dags from the Database before execution (rather than reading the DAG definition from the file system).
+* ``supports_pickling``: Whether or not the executor supports reading pickled Dags from the Database before execution (rather than reading the Dag definition from the file system).
 * ``supports_sentry``: Whether or not the executor supports `Sentry <https://sentry.io>`_.
 
 * ``is_local``: Whether or not the executor is remote or local. See the `Executor Types`_ section above.

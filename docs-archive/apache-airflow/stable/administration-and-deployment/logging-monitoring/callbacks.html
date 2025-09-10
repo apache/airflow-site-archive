@@ -10,13 +10,13 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title>Callbacks &mdash; Airflow 3.0.6 Documentation</title>
+        <title>Callbacks &mdash; Airflow 3.1.0 Documentation</title>
     <link rel="stylesheet" href="../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../_static/_gen/css/main.min.css?v=016086f5" />
             <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../_static/_gen/css/main-custom.min.css?v=24ed3fb0" />
-            <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
+            <link rel="stylesheet" type="text/css" href="../../_static/_gen/css/main-custom.min.css?v=ad330701" />
+            <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
             <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=957f1c83" />
             <link rel="index" title="Index" href="../../genindex.html" />
@@ -50,7 +50,7 @@
 
 <header>
     <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2025 is coming October 07-09. Register now for early bird ticket!
+        Airflow Summit 2025 is coming October 07-09. Register now to secure your spot!
     </a>
     <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
@@ -292,7 +292,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.0.6</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -452,7 +452,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.0.6</span>
+        <span class="bodytext__medium--greyish-brown">Version: </span><span class="version">3.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
 
@@ -638,12 +638,18 @@
 <div></div></blockquote>
 <section id="callbacks">
 <h1>Callbacks<a class="headerlink" href="#callbacks" title="Link to this heading">¶</a></h1>
-<p>A valuable component of logging and monitoring is the use of task callbacks to act upon changes in state of a given task, or across all tasks in a given DAG.
-For example, you may wish to alert when certain tasks have failed, or have the last task in your DAG invoke a callback when it succeeds.</p>
+<p>A valuable component of logging and monitoring is the use of task callbacks to act upon changes in state of a given Dag or task, or across all tasks in a given Dag.
+For example, you may wish to alert when certain tasks have failed, or invoke a callback when your Dag succeeds.</p>
+<p>There are three different places where callbacks can be defined.</p>
+<ul class="simple">
+<li><p>Callbacks set in the Dag definition will be applied at the Dag level.</p></li>
+<li><p>Using <code class="docutils literal notranslate"><span class="pre">default_args</span></code>, callbacks can be set for each task in a Dag.</p></li>
+<li><p>Individual callbacks can be set for a task by setting that callback within the task definition itself.</p></li>
+</ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Callback functions are only invoked when the task state changes due to execution by a worker.
-As such, task changes set by the command line interface (<a class="reference internal" href="../../howto/usage-cli.html"><span class="doc">CLI</span></a>) or user interface (<a class="reference internal" href="../../ui.html"><span class="doc">UI</span></a>) do not
+<p>Callback functions are only invoked when the Dag or task state changes due to execution by a worker.
+As such, Dag and task changes set by the command line interface (<a class="reference internal" href="../../howto/usage-cli.html"><span class="doc">CLI</span></a>) or user interface (<a class="reference internal" href="../../ui.html"><span class="doc">UI</span></a>) do not
 execute callback functions.</p>
 </div>
 <div class="admonition warning">
@@ -653,9 +659,15 @@ Errors in callback functions will show up in scheduler logs rather than task log
 By default, scheduler logs do not show up in the UI and instead can be found in
 <code class="docutils literal notranslate"><span class="pre">$AIRFLOW_HOME/logs/scheduler/latest/DAG_FILE.py.log</span></code></p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As of Airflow 2.6.0, callbacks now supports a list of callback functions, allowing users to specify multiple functions
+to be executed in the desired event. Simply pass a list of callback functions to the callback args when defining your Dag/task
+callbacks: e.g <code class="docutils literal notranslate"><span class="pre">on_failure_callback=[callback_func_1,</span> <span class="pre">callback_func_2]</span></code></p>
+</div>
 <section id="callback-types">
 <h2>Callback Types<a class="headerlink" href="#callback-types" title="Link to this heading">¶</a></h2>
-<p>There are five types of task events that can trigger a callback:</p>
+<p>There are six types of events that can trigger a callback:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Name</p></th>
@@ -664,34 +676,43 @@ By default, scheduler logs do not show up in the UI and instead can be found in
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">on_success_callback</span></code></p></td>
-<td><p>Invoked when the task <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">succeeds</span></a></p></td>
+<td><p>Invoked when the <a class="reference internal" href="../../core-concepts/dag-run.html#dag-run-dag-run-status"><span class="std std-ref">Dag succeeds</span></a> or <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">task succeeds</span></a>.
+Available at the Dag or task level.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">on_failure_callback</span></code></p></td>
-<td><p>Invoked when the task <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">fails</span></a></p></td>
+<td><p>Invoked when the task <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">fails</span></a>.
+Available at the Dag or task level.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">on_retry_callback</span></code></p></td>
-<td><p>Invoked when the task is <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">up for retry</span></a></p></td>
+<td><p>Invoked when the task is <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">up for retry</span></a>.
+Available only at the task level.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">on_execute_callback</span></code></p></td>
-<td><p>Invoked right before the task begins executing.</p></td>
+<td><p>Invoked right before the task begins executing.
+Available only at the task level.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">on_skipped_callback</span></code></p></td>
 <td><p>Invoked when the task is <a class="reference internal" href="../../core-concepts/tasks.html#concepts-task-instances"><span class="std std-ref">running</span></a> and  AirflowSkipException raised.
 Explicitly it is NOT called if a task is not started to be executed because of a preceding branching
-decision in the DAG or a trigger rule which causes execution to skip so that the task execution
-is never scheduled.</p></td>
+decision in the Dag or a trigger rule which causes execution to skip so that the task execution
+is never scheduled.
+Available only at the task level.</p></td>
 </tr>
 </tbody>
 </table>
 </section>
-<section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
-<p>In the following example, failures in any task call the <code class="docutils literal notranslate"><span class="pre">task_failure_alert</span></code> function, and success in the last task calls the <code class="docutils literal notranslate"><span class="pre">dag_success_alert</span></code> function:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">pendulum</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<section id="using-custom-callback-methods">
+<h3>Using Custom Callback Methods<a class="headerlink" href="#using-custom-callback-methods" title="Link to this heading">¶</a></h3>
+<p>In the following example, failures in <code class="docutils literal notranslate"><span class="pre">task1</span></code> call the <code class="docutils literal notranslate"><span class="pre">task_failure_alert</span></code> function, and success at Dag level calls the <code class="docutils literal notranslate"><span class="pre">dag_success_alert</span></code> function.
+Before each task begins to execute, the <code class="docutils literal notranslate"><span class="pre">task_execute_callback</span></code> function will be called:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.empty</span><span class="w"> </span><span class="kn">import</span> <span class="n">EmptyOperator</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">task_execute_callback</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Task has begun execution, task_instance_key_str: </span><span class="si">{</span><span class="n">context</span><span class="p">[</span><span class="s1">&#39;task_instance_key_str&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">task_failure_alert</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
@@ -699,32 +720,48 @@ is never scheduled.</p></td>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">dag_success_alert</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DAG has succeeded, run_id: </span><span class="si">{</span><span class="n">context</span><span class="p">[</span><span class="s1">&#39;run_id&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Dag has succeeded, run_id: </span><span class="si">{</span><span class="n">context</span><span class="p">[</span><span class="s1">&#39;run_id&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;example_callback&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">start_date</span><span class="o">=</span><span class="n">pendulum</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
-    <span class="n">dagrun_timeout</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">60</span><span class="p">),</span>
-    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">on_success_callback</span><span class="o">=</span><span class="n">dag_success_alert</span><span class="p">,</span>
-    <span class="n">on_failure_callback</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">],</span>
+    <span class="n">default_args</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;on_execute_callback&quot;</span><span class="p">:</span> <span class="n">task_execute_callback</span><span class="p">},</span>
 <span class="p">):</span>
-    <span class="n">task1</span> <span class="o">=</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;task1&quot;</span><span class="p">)</span>
+    <span class="n">task1</span> <span class="o">=</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;task1&quot;</span><span class="p">,</span> <span class="n">on_failure_callback</span><span class="o">=</span><span class="p">[</span><span class="n">task_failure_alert</span><span class="p">])</span>
     <span class="n">task2</span> <span class="o">=</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;task2&quot;</span><span class="p">)</span>
-    <span class="n">task3</span> <span class="o">=</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;task3&quot;</span><span class="p">,</span> <span class="n">on_failure_callback</span><span class="o">=</span><span class="p">[</span><span class="n">task_failure_alert</span><span class="p">])</span>
+    <span class="n">task3</span> <span class="o">=</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;task3&quot;</span><span class="p">)</span>
     <span class="n">task1</span> <span class="o">&gt;&gt;</span> <span class="n">task2</span> <span class="o">&gt;&gt;</span> <span class="n">task3</span>
 </pre></div>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>As of Airflow 2.6.0, callbacks now supports a list of callback functions, allowing users to specify multiple functions
-to be executed in the desired event. Simply pass a list of callback functions to the callback args when defining your DAG/task
-callbacks: e.g <code class="docutils literal notranslate"><span class="pre">on_failure_callback=[callback_func_1,</span> <span class="pre">callback_func_2]</span></code></p>
-</div>
 <p>Full list of variables available in <code class="docutils literal notranslate"><span class="pre">context</span></code> in <a class="reference internal" href="../../templates-ref.html"><span class="doc">docs</span></a> and <a class="reference external" href="https://github.com/apache/airflow/blob/main/task-sdk/src/airflow/sdk/definitions/context.py">code</a>.</p>
+</section>
+<section id="using-notifiers">
+<h3>Using Notifiers<a class="headerlink" href="#using-notifiers" title="Link to this heading">¶</a></h3>
+<p>You can use Notifiers in your Dag definition by passing it as an argument to the <code class="docutils literal notranslate"><span class="pre">on_*_callbacks</span></code>.
+For example, you can use it with <code class="docutils literal notranslate"><span class="pre">on_success_callback</span></code> or <code class="docutils literal notranslate"><span class="pre">on_failure_callback</span></code> to send notifications based
+on the status of a task or a Dag run.</p>
+<p>Here’s an example of using a custom notifier:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.bash</span><span class="w"> </span><span class="kn">import</span> <span class="n">BashOperator</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">myprovider.notifier</span><span class="w"> </span><span class="kn">import</span> <span class="n">MyNotifier</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;example_notifier&quot;</span><span class="p">,</span>
+    <span class="n">on_success_callback</span><span class="o">=</span><span class="n">MyNotifier</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;Success!&quot;</span><span class="p">),</span>
+    <span class="n">on_failure_callback</span><span class="o">=</span><span class="n">MyNotifier</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;Failure!&quot;</span><span class="p">),</span>
+<span class="p">):</span>
+    <span class="n">task</span> <span class="o">=</span> <span class="n">BashOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;example_task&quot;</span><span class="p">,</span>
+        <span class="n">bash_command</span><span class="o">=</span><span class="s2">&quot;exit 1&quot;</span><span class="p">,</span>
+        <span class="n">on_success_callback</span><span class="o">=</span><span class="n">MyNotifier</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="s2">&quot;Task Succeeded!&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p>For a list of community-managed Notifiers, see <a class="reference external" href="/docs/apache-airflow-providers/core-extensions/notifications.html" title="(in apache-airflow-providers vstable)"><span>Notifications</span></a>.
+For more information on writing a custom Notifier, see the <a class="reference internal" href="../../howto/notifications.html"><span class="doc">Notifiers</span></a> how-to page.</p>
+</section>
 </section>
 </section>
 
@@ -805,7 +842,11 @@ callbacks: e.g <code class="docutils literal notranslate"><span class="pre">on_f
             <ul>
 <li><a class="reference internal" href="#">Callbacks</a><ul>
 <li><a class="reference internal" href="#callback-types">Callback Types</a></li>
-<li><a class="reference internal" href="#example">Example</a></li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#using-custom-callback-methods">Using Custom Callback Methods</a></li>
+<li><a class="reference internal" href="#using-notifiers">Using Notifiers</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -962,8 +1003,8 @@ callbacks: e.g <code class="docutils literal notranslate"><span class="pre">on_f
     <script src="/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="/external/js/cdnjs.cloudflare.com-1.14.3-popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
     <script src="/external/js/stackpath.bootstrapcdn.com-4.1.3-bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
-        <script src="../../_static/documentation_options.js?v=c3365b21"></script>
-        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/documentation_options.js?v=dd1205ac"></script>
+        <script src="../../_static/doctools.js?v=9bcbadda"></script>
         <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
         <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../_static/copybutton.js?v=f281be69"></script>

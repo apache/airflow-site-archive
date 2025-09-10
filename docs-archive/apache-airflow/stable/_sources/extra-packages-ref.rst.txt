@@ -88,7 +88,7 @@ python dependencies for the provided package. The same extras are available as `
 +=====================+=====================================================+============================================================================+
 | async               | ``pip install 'apache-airflow[async]'``             | Async worker classes for Gunicorn                                          |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
-| graphviz            | ``pip install 'apache-airflow[graphviz]'``          | Graphviz renderer for converting DAG to graphical output                   |
+| graphviz            | ``pip install 'apache-airflow[graphviz]'``          | Graphviz renderer for converting Dag to graphical output                   |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | kerberos            | ``pip install 'apache-airflow[kerberos]'``          | Kerberos integration for Kerberized services (Hadoop, Presto, Trino)       |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
@@ -114,13 +114,15 @@ other packages that can be used by airflow or some of its providers.
 +=====================+=====================================================+============================================================================+
 | aiobotocore         | ``pip install 'apache-airflow[aiobotocore]'``       | Support for asynchronous (deferrable) operators for Amazon integration     |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
+| amazon-aws-auth     | ``pip install apache-airflow[amazon-aws-auth]``     | Amazon-aws-auth AWS authentication                                         |
++---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | cloudpickle         | ``pip install apache-airflow[cloudpickle]``         | Cloudpickle hooks and operators                                            |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | github-enterprise   | ``pip install 'apache-airflow[github-enterprise]'`` | GitHub Enterprise auth backend                                             |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | google-auth         | ``pip install 'apache-airflow[google-auth]'``       | Google auth backend                                                        |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
-| graphviz            | ``pip install 'apache-airflow[graphviz]'``          | Graphviz renderer for converting DAG to graphical output                   |
+| graphviz            | ``pip install 'apache-airflow[graphviz]'``          | Graphviz renderer for converting Dag to graphical output                   |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
 | ldap                | ``pip install 'apache-airflow[ldap]'``              | LDAP authentication for users                                              |
 +---------------------+-----------------------------------------------------+----------------------------------------------------------------------------+
@@ -162,7 +164,7 @@ with a consistent set of dependencies based on constraint files provided by Airf
     :substitutions:
 
     pip install apache-airflow[google,amazon,apache-spark]==|version| \
-      --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-|version|/constraints-3.9.txt"
+      --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-|version|/constraints-3.10.txt"
 
 Note, that this will install providers in the versions that were released at the time of Airflow |version| release. You can later
 upgrade those providers manually if you want to use latest versions of the providers.
@@ -213,6 +215,8 @@ custom bash/python providers).
 | apache-pinot        | ``pip install 'apache-airflow[apache-pinot]'``      | All Pinot related hooks                        |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
 | apache-spark        | ``pip install 'apache-airflow[apache-spark]'``      | All Spark related operators & hooks            |
++---------------------+-----------------------------------------------------+------------------------------------------------+
+| apache-tinkerpop    | ``pip install apache-airflow[apache-tinkerpop]``    | Apache-tinkerpop hooks and operators           |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
 | apache-webhdfs      | ``pip install 'apache-airflow[apache-webhdfs]'``    | HDFS hooks and operators                       |
 +---------------------+-----------------------------------------------------+------------------------------------------------+
@@ -392,6 +396,8 @@ pre-installed when Airflow is installed.
 | imap                | ``pip install 'apache-airflow[imap]'``              | IMAP hooks and sensors               |      *       |
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+
 | jdbc                | ``pip install 'apache-airflow[jdbc]'``              | JDBC hooks and operators             |              |
++---------------------+-----------------------------------------------------+--------------------------------------+--------------+
+| keycloak            | ``pip install apache-airflow[keycloak]``            | Keycloak hooks and operators         |              +
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+
 | microsoft-psrp      | ``pip install 'apache-airflow[microsoft-psrp]'``    | PSRP hooks and operators             |              |
 +---------------------+-----------------------------------------------------+--------------------------------------+--------------+
