@@ -648,15 +648,22 @@
 <li><p>An external script or process used the <a class="reference internal" href="stable-rest-api-ref.html"><span class="doc">Airflow REST API</span></a> to change the state of a task.</p></li>
 </ul>
 </section>
-<section id="taskrunner-killed">
-<h3>TaskRunner killed<a class="headerlink" href="#taskrunner-killed" title="Link to this heading">¶</a></h3>
+<section id="process-terminated-by-signal">
+<h3>Process terminated by signal<a class="headerlink" href="#process-terminated-by-signal" title="Link to this heading">¶</a></h3>
 <p>Sometimes, Airflow or some adjacent system will kill a task instance’s <code class="docutils literal notranslate"><span class="pre">TaskRunner</span></code>, causing the task instance to fail.</p>
-<p>Here are some examples that could cause such an event:</p>
-<ul class="simple">
-<li><p>A Dag run timeout, specified by <code class="docutils literal notranslate"><span class="pre">dagrun_timeout</span></code> in the Dag’s definition.</p></li>
-<li><p>An Airflow worker running out of memory
-- Usually, Airflow workers that run out of memory receive a SIGKILL, and the scheduler will fail the corresponding task instance for not having a heartbeat. However, in some scenarios, Airflow kills the task before that happens.</p></li>
-</ul>
+<p>Below we discuss a few common cases.</p>
+<section id="dag-run-timeout">
+<h4>Dag run timeout<a class="headerlink" href="#dag-run-timeout" title="Link to this heading">¶</a></h4>
+<p>A dag run timeout can be specified by <code class="docutils literal notranslate"><span class="pre">dagrun_timeout</span></code> in the dag’s definition.
+The task process would likely be killed with SIGTERM (exit code -15).</p>
+</section>
+<section id="out-of-memory-error-oom">
+<h4>Out of memory error (OOM)<a class="headerlink" href="#out-of-memory-error-oom" title="Link to this heading">¶</a></h4>
+<p>When a task process consumes too much memory for a worker, the best case scenario is it is killed
+with SIGKILL (exit code -9). Depending on configuration and infrastructure, it is also
+possible that the whole worker will be killed due to OOM and then the tasks would be marked as
+failed after failing to heartbeat.</p>
+</section>
 </section>
 <section id="lingering-task-supervisor-processes">
 <h3>Lingering task supervisor processes<a class="headerlink" href="#lingering-task-supervisor-processes" title="Link to this heading">¶</a></h3>
@@ -748,7 +755,11 @@ observe leftover <code class="docutils literal notranslate"><span class="pre">su
 <li><a class="reference internal" href="#">Troubleshooting</a><ul>
 <li><a class="reference internal" href="#obscure-task-failures">Obscure task failures</a><ul>
 <li><a class="reference internal" href="#task-state-changed-externally">Task state changed externally</a></li>
-<li><a class="reference internal" href="#taskrunner-killed">TaskRunner killed</a></li>
+<li><a class="reference internal" href="#process-terminated-by-signal">Process terminated by signal</a><ul>
+<li><a class="reference internal" href="#dag-run-timeout">Dag run timeout</a></li>
+<li><a class="reference internal" href="#out-of-memory-error-oom">Out of memory error (OOM)</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#lingering-task-supervisor-processes">Lingering task supervisor processes</a></li>
 </ul>
 </li>
@@ -898,7 +909,7 @@ observe leftover <code class="docutils literal notranslate"><span class="pre">su
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">
-            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache feather logo are either registered trademarks or trademarks of The Apache Software Foundation.
+            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache logo are either registered trademarks or trademarks of The Apache Software Foundation.
             All other products or name brands are trademarks of their respective holders, including The Apache Software Foundation.
         </span>
     </div>

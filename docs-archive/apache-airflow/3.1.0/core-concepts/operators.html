@@ -693,9 +693,21 @@ is all done for you and that just needs some arguments.</p>
 </div>
 <p>Here, <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">ds</span> <span class="pre">}}</span></code> is a templated variable, and because the <code class="docutils literal notranslate"><span class="pre">env</span></code> parameter of the <code class="docutils literal notranslate"><span class="pre">BashOperator</span></code> is templated with Jinja, the data interval’s start date will be available as an environment variable named <code class="docutils literal notranslate"><span class="pre">DATA_INTERVAL_START</span></code> in your Bash script.</p>
 <p>You can also pass in a callable instead when Python is more readable than a Jinja template. The callable must accept two named arguments <code class="docutils literal notranslate"><span class="pre">context</span></code> and <code class="docutils literal notranslate"><span class="pre">jinja_env</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">build_complex_command</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">):</span>
+<p>The <code class="docutils literal notranslate"><span class="pre">context</span></code> parameter is an Airflow’s <code class="docutils literal notranslate"><span class="pre">Context</span></code> object that provides runtime information for the current task execution. Its contents can be accessed with Python’s standard <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#mapping-types-dict">dict syntax</a>. It includes all variables available in Jinja templates and is read-only from the perspective of template rendering - while you can access and use its values, modifications won’t affect the task execution environment.</p>
+<p>For a complete list of available context variables see <a class="reference internal" href="../templates-ref.html#templates-variables"><span class="std std-ref">Templates reference</span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">jinja2</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">build_complex_command</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">:</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Environment</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="c1"># Access runtime information from the context dictionary</span>
+    <span class="n">task_id</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;ti&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">task_id</span>
+    <span class="n">execution_date</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;ds&quot;</span><span class="p">]</span>
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">do_complex_things</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">do_complex_things</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">execution_date</span><span class="p">)</span>
 
 
 <span class="n">t</span> <span class="o">=</span> <span class="n">BashOperator</span><span class="p">(</span>
@@ -706,7 +718,7 @@ is all done for you and that just needs some arguments.</p>
 </pre></div>
 </div>
 <p>Since each template field is only rendered once, the callable’s return value will not go through rendering again. Therefore, the callable must manually render any templates. This can be done by calling <code class="docutils literal notranslate"><span class="pre">render_template()</span></code> on the current task like this:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">build_complex_command</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">build_complex_command</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">:</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Environment</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">do_complex_things</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;task&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">render_template</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">)</span>
@@ -1130,7 +1142,7 @@ If you upgrade your environment and get the following error:</p>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">
-            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache feather logo are either registered trademarks or trademarks of The Apache Software Foundation.
+            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache logo are either registered trademarks or trademarks of The Apache Software Foundation.
             All other products or name brands are trademarks of their respective holders, including The Apache Software Foundation.
         </span>
     </div>
