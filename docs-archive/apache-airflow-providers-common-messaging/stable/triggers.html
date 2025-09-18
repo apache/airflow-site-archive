@@ -50,7 +50,7 @@
 
 <header>
     <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2025 is coming October 07-09. Register now for early bird ticket!
+        Airflow Summit 2025 is coming October 07-09. Register now to secure your spot!
     </a>
     <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
@@ -621,9 +621,9 @@
 <section id="wait-for-a-message-in-a-queue">
 <span id="howto-trigger-messagequeuetrigger"></span><h2>Wait for a message in a queue<a class="headerlink" href="#wait-for-a-message-in-a-queue" title="Link to this heading">¶</a></h2>
 <p>Use the <a class="reference internal" href="_api/airflow/providers/common/messaging/triggers/msg_queue/index.html#airflow.providers.common.messaging.triggers.msg_queue.MessageQueueTrigger" title="airflow.providers.common.messaging.triggers.msg_queue.MessageQueueTrigger"><code class="xref py py-class docutils literal notranslate"><span class="pre">MessageQueueTrigger</span></code></a> to wait for a message in a
-queue. Parameters of the trigger are:</p>
+queue. Mandatory parameters of the trigger are:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">queue</span></code> - the queue identifier</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scheme</span></code> - the queue scheme (e.g., ‘kafka’, ‘redis+pubsub’, ‘sqs’) you are using</p></li>
 </ul>
 <p>Additional parameters can be provided depending on the queue provider. Connections needs to be provided with the relevant
 default connection ID, for example, when connecting to a queue in AWS SQS, the connection ID should be
@@ -655,6 +655,34 @@ asset.</p>
 <p>3. <strong>Event-Driven Dag</strong>: Instead of running on a fixed schedule, the Dag executes when the asset receives an update
 (e.g., a new message in the queue).</p>
 </section>
+</section>
+<section id="use-message-payload-in-the-dag">
+<h2>Use message payload in the Dag<a class="headerlink" href="#use-message-payload-in-the-dag" title="Link to this heading">¶</a></h2>
+<p>When a message is received from the queue, the trigger passes the message payload as part of the trigger event.
+You can access this payload in your DAG tasks using the <code class="docutils literal notranslate"><span class="pre">triggering_asset_events</span></code> parameter.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.decorators</span><span class="w"> </span><span class="kn">import</span> <span class="n">task</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.messaging.triggers.msg_queue</span><span class="w"> </span><span class="kn">import</span> <span class="n">MessageQueueTrigger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">Asset</span><span class="p">,</span> <span class="n">AssetWatcher</span><span class="p">,</span> <span class="n">chain</span>
+
+<span class="c1"># Define the asset with trigger</span>
+<span class="n">trigger</span> <span class="o">=</span> <span class="n">MessageQueueTrigger</span><span class="p">(</span><span class="n">scheme</span><span class="o">=</span><span class="s2">&quot;kafka&quot;</span><span class="p">,</span> <span class="n">topics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;my-kafka-topic&quot;</span><span class="p">])</span>
+<span class="n">asset</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="s2">&quot;kafka_queue_asset&quot;</span><span class="p">,</span> <span class="n">watchers</span><span class="o">=</span><span class="p">[</span><span class="n">AssetWatcher</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;kafka_watcher&quot;</span><span class="p">,</span> <span class="n">trigger</span><span class="o">=</span><span class="n">trigger</span><span class="p">)])</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span><span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;example_msgq_payload&quot;</span><span class="p">,</span> <span class="n">schedule</span><span class="o">=</span><span class="p">[</span><span class="n">asset</span><span class="p">])</span> <span class="k">as</span> <span class="n">dag</span><span class="p">:</span>
+
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_message</span><span class="p">(</span><span class="n">triggering_asset_events</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">triggering_asset_events</span><span class="p">[</span><span class="n">asset</span><span class="p">]:</span>
+            <span class="c1"># Access the message payload</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">extra</span><span class="p">[</span><span class="s2">&quot;payload&quot;</span><span class="p">]</span>
+            <span class="c1"># Process the payload as needed</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Received message: </span><span class="si">{</span><span class="n">payload</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">chain</span><span class="p">(</span><span class="n">process_message</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">triggering_asset_events</span></code> parameter contains the events that triggered the DAG run, indexed by asset.
+Each event includes an <code class="docutils literal notranslate"><span class="pre">extra</span></code> dictionary where the message payload is stored under the <code class="docutils literal notranslate"><span class="pre">payload</span></code> key.</p>
 </section>
 </section>
 
@@ -738,6 +766,7 @@ asset.</p>
 <li><a class="reference internal" href="#how-it-works">How it works</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#use-message-payload-in-the-dag">Use message payload in the Dag</a></li>
 </ul>
 </li>
 </ul>
@@ -882,7 +911,7 @@ asset.</p>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">
-            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache feather logo are either registered trademarks or trademarks of The Apache Software Foundation.
+            Apache Airflow, Apache, Airflow, the Airflow logo, and the Apache logo are either registered trademarks or trademarks of The Apache Software Foundation.
             All other products or name brands are trademarks of their respective holders, including The Apache Software Foundation.
         </span>
     </div>
