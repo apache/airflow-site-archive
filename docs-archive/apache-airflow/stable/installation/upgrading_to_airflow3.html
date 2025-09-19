@@ -704,7 +704,7 @@ ensure you deploy your changes to your old instance prior to upgrade, and wait u
 <h2>Step 3: Dag authors - Check your Airflow Dags for compatibility<a class="headerlink" href="#step-3-dag-authors-check-your-airflow-dags-for-compatibility" title="Link to this heading">¶</a></h2>
 <p>To minimize friction for users upgrading from prior versions of Airflow, we have created a Dag upgrade check utility using <a class="reference external" href="https://docs.astral.sh/ruff/">Ruff</a> combined with <a class="reference external" href="https://docs.astral.sh/ruff/rules/#airflow-air">AIR</a> rules.
 The rules AIR301 and AIR302 indicate breaking changes in Airflow 3, while AIR311 and AIR312 highlight changes that are not currently breaking but are strongly recommended for updates.</p>
-<p>The latest available <code class="docutils literal notranslate"><span class="pre">ruff</span></code> version will have the most up-to-date rules, but be sure to use at least version <code class="docutils literal notranslate"><span class="pre">0.13.0</span></code>. The below example demonstrates how to check
+<p>The latest available <code class="docutils literal notranslate"><span class="pre">ruff</span></code> version will have the most up-to-date rules, but be sure to use at least version <code class="docutils literal notranslate"><span class="pre">0.13.1</span></code>. The below example demonstrates how to check
 for Dag incompatibilities that will need to be fixed before they will work as expected on Airflow 3.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ruff<span class="w"> </span>check<span class="w"> </span>dags/<span class="w"> </span>--select<span class="w"> </span>AIR301
 </pre></div>
@@ -727,6 +727,95 @@ To trigger these fixes, run the following command:</p>
 <p>In AIR rules, unsafe fixes involve changing import paths while keeping the name of the imported member the same. For instance, changing the import from <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">airflow.sensors.base_sensor_operator</span> <span class="pre">import</span> <span class="pre">BaseSensorOperator</span></code> to <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">airflow.sdk.bases.sensor</span> <span class="pre">import</span> <span class="pre">BaseSensorOperator</span></code> requires ruff to remove the original import before adding the new one. In contrast, safe fixes include changes to both the member name and the import path, such as changing <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">airflow.datasets</span> <span class="pre">import</span> <span class="pre">Dataset</span></code> to <cite>from airflow.sdk import Asset`</cite>. These adjustments do not require ruff to remove the old import. To remove unused legacy imports, it is necessary to enable the <cite>unused-import</cite> rule (F401) &lt;<a class="reference external" href="https://docs.astral.sh/ruff/rules/unused-import/#unused-import-f401">https://docs.astral.sh/ruff/rules/unused-import/#unused-import-f401</a>&gt;.</p>
 </div>
 <p>You can also configure these flags through configuration files. See <a class="reference external" href="https://docs.astral.sh/ruff/configuration/">Configuring Ruff</a> for details.</p>
+<section id="key-import-updates">
+<h3>Key Import Updates<a class="headerlink" href="#key-import-updates" title="Link to this heading">¶</a></h3>
+<p>While ruff can automatically fix many import issues, here are the key import changes you’ll need to make to ensure your DAGs and other
+code import Airflow components correctly in Airflow 3. The older paths are deprecated and will be removed in a future Airflow version.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 50.0%" />
+<col style="width: 50.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>Old Import Path (Deprecated)</strong></p></th>
+<th class="head"><p><strong>New Import Path (airflow.sdk)</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.decorators.dag</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.dag</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.decorators.task</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.task</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.decorators.task_group</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.task_group</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.decorators.setup</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.setup</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.decorators.teardown</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.teardown</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.dag.DAG</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.DAG</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.baseoperator.BaseOperator</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.BaseOperator</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.param.Param</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.Param</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.param.ParamsDict</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.ParamsDict</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.baseoperatorlink.BaseOperatorLink</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.BaseOperatorLink</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.sensors.base.BaseSensorOperator</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.BaseSensorOperator</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.hooks.base.BaseHook</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.BaseHook</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.notifications.basenotifier.BaseNotifier</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.BaseNotifier</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.utils.task_group.TaskGroup</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.TaskGroup</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.datasets.Dataset</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.Asset</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.datasets.DatasetAlias</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.AssetAlias</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.datasets.DatasetAll</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.AssetAll</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.datasets.DatasetAny</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.AssetAny</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.connection.Connection</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.Connection</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.context.Context</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.Context</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.models.variable.Variable</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.Variable</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">airflow.io.*</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">airflow.sdk.io.*</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Migration Timeline</strong></p>
+<ul class="simple">
+<li><p><strong>Airflow 3.1</strong>: Legacy imports show deprecation warnings but continue to work</p></li>
+<li><p><strong>Future Airflow version</strong>: Legacy imports will be <strong>removed</strong></p></li>
+</ul>
+</section>
 </section>
 <section id="step-4-install-the-standard-provider">
 <h2>Step 4: Install the Standard Provider<a class="headerlink" href="#step-4-install-the-standard-provider" title="Link to this heading">¶</a></h2>
@@ -786,7 +875,7 @@ These include:</p>
 <li><p><strong>SubDAGs</strong>: Replaced by TaskGroups, Assets, and Data Aware Scheduling.</p></li>
 <li><p><strong>Sequential Executor</strong>: Replaced by LocalExecutor, which can be used with SQLite for local development use cases.</p></li>
 <li><p><strong>CeleryKubernetesExecutor and LocalKubernetesExecutor</strong>: Replaced by <a class="reference external" href="https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/executor/index.html#using-multiple-executors-concurrently">Multiple Executor Configuration</a></p></li>
-<li><p><strong>SLAs</strong>: Deprecated and removed; Will be replaced by forthcoming <a class="reference external" href="https://cwiki.apache.org/confluence/x/tglIEw">Deadline Alerts</a>.</p></li>
+<li><p><strong>SLAs</strong>: Deprecated and removed; replaced with <a class="reference internal" href="../howto/deadline-alerts.html"><span class="doc">Deadline Alerts</span></a>.</p></li>
 <li><p><strong>Subdir</strong>: Used as an argument on many CLI commands, <code class="docutils literal notranslate"><span class="pre">--subdir</span></code> or <code class="docutils literal notranslate"><span class="pre">-S</span></code> has been superseded by <a class="reference internal" href="../administration-and-deployment/dag-bundles.html"><span class="doc">Dag bundles</span></a>.</p></li>
 <li><p><strong>REST API</strong> (<code class="docutils literal notranslate"><span class="pre">/api/v1</span></code>) replaced: Use the modern FastAPI-based stable <code class="docutils literal notranslate"><span class="pre">/api/v2</span></code> instead; see <a class="reference internal" href="../stable-rest-api-ref.html"><span class="doc">Airflow API v2</span></a> for details.</p></li>
 <li><p><strong>Some Airflow context variables</strong>: The following keys are no longer available in a <a class="reference internal" href="../templates-ref.html#templates-variables"><span class="std std-ref">task instance’s context</span></a>. If not replaced, will cause Dag errors:
@@ -897,7 +986,10 @@ These include:</p>
 </li>
 <li><a class="reference internal" href="#step-1-take-care-of-prerequisites">Step 1: Take care of prerequisites</a></li>
 <li><a class="reference internal" href="#step-2-clean-and-back-up-your-existing-airflow-instance">Step 2: Clean and back up your existing Airflow Instance</a></li>
-<li><a class="reference internal" href="#step-3-dag-authors-check-your-airflow-dags-for-compatibility">Step 3: Dag authors - Check your Airflow Dags for compatibility</a></li>
+<li><a class="reference internal" href="#step-3-dag-authors-check-your-airflow-dags-for-compatibility">Step 3: Dag authors - Check your Airflow Dags for compatibility</a><ul>
+<li><a class="reference internal" href="#key-import-updates">Key Import Updates</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#step-4-install-the-standard-provider">Step 4: Install the Standard Provider</a></li>
 <li><a class="reference internal" href="#step-5-review-custom-operators-for-direct-db-access">Step 5: Review custom operators for direct db access</a></li>
 <li><a class="reference internal" href="#step-6-deployment-managers-upgrade-your-airflow-instance">Step 6: Deployment Managers - Upgrade your Airflow Instance</a></li>
