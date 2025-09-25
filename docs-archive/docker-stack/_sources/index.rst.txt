@@ -50,6 +50,16 @@ for all the supported Python versions.
 
 The images we release are multi-platform AMD/ARM images.
 
+The default Python version for the reference image - one that you get when you do not specify version -
+is the newest supported Python version at the time of the Airflow release that supports
+all providers released in the regular reference image.
+
+For example, even when we release Airflow 3.0 with Python 3.13 support, but some of the providers that
+are installed by default in the regular reference image do not support Python 3.13,
+the "default" Python version for the image should be Python 3.12.
+
+The same applies to the "slim" images.
+
 You can find the following images there (Assuming Airflow version :subst-code:`|airflow-version|`):
 
 * :subst-code:`apache/airflow:latest`              - the latest released Airflow image with default Python version (3.12 currently)
@@ -60,7 +70,7 @@ You can find the following images there (Assuming Airflow version :subst-code:`|
 Those are "reference" regular images. They contain the most common set of extras, dependencies and providers that are
 often used by the users and they are good to "try-things-out" when you want to just take Airflow for a spin,
 
-You can also use "slim" images that contain only core airflow and are about half the size of the "regular" images
+You can also use "slim" images that contain only core Airflow and are about half the size of the "regular" images
 but you need to add all the :doc:`apache-airflow:extra-packages-ref` and providers that you need separately
 via :ref:`Building the image <build:build_image>`.
 
@@ -150,7 +160,7 @@ You have four options:
 
 3. If the base platform we use (currently Debian Bookworm) does not contain the latest versions you want
    and you want to use other base images, you can take a look at what system dependencies are installed
-   and scripts in the latest ``Dockerfile`` of airflow and take inspiration from it and build your own image
+   and scripts in the latest ``Dockerfile`` of Airflow and take inspiration from it and build your own image
    or copy it and modify it to your needs. See the
    `Dockerfile <https://github.com/apache/airflow/blob/|airflow-version|/Dockerfile>`__ for the latest version.
 
