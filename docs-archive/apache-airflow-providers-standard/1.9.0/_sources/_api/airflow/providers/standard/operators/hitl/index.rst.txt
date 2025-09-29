@@ -1,0 +1,263 @@
+airflow.providers.standard.operators.hitl
+=========================================
+
+.. py:module:: airflow.providers.standard.operators.hitl
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.standard.operators.hitl.HITLOperator
+   airflow.providers.standard.operators.hitl.ApprovalOperator
+   airflow.providers.standard.operators.hitl.HITLBranchOperator
+   airflow.providers.standard.operators.hitl.HITLEntryOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: HITLOperator(*, subject, options, body = None, defaults = None, multiple = False, params = None, notifiers = None, assigned_users = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.standard.version_compat.BaseOperator`
+
+
+   Base class for all Human-in-the-loop Operators to inherit from.
+
+   :param subject: Headline/subject presented to the user for the interaction task.
+   :param options: List of options that the an user can select from to complete the task.
+   :param body: Descriptive text (with Markdown support) that gives the details that are needed to decide.
+   :param defaults: The default options and the options that are taken if timeout is passed.
+   :param multiple: Whether the user can select one or multiple options.
+   :param params: dictionary of parameter definitions that are in the format of Dag params such that
+       a Form Field can be rendered. Entered data is validated (schema, required fields) like for a Dag run
+       and added to XCom of the task result.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Collection[str]
+      :value: ('subject', 'body')
+
+
+
+   .. py:attribute:: subject
+
+
+   .. py:attribute:: body
+      :value: None
+
+
+
+   .. py:attribute:: options
+
+
+   .. py:attribute:: defaults
+
+
+   .. py:attribute:: multiple
+      :value: False
+
+
+
+   .. py:attribute:: params
+      :type:  airflow.sdk.definitions.param.ParamsDict
+      :value: None
+
+
+
+   .. py:attribute:: notifiers
+      :type:  collections.abc.Sequence[airflow.sdk.bases.notifier.BaseNotifier]
+
+
+   .. py:attribute:: assigned_users
+
+
+   .. py:method:: validate_options()
+
+      Validate the `options` attribute of the instance.
+
+      Raises:
+          ValueError: If `options` is empty.
+
+
+
+   .. py:method:: validate_params()
+
+      Validate the `params` attribute of the instance.
+
+      Raises:
+          ValueError: If `"_options"` key is present in `params`, which is not allowed.
+
+
+
+   .. py:method:: validate_defaults()
+
+      Validate whether the given defaults pass the following criteria.
+
+      1. Default options should be the subset of options.
+      2. When multiple is False, there should only be one option.
+
+
+
+   .. py:method:: execute(context)
+
+      Add a Human-in-the-loop Response and then defer to HITLTrigger and wait for user input.
+
+
+
+   .. py:property:: serialized_params
+      :type: dict[str, Any]
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+
+   .. py:method:: process_trigger_event_error(event)
+
+
+   .. py:method:: validate_chosen_options(chosen_options)
+
+      Check whether user provide valid response.
+
+
+
+   .. py:method:: validate_params_input(params_input)
+
+      Check whether user provide valid params input.
+
+
+
+   .. py:method:: generate_link_to_ui(*, task_instance, base_url = None, options = None, params_input = None)
+
+      Generate a URL link to the "required actions" page for a specific task instance.
+
+      This URL includes query parameters based on allowed options and parameters.
+
+      Args:
+          task_instance: The task instance to generate the link for.
+          base_url: Optional base URL to use. Defaults to ``api.base_url`` from config.
+          options: Optional subset of allowed options to include in the URL.
+          params_input: Optional subset of allowed params to include in the URL.
+
+      Raises:
+          ValueError: If any provided option or parameter is invalid.
+          ValueError: If no base_url can be determined.
+
+      Returns:
+          The full URL pointing to the required actions page with query parameters.
+
+
+
+   .. py:method:: generate_link_to_ui_from_context(*, context, base_url = None, options = None, params_input = None)
+      :staticmethod:
+
+
+      Generate a "required actions" page URL from a task context.
+
+      Delegates to ``generate_link_to_ui`` using the task and task_instance extracted from
+      the provided context.
+
+      Args:
+          context: The Airflow task context containing 'task' and 'task_instance'.
+          base_url: Optional base URL to use.
+          options: Optional list of allowed options to include.
+          params_input: Optional dictionary of allowed parameters to include.
+
+      Returns:
+          The full URL pointing to the required actions page with query parameters.
+
+
+
+.. py:class:: ApprovalOperator(*, ignore_downstream_trigger_rules = False, fail_on_reject = False, **kwargs)
+
+   Bases: :py:obj:`HITLOperator`, :py:obj:`airflow.providers.standard.utils.skipmixin.SkipMixin`
+
+
+   Human-in-the-loop Operator that has only 'Approval' and 'Reject' options.
+
+
+   .. py:attribute:: inherits_from_skipmixin
+      :value: True
+
+
+      Used to determine if an Operator is inherited from SkipMixin or its subclasses (e.g., BranchMixin).
+
+
+
+   .. py:attribute:: FIXED_ARGS
+      :value: ['options', 'multiple']
+
+
+
+   .. py:attribute:: APPROVE
+      :value: 'Approve'
+
+
+
+   .. py:attribute:: REJECT
+      :value: 'Reject'
+
+
+
+   .. py:attribute:: ignore_downstream_trigger_rules
+      :value: False
+
+
+
+   .. py:attribute:: fail_on_reject
+      :value: False
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+
+.. py:class:: HITLBranchOperator(*, options_mapping = None, **kwargs)
+
+   Bases: :py:obj:`HITLOperator`, :py:obj:`airflow.providers.standard.operators.branch.BranchMixIn`
+
+
+   BranchOperator based on Human-in-the-loop Response.
+
+
+   .. py:attribute:: inherits_from_skipmixin
+      :value: True
+
+
+      Used to determine if an Operator is inherited from SkipMixin or its subclasses (e.g., BranchMixin).
+
+
+
+   .. py:attribute:: options_mapping
+
+
+   .. py:method:: validate_options_mapping()
+
+      Validate that `options_mapping` keys match `self.options` and all values are strings.
+
+      Raises:
+          ValueError: If any key is not in `self.options` or any value is not a string.
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+      Execute the operator and branch based on chosen options.
+
+
+
+.. py:class:: HITLEntryOperator(**kwargs)
+
+   Bases: :py:obj:`HITLOperator`
+
+
+   Human-in-the-loop Operator that is used to accept user input through TriggerForm.
+
+
+   .. py:attribute:: OK
+      :value: 'OK'
+
+
+
