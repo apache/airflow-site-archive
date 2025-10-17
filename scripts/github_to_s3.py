@@ -31,7 +31,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from transfer_utils import CommonTransferUtils, convert_short_name_to_full_package_name, sort_priority_packages
+from transfer_utils import CommonTransferUtils, convert_short_name_to_full_package_name, \
+    sort_priority_packages, invalidate_cloudflare_cache
 
 console = Console(width=200, color_system="standard")
 
@@ -159,3 +160,4 @@ if __name__ == "__main__":
         console.print(f"[red] Invalid sync type {args.sync_type} with document packages {document_packages} "
                       f"and commit ref {args.commit_ref}[/]")
         sys.exit(1)
+    invalidate_cloudflare_cache(args.bucket_path)
