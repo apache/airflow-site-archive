@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import tempfile
@@ -167,3 +168,29 @@ def sort_priority_tuples(tuples: list[tuple[str, str]]) -> list[tuple[str, str]]
                 sorted_tuples.append(tup)
                 tuples.remove(tup)
     return sorted_tuples + sorted(tuples, key=lambda x: x[0])
+
+
+def get_cloudfront_distribution(destination_location: str):
+    if "live-docs" in destination_location:
+        return "E26P75MP9PMULE"
+    return "E197MS0XRJC5F3"
+
+def invalidate_cloudflare_cache(destination_location: str):
+    cloudfront_client = boto3.client("cloudfront")
+    distribution_id = get_cloudfront_distribution(destination_location)
+    console.print(
+        f"[info]Invalidating CloudFront cache for the uploaded files: distribution id {distribution_id}\n"
+    )
+    cloudfront_client.create_invalidation(
+        DistributionId=distribution_id,
+        InvalidationBatch={
+            "Paths": {
+                "Quantity": 1,
+                "Items": ["/*"],
+            },
+            "CallerReference": str(int(os.environ.get("GITHUB_RUN_ID", 0))),
+        },
+    )
+    console.print(
+        f"[success]CloudFront cache request invalidated successfully: {distribution_id}\n"
+    )
