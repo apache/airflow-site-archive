@@ -46,10 +46,7 @@
     
 
 <header>
-    <a href="https://astronomer.typeform.com/airflowsurvey25" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Complete the airflow survey & get a free airflow 3 certification!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -959,7 +956,9 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Write maintenance request to the db.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">MAINTENANCE_REQUEST</span>
     <span class="n">worker</span><span class="o">.</span><span class="n">maintenance_comment</span> <span class="o">=</span> <span class="n">maintenance_comment</span></div>
 
@@ -971,7 +970,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">exit_maintenance</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Write maintenance exit to the db.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">MAINTENANCE_EXIT</span>
     <span class="n">worker</span><span class="o">.</span><span class="n">maintenance_comment</span> <span class="o">=</span> <span class="kc">None</span></div>
 
@@ -983,7 +984,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">remove_worker</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a worker that is offline or just gone from DB.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
@@ -1005,7 +1008,9 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Write maintenance comment in the db.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">MAINTENANCE_MODE</span><span class="p">,</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">MAINTENANCE_PENDING</span><span class="p">,</span>
@@ -1026,7 +1031,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">request_shutdown</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Request to shutdown the edge worker.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
@@ -1042,7 +1049,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">add_worker_queues</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">queues</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Add queues to an edge worker.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
@@ -1061,7 +1070,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">remove_worker_queues</span><span class="p">(</span><span class="n">worker_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">queues</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove queues from an edge worker.&quot;&quot;&quot;</span>
     <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">EdgeWorkerModel</span><span class="o">.</span><span class="n">worker_name</span> <span class="o">==</span> <span class="n">worker_name</span><span class="p">)</span>
-    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">worker</span><span class="p">:</span> <span class="n">EdgeWorkerModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">worker</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Edge Worker </span><span class="si">{</span><span class="n">worker_name</span><span class="si">}</span><span class="s2"> not found in list of registered workers&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE</span><span class="p">,</span>
         <span class="n">EdgeWorkerState</span><span class="o">.</span><span class="n">OFFLINE_MAINTENANCE</span><span class="p">,</span>
@@ -1254,6 +1265,10 @@
                     <span>Donate</span>
                 </a>
 
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
                 <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
                     <span>Thanks</span>
                 </a>
@@ -1261,6 +1276,15 @@
                 <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
                     <span>Security</span>
                 </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
 
             </div>
