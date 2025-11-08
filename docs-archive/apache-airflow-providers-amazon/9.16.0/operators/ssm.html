@@ -738,6 +738,42 @@ or the <a class="reference internal" href="../_api/airflow/providers/amazon/aws/
 </div>
 </div>
 </section>
+<section id="retrieve-output-from-an-ssm-command-invocation">
+<span id="howto-operator-ssmgetcommandinvocationoperator"></span><h3>Retrieve output from an SSM command invocation<a class="headerlink" href="#retrieve-output-from-an-ssm-command-invocation" title="Link to this heading">¶</a></h3>
+<p>To retrieve the output and execution details from an SSM command that has been executed, you can use
+<a class="reference internal" href="../_api/airflow/providers/amazon/aws/operators/ssm/index.html#airflow.providers.amazon.aws.operators.ssm.SsmGetCommandInvocationOperator" title="airflow.providers.amazon.aws.operators.ssm.SsmGetCommandInvocationOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">SsmGetCommandInvocationOperator</span></code></a>.</p>
+<p>This operator is useful for:</p>
+<ul class="simple">
+<li><p>Retrieving output from commands executed by <a class="reference internal" href="../_api/airflow/providers/amazon/aws/operators/ssm/index.html#airflow.providers.amazon.aws.operators.ssm.SsmRunCommandOperator" title="airflow.providers.amazon.aws.operators.ssm.SsmRunCommandOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">SsmRunCommandOperator</span></code></a> in previous tasks</p></li>
+<li><p>Getting output from SSM commands executed outside of Airflow</p></li>
+<li><p>Inspecting command results for debugging or data processing purposes</p></li>
+</ul>
+<p>To retrieve output from all instances that executed a command:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">get_all_output</span> <span class="o">=</span> <span class="n">SsmGetCommandInvocationOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;get_command_output&quot;</span><span class="p">,</span>
+    <span class="n">command_id</span><span class="o">=</span><span class="s1">&#39;{{ ti.xcom_pull(task_ids=&quot;run_command&quot;) }}&#39;</span><span class="p">,</span>  <span class="c1"># From previous task</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>To retrieve output from a specific instance:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/amazon/aws/example_ssm.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/tests/system/amazon/aws/example_ssm.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">get_command_output</span> <span class="o">=</span> <span class="n">SsmGetCommandInvocationOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;get_command_output&quot;</span><span class="p">,</span>
+    <span class="n">command_id</span><span class="o">=</span><span class="s2">&quot;{{ ti.xcom_pull(task_ids=&#39;run_command&#39;) }}&quot;</span><span class="p">,</span>
+    <span class="n">instance_id</span><span class="o">=</span><span class="n">instance_id</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>The operator returns structured data including:</p>
+<ul class="simple">
+<li><p>Standard output and error content</p></li>
+<li><p>Execution status and response codes</p></li>
+<li><p>Execution start and end times</p></li>
+<li><p>Document name and comments</p></li>
+</ul>
+</section>
 </section>
 <section id="sensors">
 <h2>Sensors<a class="headerlink" href="#sensors" title="Link to this heading">¶</a></h2>
@@ -757,7 +793,7 @@ or the <a class="reference internal" href="../_api/airflow/providers/amazon/aws/
 </section>
 <section id="iam-permissions">
 <h2>IAM Permissions<a class="headerlink" href="#iam-permissions" title="Link to this heading">¶</a></h2>
-<p>You need to ensure the following IAM permissions are granted to allow Airflow to run and monitor SSM Run Command executions:</p>
+<p>You need to ensure the following IAM permissions are granted to allow Airflow to run, retrieve and monitor SSM Run Command executions:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
   <span class="s2">&quot;Effect&quot;</span><span class="p">:</span> <span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
   <span class="s2">&quot;Action&quot;</span><span class="p">:</span> <span class="p">[</span>
@@ -861,6 +897,7 @@ to the ARNs of intended target resources (such as EC2 instances), in accordance 
 <li><a class="reference internal" href="#generic-parameters">Generic Parameters</a></li>
 <li><a class="reference internal" href="#operators">Operators</a><ul>
 <li><a class="reference internal" href="#runs-commands-on-one-or-more-managed-nodes">Runs commands on one or more managed nodes</a></li>
+<li><a class="reference internal" href="#retrieve-output-from-an-ssm-command-invocation">Retrieve output from an SSM command invocation</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#sensors">Sensors</a><ul>
@@ -1001,40 +1038,28 @@ to the ARNs of intended target resources (such as EC2 instances), in accordance 
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">

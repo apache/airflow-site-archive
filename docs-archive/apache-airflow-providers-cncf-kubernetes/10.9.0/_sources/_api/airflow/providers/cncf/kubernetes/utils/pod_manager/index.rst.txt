@@ -37,6 +37,7 @@ Classes
    airflow.providers.cncf.kubernetes.utils.pod_manager.PodLoggingStatus
    airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager
    airflow.providers.cncf.kubernetes.utils.pod_manager.OnFinishAction
+   airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager
 
 
 Functions
@@ -46,6 +47,8 @@ Functions
 
    airflow.providers.cncf.kubernetes.utils.pod_manager.should_retry_start_pod
    airflow.providers.cncf.kubernetes.utils.pod_manager.check_exception_is_kubernetes_api_unauthorized
+   airflow.providers.cncf.kubernetes.utils.pod_manager.watch_pod_events
+   airflow.providers.cncf.kubernetes.utils.pod_manager.await_pod_start
    airflow.providers.cncf.kubernetes.utils.pod_manager.is_log_group_marker
 
 
@@ -105,6 +108,35 @@ Module Contents
 
 
 .. py:function:: check_exception_is_kubernetes_api_unauthorized(exc)
+
+.. py:function:: watch_pod_events(pod_manager, pod, check_interval = 1)
+   :async:
+
+
+   Read pod events and write them to the log.
+
+   This function supports both asynchronous and synchronous pod managers.
+
+   :param pod_manager: The pod manager instance (PodManager or AsyncPodManager).
+   :param pod: The pod object to monitor.
+   :param check_interval: Interval (in seconds) between checks.
+
+
+.. py:function:: await_pod_start(pod_manager, pod, schedule_timeout = 120, startup_timeout = 120, check_interval = 1)
+   :async:
+
+
+   Monitor the startup phase of a Kubernetes pod, waiting for it to leave the ``Pending`` state.
+
+   This function is shared by both PodManager and AsyncPodManager to provide consistent pod startup tracking.
+
+   :param pod_manager: The pod manager instance (PodManager or AsyncPodManager).
+   :param pod: The pod object to monitor.
+   :param schedule_timeout: Maximum time (in seconds) to wait for the pod to be scheduled.
+   :param startup_timeout: Maximum time (in seconds) to wait for the pod to start running after being scheduled.
+   :param check_interval: Interval (in seconds) between status checks.
+   :param is_async: Set to True if called in an async context; otherwise, False.
+
 
 .. py:exception:: PodLaunchTimeoutException
 
@@ -413,5 +445,58 @@ Module Contents
 .. py:function:: is_log_group_marker(line)
 
    Check if the line is a log group marker like `::group::` or `::endgroup::`.
+
+
+.. py:class:: AsyncPodManager(async_hook, callbacks = None)
+
+   Bases: :py:obj:`airflow.utils.log.logging_mixin.LoggingMixin`
+
+
+   Create, monitor, and otherwise interact with Kubernetes pods for use with the KubernetesPodTriggerer.
+
+
+   .. py:attribute:: stop_watching_events
+      :value: False
+
+
+
+   .. py:method:: read_pod(pod)
+      :async:
+
+
+      Read POD information.
+
+
+
+   .. py:method:: read_pod_events(pod)
+      :async:
+
+
+      Get pod's events.
+
+
+
+   .. py:method:: watch_pod_events(pod, check_interval = 1)
+      :async:
+
+
+      Read pod events and writes into log.
+
+
+
+   .. py:method:: await_pod_start(pod, schedule_timeout = 120, startup_timeout = 120, check_interval = 1)
+      :async:
+
+
+      Wait for the pod to reach phase other than ``Pending``.
+
+      :param pod:
+      :param schedule_timeout: Timeout (in seconds) for pod stay in schedule state
+          (if pod is taking to long in schedule state, fails task)
+      :param startup_timeout: Timeout (in seconds) for startup of the pod
+          (if pod is pending for too long after being scheduled, fails task)
+      :param check_interval: Interval (in seconds) between checks
+      :return:
+
 
 

@@ -701,6 +701,8 @@
     <span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client.models.v1_pod_condition</span><span class="w"> </span><span class="kn">import</span> <span class="n">V1PodCondition</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">urllib3.response</span><span class="w"> </span><span class="kn">import</span> <span class="n">HTTPResponse</span>
 
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.hooks.kubernetes</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncKubernetesHook</span>
+
 
 <div class="viewcode-block" id="EMPTY_XCOM_RESULT">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.EMPTY_XCOM_RESULT">[docs]</a>
@@ -767,6 +769,115 @@
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.check_exception_is_kubernetes_api_unauthorized">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_exception_is_kubernetes_api_unauthorized</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">):</span>
     <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="n">ApiException</span><span class="p">)</span> <span class="ow">and</span> <span class="n">exc</span><span class="o">.</span><span class="n">status</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="o">.</span><span class="n">status</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;401&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="watch_pod_events">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.watch_pod_events">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">watch_pod_events</span><span class="p">(</span>
+    <span class="n">pod_manager</span><span class="p">:</span> <span class="n">PodManager</span> <span class="o">|</span> <span class="n">AsyncPodManager</span><span class="p">,</span>
+    <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">,</span>
+    <span class="n">check_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read pod events and write them to the log.</span>
+
+<span class="sd">    This function supports both asynchronous and synchronous pod managers.</span>
+
+<span class="sd">    :param pod_manager: The pod manager instance (PodManager or AsyncPodManager).</span>
+<span class="sd">    :param pod: The pod object to monitor.</span>
+<span class="sd">    :param check_interval: Interval (in seconds) between checks.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">num_events</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">is_async</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pod_manager</span><span class="p">,</span> <span class="n">AsyncPodManager</span><span class="p">)</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">stop_watching_events</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_async</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="k">await</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">read_pod_events</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">read_pod_events</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">new_event</span> <span class="ow">in</span> <span class="n">events</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="n">num_events</span><span class="p">:]:</span>
+            <span class="n">involved_object</span><span class="p">:</span> <span class="n">V1ObjectReference</span> <span class="o">=</span> <span class="n">new_event</span><span class="o">.</span><span class="n">involved_object</span>
+            <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;The Pod has an Event: </span><span class="si">%s</span><span class="s2"> from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">new_event</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="n">involved_object</span><span class="o">.</span><span class="n">field_path</span>
+            <span class="p">)</span>
+        <span class="n">num_events</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="o">.</span><span class="n">items</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="await_pod_start">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.await_pod_start">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">await_pod_start</span><span class="p">(</span>
+    <span class="n">pod_manager</span><span class="p">:</span> <span class="n">PodManager</span> <span class="o">|</span> <span class="n">AsyncPodManager</span><span class="p">,</span>
+    <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">,</span>
+    <span class="n">schedule_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span>
+    <span class="n">startup_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span>
+    <span class="n">check_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Monitor the startup phase of a Kubernetes pod, waiting for it to leave the ``Pending`` state.</span>
+
+<span class="sd">    This function is shared by both PodManager and AsyncPodManager to provide consistent pod startup tracking.</span>
+
+<span class="sd">    :param pod_manager: The pod manager instance (PodManager or AsyncPodManager).</span>
+<span class="sd">    :param pod: The pod object to monitor.</span>
+<span class="sd">    :param schedule_timeout: Maximum time (in seconds) to wait for the pod to be scheduled.</span>
+<span class="sd">    :param startup_timeout: Maximum time (in seconds) to wait for the pod to start running after being scheduled.</span>
+<span class="sd">    :param check_interval: Interval (in seconds) between status checks.</span>
+<span class="sd">    :param is_async: Set to True if called in an async context; otherwise, False.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::group::Waiting until </span><span class="si">%s</span><span class="s2">s to get the POD scheduled...&quot;</span><span class="p">,</span> <span class="n">schedule_timeout</span><span class="p">)</span>
+    <span class="n">pod_was_scheduled</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">start_check_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">is_async</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pod_manager</span><span class="p">,</span> <span class="n">AsyncPodManager</span><span class="p">)</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_async</span><span class="p">:</span>
+            <span class="n">remote_pod</span> <span class="o">=</span> <span class="k">await</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">read_pod</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">remote_pod</span> <span class="o">=</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">read_pod</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
+        <span class="n">pod_status</span> <span class="o">=</span> <span class="n">remote_pod</span><span class="o">.</span><span class="n">status</span>
+        <span class="k">if</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">phase</span> <span class="o">!=</span> <span class="n">PodPhase</span><span class="o">.</span><span class="n">PENDING</span><span class="p">:</span>
+            <span class="n">pod_manager</span><span class="o">.</span><span class="n">stop_watching_events</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
+            <span class="k">break</span>
+
+        <span class="c1"># Check for timeout</span>
+        <span class="n">pod_conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">V1PodCondition</span><span class="p">]</span> <span class="o">=</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">conditions</span>
+        <span class="k">if</span> <span class="n">pod_conditions</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">condition</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;PodScheduled&quot;</span> <span class="ow">and</span> <span class="n">condition</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;True&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">condition</span> <span class="ow">in</span> <span class="n">pod_conditions</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">pod_was_scheduled</span><span class="p">:</span>
+                <span class="c1"># POD was initially scheduled update timeout for getting POD launched</span>
+                <span class="n">pod_was_scheduled</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">start_check_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+                <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Waiting </span><span class="si">%s</span><span class="s2">s to get the POD running...&quot;</span><span class="p">,</span> <span class="n">startup_timeout</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_check_time</span> <span class="o">&gt;=</span> <span class="n">startup_timeout</span><span class="p">:</span>
+                <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PodLaunchTimeoutException</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Pod took too long to start. More than </span><span class="si">{</span><span class="n">startup_timeout</span><span class="si">}</span><span class="s2">s. Check the pod events in kubernetes.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_check_time</span> <span class="o">&gt;=</span> <span class="n">schedule_timeout</span><span class="p">:</span>
+                <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PodLaunchTimeoutException</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Pod took too long to be scheduled on the cluster, giving up. More than </span><span class="si">{</span><span class="n">schedule_timeout</span><span class="si">}</span><span class="s2">s. Check the pod events in kubernetes.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># Check for general problems to terminate early - ErrImagePull</span>
+        <span class="k">if</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">container_status</span> <span class="ow">in</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
+                <span class="n">container_state</span><span class="p">:</span> <span class="n">V1ContainerState</span> <span class="o">=</span> <span class="n">container_status</span><span class="o">.</span><span class="n">state</span>
+                <span class="n">container_waiting</span><span class="p">:</span> <span class="n">V1ContainerStateWaiting</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">container_state</span><span class="o">.</span><span class="n">waiting</span>
+                <span class="k">if</span> <span class="n">container_waiting</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;ErrImagePull&quot;</span><span class="p">,</span> <span class="s2">&quot;InvalidImageName&quot;</span><span class="p">]:</span>
+                        <span class="n">pod_manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="n">PodLaunchFailedException</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Pod docker image cannot be pulled, unable to start: </span><span class="si">{</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="p">)</span>
+
+        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span></div>
 
 
 
@@ -1000,16 +1111,7 @@
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager.watch_pod_events">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">watch_pod_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">,</span> <span class="n">check_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Read pod events and writes into log.&quot;&quot;&quot;</span>
-        <span class="n">num_events</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_watching_events</span><span class="p">:</span>
-            <span class="n">events</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_pod_events</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">new_event</span> <span class="ow">in</span> <span class="n">events</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="n">num_events</span><span class="p">:]:</span>
-                <span class="n">involved_object</span><span class="p">:</span> <span class="n">V1ObjectReference</span> <span class="o">=</span> <span class="n">new_event</span><span class="o">.</span><span class="n">involved_object</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;The Pod has an Event: </span><span class="si">%s</span><span class="s2"> from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">new_event</span><span class="o">.</span><span class="n">message</span><span class="p">,</span> <span class="n">involved_object</span><span class="o">.</span><span class="n">field_path</span>
-                <span class="p">)</span>
-            <span class="n">num_events</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="o">.</span><span class="n">items</span><span class="p">)</span>
-            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span></div>
+        <span class="k">await</span> <span class="n">watch_pod_events</span><span class="p">(</span><span class="n">pod_manager</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="o">=</span><span class="n">pod</span><span class="p">,</span> <span class="n">check_interval</span><span class="o">=</span><span class="n">check_interval</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="PodManager.await_pod_start">
@@ -1028,55 +1130,13 @@
 <span class="sd">        :param check_interval: Interval (in seconds) between checks</span>
 <span class="sd">        :return:</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::group::Waiting until </span><span class="si">%s</span><span class="s2">s to get the POD scheduled...&quot;</span><span class="p">,</span> <span class="n">schedule_timeout</span><span class="p">)</span>
-        <span class="n">pod_was_scheduled</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="n">start_check_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-            <span class="n">remote_pod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_pod</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
-            <span class="n">pod_status</span> <span class="o">=</span> <span class="n">remote_pod</span><span class="o">.</span><span class="n">status</span>
-            <span class="k">if</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">phase</span> <span class="o">!=</span> <span class="n">PodPhase</span><span class="o">.</span><span class="n">PENDING</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">stop_watching_events</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
-                <span class="k">break</span>
-
-            <span class="c1"># Check for timeout</span>
-            <span class="n">pod_conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">V1PodCondition</span><span class="p">]</span> <span class="o">=</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">conditions</span>
-            <span class="k">if</span> <span class="n">pod_conditions</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
-                <span class="p">(</span><span class="n">condition</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;PodScheduled&quot;</span> <span class="ow">and</span> <span class="n">condition</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;True&quot;</span><span class="p">)</span>
-                <span class="k">for</span> <span class="n">condition</span> <span class="ow">in</span> <span class="n">pod_conditions</span>
-            <span class="p">):</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">pod_was_scheduled</span><span class="p">:</span>
-                    <span class="c1"># POD was initially scheduled update timeout for getting POD launched</span>
-                    <span class="n">pod_was_scheduled</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="n">start_check_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Waiting </span><span class="si">%s</span><span class="s2">s to get the POD running...&quot;</span><span class="p">,</span> <span class="n">startup_timeout</span><span class="p">)</span>
-
-                <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_check_time</span> <span class="o">&gt;=</span> <span class="n">startup_timeout</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
-                    <span class="k">raise</span> <span class="n">PodLaunchFailedException</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;Pod took too long to start. More than </span><span class="si">{</span><span class="n">startup_timeout</span><span class="si">}</span><span class="s2">s. Check the pod events in kubernetes.&quot;</span>
-                    <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_check_time</span> <span class="o">&gt;=</span> <span class="n">schedule_timeout</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
-                    <span class="k">raise</span> <span class="n">PodLaunchFailedException</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;Pod took too long to be scheduled on the cluster, giving up. More than </span><span class="si">{</span><span class="n">schedule_timeout</span><span class="si">}</span><span class="s2">s. Check the pod events in kubernetes.&quot;</span>
-                    <span class="p">)</span>
-
-            <span class="c1"># Check for general problems to terminate early - ErrImagePull</span>
-            <span class="k">if</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
-                <span class="k">for</span> <span class="n">container_status</span> <span class="ow">in</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
-                    <span class="n">container_state</span><span class="p">:</span> <span class="n">V1ContainerState</span> <span class="o">=</span> <span class="n">container_status</span><span class="o">.</span><span class="n">state</span>
-                    <span class="n">container_waiting</span><span class="p">:</span> <span class="n">V1ContainerStateWaiting</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">container_state</span><span class="o">.</span><span class="n">waiting</span>
-                    <span class="k">if</span> <span class="n">container_waiting</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;ErrImagePull&quot;</span><span class="p">,</span> <span class="s2">&quot;InvalidImageName&quot;</span><span class="p">]:</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span>
-                            <span class="k">raise</span> <span class="n">PodLaunchFailedException</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Pod docker image cannot be pulled, unable to start: </span><span class="si">{</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span>
-                            <span class="p">)</span>
-
-            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span></div>
+        <span class="k">await</span> <span class="n">await_pod_start</span><span class="p">(</span>
+            <span class="n">pod_manager</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">pod</span><span class="o">=</span><span class="n">pod</span><span class="p">,</span>
+            <span class="n">schedule_timeout</span><span class="o">=</span><span class="n">schedule_timeout</span><span class="p">,</span>
+            <span class="n">startup_timeout</span><span class="o">=</span><span class="n">startup_timeout</span><span class="p">,</span>
+            <span class="n">check_interval</span><span class="o">=</span><span class="n">check_interval</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_log_message</span><span class="p">(</span>
@@ -1724,6 +1784,87 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if the line is a log group marker like `::group::` or `::endgroup::`.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;::group::&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;::endgroup::&quot;</span><span class="p">)</span></div>
 
+
+
+<div class="viewcode-block" id="AsyncPodManager">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AsyncPodManager</span><span class="p">(</span><span class="n">LoggingMixin</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create, monitor, and otherwise interact with Kubernetes pods for use with the KubernetesPodTriggerer.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">async_hook</span><span class="p">:</span> <span class="n">AsyncKubernetesHook</span><span class="p">,</span>
+        <span class="n">callbacks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">type</span><span class="p">[</span><span class="n">KubernetesPodOperatorCallback</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create the launcher.</span>
+
+<span class="sd">        :param kube_client: kubernetes client</span>
+<span class="sd">        :param callbacks:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span> <span class="o">=</span> <span class="n">async_hook</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_watch</span> <span class="o">=</span> <span class="n">watch</span><span class="o">.</span><span class="n">Watch</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_callbacks</span> <span class="o">=</span> <span class="n">callbacks</span> <span class="ow">or</span> <span class="p">[]</span>
+<div class="viewcode-block" id="AsyncPodManager.stop_watching_events">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager.stop_watching_events">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_watching_events</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+    <span class="nd">@tenacity</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">stop</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">stop_after_attempt</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span> <span class="n">wait</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">wait_exponential</span><span class="p">(),</span> <span class="n">reraise</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="AsyncPodManager.read_pod">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager.read_pod">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">read_pod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">V1Pod</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read POD information.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">get_pod</span><span class="p">(</span>
+            <span class="n">pod</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">pod</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">namespace</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="nd">@tenacity</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">stop</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">stop_after_attempt</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span> <span class="n">wait</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">wait_exponential</span><span class="p">(),</span> <span class="n">reraise</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="AsyncPodManager.read_pod_events">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager.read_pod_events">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">read_pod_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CoreV1EventList</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get pod&#39;s events.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">get_pod_events</span><span class="p">(</span>
+            <span class="n">pod</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">pod</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">namespace</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AsyncPodManager.watch_pod_events">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager.watch_pod_events">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">watch_pod_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">,</span> <span class="n">check_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read pod events and writes into log.&quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">watch_pod_events</span><span class="p">(</span><span class="n">pod_manager</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="o">=</span><span class="n">pod</span><span class="p">,</span> <span class="n">check_interval</span><span class="o">=</span><span class="n">check_interval</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AsyncPodManager.await_pod_start">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/utils/pod_manager/index.html#airflow.providers.cncf.kubernetes.utils.pod_manager.AsyncPodManager.await_pod_start">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">await_pod_start</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span><span class="p">,</span> <span class="n">schedule_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span> <span class="n">startup_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span> <span class="n">check_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Wait for the pod to reach phase other than ``Pending``.</span>
+
+<span class="sd">        :param pod:</span>
+<span class="sd">        :param schedule_timeout: Timeout (in seconds) for pod stay in schedule state</span>
+<span class="sd">            (if pod is taking to long in schedule state, fails task)</span>
+<span class="sd">        :param startup_timeout: Timeout (in seconds) for startup of the pod</span>
+<span class="sd">            (if pod is pending for too long after being scheduled, fails task)</span>
+<span class="sd">        :param check_interval: Interval (in seconds) between checks</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">await_pod_start</span><span class="p">(</span>
+            <span class="n">pod_manager</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">pod</span><span class="o">=</span><span class="n">pod</span><span class="p">,</span>
+            <span class="n">schedule_timeout</span><span class="o">=</span><span class="n">schedule_timeout</span><span class="p">,</span>
+            <span class="n">startup_timeout</span><span class="o">=</span><span class="n">startup_timeout</span><span class="p">,</span>
+            <span class="n">check_interval</span><span class="o">=</span><span class="n">check_interval</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
 </pre></div>
 
     <div class="pager" role="navigation" aria-label="related navigation"><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Previous</button><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Next</button>
@@ -1904,40 +2045,28 @@
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">

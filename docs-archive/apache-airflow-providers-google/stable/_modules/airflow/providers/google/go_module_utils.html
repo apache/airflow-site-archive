@@ -644,9 +644,41 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shlex</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.process_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_in_subprocess</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_execute_in_subprocess</span><span class="p">(</span><span class="n">cmd</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">cwd</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execute a process and stream output to logger.</span>
+
+<span class="sd">    :param cmd: command and arguments to run</span>
+<span class="sd">    :param cwd: Current working directory passed to the Popen constructor</span>
+<span class="sd">    :param env: Additional environment variables to set for the subprocess.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing cmd: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cmd</span><span class="p">))</span>
+    <span class="k">with</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>
+        <span class="n">cmd</span><span class="p">,</span>
+        <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+        <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">STDOUT</span><span class="p">,</span>
+        <span class="n">bufsize</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">close_fds</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">cwd</span><span class="o">=</span><span class="n">cwd</span><span class="p">,</span>
+        <span class="n">env</span><span class="o">=</span><span class="n">env</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">proc</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Output:&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">iter</span><span class="p">(</span><span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">readline</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">line</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">rstrip</span><span class="p">())</span>
+
+        <span class="n">exit_code</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">exit_code</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">(</span><span class="n">exit_code</span><span class="p">,</span> <span class="n">cmd</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="init_module">
@@ -663,7 +695,7 @@
     <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">go_module_path</span><span class="p">,</span> <span class="s2">&quot;go.mod&quot;</span><span class="p">)):</span>
         <span class="k">return</span>
     <span class="n">go_mod_init_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;go&quot;</span><span class="p">,</span> <span class="s2">&quot;mod&quot;</span><span class="p">,</span> <span class="s2">&quot;init&quot;</span><span class="p">,</span> <span class="n">go_module_name</span><span class="p">]</span>
-    <span class="n">execute_in_subprocess</span><span class="p">(</span><span class="n">go_mod_init_cmd</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">go_module_path</span><span class="p">)</span></div>
+    <span class="n">_execute_in_subprocess</span><span class="p">(</span><span class="n">go_mod_init_cmd</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">go_module_path</span><span class="p">)</span></div>
 
 
 
@@ -676,7 +708,7 @@
 <span class="sd">    :param go_module_path: The path to the directory containing the Go module.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">go_mod_tidy</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;go&quot;</span><span class="p">,</span> <span class="s2">&quot;mod&quot;</span><span class="p">,</span> <span class="s2">&quot;tidy&quot;</span><span class="p">]</span>
-    <span class="n">execute_in_subprocess</span><span class="p">(</span><span class="n">go_mod_tidy</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">go_module_path</span><span class="p">)</span></div>
+    <span class="n">_execute_in_subprocess</span><span class="p">(</span><span class="n">go_mod_tidy</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">go_module_path</span><span class="p">)</span></div>
 
 </pre></div>
 
@@ -858,40 +890,28 @@
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">

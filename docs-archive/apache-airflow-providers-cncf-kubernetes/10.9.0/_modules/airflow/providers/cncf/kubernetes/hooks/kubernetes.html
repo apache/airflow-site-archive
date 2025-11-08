@@ -678,6 +678,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">AirflowNotFoundException</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Connection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesApiError</span><span class="p">,</span> <span class="n">KubernetesApiPermissionError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.kube_client</span><span class="w"> </span><span class="kn">import</span> <span class="n">_disable_verify_ssl</span><span class="p">,</span> <span class="n">_enable_tcp_keepalive</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.kubernetes_helper_functions</span><span class="w"> </span><span class="kn">import</span> <span class="n">should_retry_creation</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.utils.container</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -689,7 +690,7 @@
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">V1JobList</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">V1Job</span><span class="p">,</span> <span class="n">V1Pod</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoreV1EventList</span><span class="p">,</span> <span class="n">V1Job</span><span class="p">,</span> <span class="n">V1Pod</span>
 
 <div class="viewcode-block" id="LOADING_KUBE_CONFIG_FILE_RESOURCE">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/hooks/kubernetes/index.html#airflow.providers.cncf.kubernetes.hooks.kubernetes.LOADING_KUBE_CONFIG_FILE_RESOURCE">[docs]</a>
@@ -1713,12 +1714,17 @@
 <span class="sd">        :param namespace: Name of the pod&#39;s namespace.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
-            <span class="n">v1_api</span> <span class="o">=</span> <span class="n">async_client</span><span class="o">.</span><span class="n">CoreV1Api</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
-            <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span> <span class="o">=</span> <span class="k">await</span> <span class="n">v1_api</span><span class="o">.</span><span class="n">read_namespaced_pod</span><span class="p">(</span>
-                <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-                <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="k">return</span> <span class="n">pod</span></div>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">v1_api</span> <span class="o">=</span> <span class="n">async_client</span><span class="o">.</span><span class="n">CoreV1Api</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
+                <span class="n">pod</span><span class="p">:</span> <span class="n">V1Pod</span> <span class="o">=</span> <span class="k">await</span> <span class="n">v1_api</span><span class="o">.</span><span class="n">read_namespaced_pod</span><span class="p">(</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">pod</span>
+            <span class="k">except</span> <span class="n">HTTPError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="mi">403</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">KubernetesApiPermissionError</span><span class="p">(</span><span class="s2">&quot;Permission denied (403) from Kubernetes API.&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+                <span class="k">raise</span> <span class="n">KubernetesApiError</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
 
 <div class="viewcode-block" id="AsyncKubernetesHook.delete_pod">
@@ -1772,6 +1778,24 @@
             <span class="k">except</span> <span class="n">HTTPError</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;There was an error reading the kubernetes API.&quot;</span><span class="p">)</span>
                 <span class="k">raise</span></div>
+
+
+<div class="viewcode-block" id="AsyncKubernetesHook.get_pod_events">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/hooks/kubernetes/index.html#airflow.providers.cncf.kubernetes.hooks.kubernetes.AsyncKubernetesHook.get_pod_events">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_pod_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">namespace</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CoreV1EventList</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get pod&#39;s events.&quot;&quot;&quot;</span>
+        <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">as</span> <span class="n">connection</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">v1_api</span> <span class="o">=</span> <span class="n">async_client</span><span class="o">.</span><span class="n">CoreV1Api</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
+                <span class="n">events</span><span class="p">:</span> <span class="n">CoreV1EventList</span> <span class="o">=</span> <span class="k">await</span> <span class="n">v1_api</span><span class="o">.</span><span class="n">list_namespaced_event</span><span class="p">(</span>
+                    <span class="n">field_selector</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;involvedObject.name=</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">events</span>
+            <span class="k">except</span> <span class="n">HTTPError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="mi">403</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">KubernetesApiPermissionError</span><span class="p">(</span><span class="s2">&quot;Permission denied (403) from Kubernetes API.&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+                <span class="k">raise</span> <span class="n">KubernetesApiError</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
 
 <div class="viewcode-block" id="AsyncKubernetesHook.get_job_status">
@@ -2034,40 +2058,28 @@
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">

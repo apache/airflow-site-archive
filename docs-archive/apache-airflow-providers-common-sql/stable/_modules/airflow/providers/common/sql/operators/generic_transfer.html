@@ -643,18 +643,14 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span><span class="p">,</span> <span class="n">BaseOperator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DbApiHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.triggers.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLExecuteQueryTrigger</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span><span class="p">,</span> <span class="n">BaseOperator</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">jinja2</span>
 
-    <span class="k">try</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.definitions.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-        <span class="c1"># TODO: Remove once provider drops support for Airflow 2</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
 <div class="viewcode-block" id="GenericTransfer">
@@ -714,7 +710,7 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
         <span class="n">destination_table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">source_conn_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">source_hook_params</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -842,13 +838,19 @@
                 <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute_complete</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sql</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">]</span>
+
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Extracting data from </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_conn_id</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing: </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">sql</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing: </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
 
-            <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_hook</span><span class="o">.</span><span class="n">get_records</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">)</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_hook</span><span class="o">.</span><span class="n">get_records</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserting rows into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">destination_conn_id</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">destination_hook</span><span class="o">.</span><span class="n">insert_rows</span><span class="p">(</span><span class="n">table</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_table</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_args</span><span class="p">)</span></div>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserting rows into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">destination_conn_id</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">destination_hook</span><span class="o">.</span><span class="n">insert_rows</span><span class="p">(</span>
+                    <span class="n">table</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_table</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">insert_args</span>
+                <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="GenericTransfer.execute_complete">
@@ -1085,40 +1087,28 @@
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">

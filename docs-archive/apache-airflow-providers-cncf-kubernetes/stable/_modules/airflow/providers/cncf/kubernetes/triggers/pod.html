@@ -667,8 +667,10 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">tenacity</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesApiPermissionError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.hooks.kubernetes</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncKubernetesHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.utils.pod_manager</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AsyncPodManager</span><span class="p">,</span>
     <span class="n">OnFinishAction</span><span class="p">,</span>
     <span class="n">PodLaunchTimeoutException</span><span class="p">,</span>
     <span class="n">PodPhase</span><span class="p">,</span>
@@ -730,6 +732,7 @@
 <span class="sd">    :param get_logs: get the stdout of the container as logs of the tasks.</span>
 <span class="sd">    :param startup_timeout: timeout in seconds to start up the pod.</span>
 <span class="sd">    :param startup_check_interval: interval in seconds to check if the pod has already started.</span>
+<span class="sd">    :param schedule_timeout: timeout in seconds to schedule pod in cluster.</span>
 <span class="sd">    :param on_finish_action: What to do when the pod reaches its final state, or the execution is interrupted.</span>
 <span class="sd">        If &quot;delete_pod&quot;, the pod will be deleted regardless its state; if &quot;delete_succeeded_pod&quot;,</span>
 <span class="sd">        only succeeded pod will be deleted. You can set to &quot;keep_pod&quot; to keep the pod.</span>
@@ -752,7 +755,8 @@
         <span class="n">in_cluster</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">get_logs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">startup_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span>
-        <span class="n">startup_check_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="n">startup_check_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="n">schedule_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span>
         <span class="n">on_finish_action</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;delete_pod&quot;</span><span class="p">,</span>
         <span class="n">last_log_time</span><span class="p">:</span> <span class="n">DateTime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">logging_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -807,6 +811,10 @@
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.startup_check_interval">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">startup_check_interval</span> <span class="o">=</span> <span class="n">startup_check_interval</span></div>
 
+<div class="viewcode-block" id="KubernetesPodTrigger.schedule_timeout">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.schedule_timeout">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule_timeout</span> <span class="o">=</span> <span class="n">schedule_timeout</span></div>
+
 <div class="viewcode-block" id="KubernetesPodTrigger.last_log_time">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.last_log_time">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">last_log_time</span> <span class="o">=</span> <span class="n">last_log_time</span></div>
@@ -822,7 +830,6 @@
 <div class="viewcode-block" id="KubernetesPodTrigger.trigger_kwargs">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.trigger_kwargs">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">trigger_kwargs</span> <span class="o">=</span> <span class="n">trigger_kwargs</span> <span class="ow">or</span> <span class="p">{}</span></div>
-
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_since_time</span> <span class="o">=</span> <span class="kc">None</span>
 
@@ -844,6 +851,7 @@
                 <span class="s2">&quot;get_logs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_logs</span><span class="p">,</span>
                 <span class="s2">&quot;startup_timeout&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup_timeout</span><span class="p">,</span>
                 <span class="s2">&quot;startup_check_interval&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup_check_interval</span><span class="p">,</span>
+                <span class="s2">&quot;schedule_timeout&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">schedule_timeout</span><span class="p">,</span>
                 <span class="s2">&quot;trigger_start_time&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trigger_start_time</span><span class="p">,</span>
                 <span class="s2">&quot;on_finish_action&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">on_finish_action</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
                 <span class="s2">&quot;last_log_time&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_log_time</span><span class="p">,</span>
@@ -857,7 +865,12 @@
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.run">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="n">TriggerEvent</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get current pod status and yield a TriggerEvent.&quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Checking pod </span><span class="si">%r</span><span class="s2"> in namespace </span><span class="si">%r</span><span class="s2">.&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_namespace</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Checking pod </span><span class="si">%r</span><span class="s2"> in namespace </span><span class="si">%r</span><span class="s2"> with poll interval </span><span class="si">%r</span><span class="s2">.&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pod_namespace</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">state</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_pod_start</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="n">ContainerState</span><span class="o">.</span><span class="n">TERMINATED</span><span class="p">:</span>
@@ -896,7 +909,28 @@
                 <span class="p">}</span>
             <span class="p">)</span>
             <span class="k">return</span>
+        <span class="k">except</span> <span class="n">KubernetesApiPermissionError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">&quot;Kubernetes API permission error: The triggerer may not have sufficient permissions to monitor or delete pods. &quot;</span>
+                <span class="s2">&quot;Please ensure the triggerer&#39;s service account is included in the &#39;pod-launcher-role&#39; as defined in the latest Airflow Helm chart. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Original error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span>
+                    <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_namespace</span><span class="p">,</span>
+                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
+                    <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">trigger_kwargs</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+            <span class="k">return</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Unexpected error while waiting for pod </span><span class="si">%s</span><span class="s2"> in namespace </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pod_namespace</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">(</span>
                 <span class="p">{</span>
                     <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span>
@@ -924,17 +958,16 @@
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_wait_for_pod_start</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ContainerState</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Loops until pod phase leaves ``PENDING`` If timeout is reached, throws error.&quot;&quot;&quot;</span>
-        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-            <span class="n">pod</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pod</span><span class="p">()</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">pod</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">phase</span> <span class="o">==</span> <span class="s2">&quot;Pending&quot;</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">define_container_state</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
-
-            <span class="n">delta</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">trigger_start_time</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup_timeout</span> <span class="o">&lt;</span> <span class="n">delta</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">():</span>
-                <span class="k">raise</span> <span class="n">PodLaunchTimeoutException</span><span class="p">(</span><span class="s2">&quot;Pod did not leave &#39;Pending&#39; phase within specified timeout&quot;</span><span class="p">)</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Still waiting for pod to start. The pod state is </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">pod</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">phase</span><span class="p">)</span>
-            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">startup_check_interval</span><span class="p">)</span>
+        <span class="n">pod</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pod</span><span class="p">()</span>
+        <span class="n">events_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_manager</span><span class="o">.</span><span class="n">watch_pod_events</span><span class="p">(</span><span class="n">pod</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">startup_check_interval</span><span class="p">)</span>
+        <span class="n">pod_start_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pod_manager</span><span class="o">.</span><span class="n">await_pod_start</span><span class="p">(</span>
+            <span class="n">pod</span><span class="o">=</span><span class="n">pod</span><span class="p">,</span>
+            <span class="n">schedule_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">schedule_timeout</span><span class="p">,</span>
+            <span class="n">startup_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">startup_timeout</span><span class="p">,</span>
+            <span class="n">check_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">startup_check_interval</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">pod_start_task</span><span class="p">,</span> <span class="n">events_task</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">define_container_state</span><span class="p">(</span><span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pod</span><span class="p">())</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_wait_for_container_completion</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TriggerEvent</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -1003,6 +1036,13 @@
             <span class="n">config_dict</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config_dict</span><span class="p">,</span>
             <span class="n">cluster_context</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cluster_context</span><span class="p">,</span>
         <span class="p">)</span></div>
+
+
+    <span class="nd">@cached_property</span>
+<div class="viewcode-block" id="KubernetesPodTrigger.pod_manager">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/triggers/pod/index.html#airflow.providers.cncf.kubernetes.triggers.pod.KubernetesPodTrigger.pod_manager">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pod_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncPodManager</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">AsyncPodManager</span><span class="p">(</span><span class="n">async_hook</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="KubernetesPodTrigger.define_container_state">
@@ -1215,40 +1255,28 @@
                     <span>Donate</span>
                 </a>
 
-                            <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
-                                <span>Events</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
-                                <span>Thanks</span>
-                            </a>
-                        
-                            <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
-                                <span>Security</span>
-                            </a>
-                        
-                            <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
-                                <span>Privacy</span>
-                            </a>
-                        
-                            <a href="/code-of-conduct/" class="footer-section__policies-section--policy-item">
-                                <span>Code of Conduct</span>
-                            </a>
-                        
-                    
+                <a href="https://events.apache.org/" class="footer-section__policies-section--policy-item">
+                    <span>Events</span>
+                </a>
+
+                <a href="https://www.apache.org/foundation/thanks.html" class="footer-section__policies-section--policy-item">
+                    <span>Thanks</span>
+                </a>
+
+                <a href="https://www.apache.org/security/" class="footer-section__policies-section--policy-item">
+                    <span>Security</span>
+                </a>
+
+                <a href="https://privacy.apache.org/policies/privacy-policy-public.html" class="footer-section__policies-section--policy-item">
+                    <span>Privacy</span>
+                </a>
+
+                <a href="https://airflow.apache.org/code-of-conduct/" class="footer-section__policies-section--policy-item">
+                    <span>Code of conduct</span>
+                </a>
+
                 
-                <div class="footer-section__policies-section--language-toggle">
-                    
 
-
-<a class="dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-    <span>English</span>
-</a>
-<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-    
-</div>
-
-                </div>
             </div>
         </div>
         <span class="footer-section__policies-section--disclaimer">
