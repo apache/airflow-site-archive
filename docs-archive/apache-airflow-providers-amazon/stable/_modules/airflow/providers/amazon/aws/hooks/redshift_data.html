@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -809,6 +809,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsGenericHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">trim_none_values</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.lineage</span><span class="w"> </span><span class="kn">import</span> <span class="n">send_sql_hook_lineage</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">mypy_boto3_redshift_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedshiftDataAPIServiceClient</span>  <span class="c1"># noqa: F401</span>
@@ -968,6 +969,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">resp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="o">**</span><span class="n">trim_none_values</span><span class="p">(</span><span class="n">kwargs</span><span class="p">))</span>
 
         <span class="n">statement_id</span> <span class="o">=</span> <span class="n">resp</span><span class="p">[</span><span class="s2">&quot;Id&quot;</span><span class="p">]</span>
+
+        <span class="n">send_sql_hook_lineage</span><span class="p">(</span>
+            <span class="n">context</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">sql</span><span class="o">=</span><span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">sql</span><span class="p">,</span>
+            <span class="n">sql_parameters</span><span class="o">=</span><span class="n">parameters</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">job_id</span><span class="o">=</span><span class="n">statement_id</span><span class="p">,</span>
+            <span class="n">default_db</span><span class="o">=</span><span class="n">database</span><span class="p">,</span>
+            <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;cluster_identifier&quot;</span><span class="p">:</span> <span class="n">cluster_identifier</span><span class="p">,</span>
+                <span class="s2">&quot;workgroup_name&quot;</span><span class="p">:</span> <span class="n">workgroup_name</span><span class="p">,</span>
+                <span class="s2">&quot;session_id&quot;</span><span class="p">:</span> <span class="n">session_id</span> <span class="ow">or</span> <span class="n">resp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;SessionId&quot;</span><span class="p">),</span>
+            <span class="p">},</span>
+        <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">wait_for_completion</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_results</span><span class="p">(</span><span class="n">statement_id</span><span class="p">,</span> <span class="n">poll_interval</span><span class="o">=</span><span class="n">poll_interval</span><span class="p">)</span>

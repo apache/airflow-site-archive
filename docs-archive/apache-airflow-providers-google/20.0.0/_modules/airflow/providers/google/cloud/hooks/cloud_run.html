@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -793,6 +793,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.client_options</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientOptions</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.run_v2</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">CreateJobRequest</span><span class="p">,</span>
     <span class="n">CreateServiceRequest</span><span class="p">,</span>
@@ -824,6 +825,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">operation</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.operation_async</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncOperation</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.run_v2.services.jobs</span><span class="w"> </span><span class="kn">import</span> <span class="n">pagers</span>
+
+
+<div class="viewcode-block" id="NoLocationSpecifiedException">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.NoLocationSpecifiedException">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NoLocationSpecifiedException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Custom exception to catch error when location is not specified.&quot;&quot;&quot;</span>
+
+    <span class="k">pass</span></div>
+
 
 
 <div class="viewcode-block" id="CloudRunHook">
@@ -862,9 +872,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="CloudRunHook.get_conn">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunHook.get_conn">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JobsClient</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Retrieve connection to Cloud Run.</span>
+<span class="sd">        Retrieve the connection to Google Cloud Run.</span>
+
+<span class="sd">        :param location: The location of the project.</span>
+<span class="sd">        :param use_regional_endpoint: If set to True, regional endpoint will be used while creating Client.</span>
+<span class="sd">            If not provided, the default one is global endpoint.</span>
 
 <span class="sd">        :return: Cloud Run Jobs client object.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -875,18 +889,34 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">}</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span><span class="p">:</span>
                 <span class="n">client_kwargs</span><span class="p">[</span><span class="s2">&quot;transport&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">JobsClient</span><span class="p">(</span><span class="o">**</span><span class="n">client_kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">use_regional_endpoint</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">location</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">NoLocationSpecifiedException</span><span class="p">(</span>
+                        <span class="s2">&quot;No location was specified while using use_regional_endpoint parameter&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">client_kwargs</span><span class="p">[</span><span class="s2">&quot;client_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ClientOptions</span><span class="p">(</span>
+                    <span class="n">api_endpoint</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">-run.googleapis.com:443&quot;</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">JobsClient</span><span class="p">(</span><span class="o">**</span><span class="n">client_kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunHook.delete_job">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunHook.delete_job">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Job</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_job</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Job</span><span class="p">:</span>
         <span class="n">delete_request</span> <span class="o">=</span> <span class="n">DeleteJobRequest</span><span class="p">()</span>
         <span class="n">delete_request</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/jobs/</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">delete_job</span><span class="p">(</span><span class="n">delete_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">delete_job</span><span class="p">(</span>
+            <span class="n">delete_request</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span><span class="o">.</span><span class="n">result</span><span class="p">()</span></div>
 
 
@@ -894,7 +924,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="CloudRunHook.create_job">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunHook.create_job">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_job</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">job</span><span class="p">:</span> <span class="n">Job</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">job</span><span class="p">:</span> <span class="n">Job</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Job</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
@@ -904,7 +939,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">create_request</span><span class="o">.</span><span class="n">job_id</span> <span class="o">=</span> <span class="n">job_name</span>
         <span class="n">create_request</span><span class="o">.</span><span class="n">parent</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">create_job</span><span class="p">(</span><span class="n">create_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">create_job</span><span class="p">(</span>
+            <span class="n">create_request</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span><span class="o">.</span><span class="n">result</span><span class="p">()</span></div>
 
 
@@ -912,7 +949,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="CloudRunHook.update_job">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunHook.update_job">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">update_job</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">job</span><span class="p">:</span> <span class="n">Job</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">job</span><span class="p">:</span> <span class="n">Job</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Job</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
@@ -920,7 +962,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">update_request</span> <span class="o">=</span> <span class="n">UpdateJobRequest</span><span class="p">()</span>
         <span class="n">job</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/jobs/</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="n">update_request</span><span class="o">.</span><span class="n">job</span> <span class="o">=</span> <span class="n">job</span>
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">update_job</span><span class="p">(</span><span class="n">update_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">update_job</span><span class="p">(</span>
+            <span class="n">update_request</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span><span class="o">.</span><span class="n">result</span><span class="p">()</span></div>
 
 
@@ -931,22 +975,33 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
         <span class="n">overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">operation</span><span class="o">.</span><span class="n">Operation</span><span class="p">:</span>
         <span class="n">run_job_request</span> <span class="o">=</span> <span class="n">RunJobRequest</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/jobs/</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">overrides</span><span class="o">=</span><span class="n">overrides</span>
         <span class="p">)</span>
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">run_job</span><span class="p">(</span><span class="n">request</span><span class="o">=</span><span class="n">run_job_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">run_job</span><span class="p">(</span>
+            <span class="n">request</span><span class="o">=</span><span class="n">run_job_request</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunHook.get_job">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunHook.get_job">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_job</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
+    <span class="p">):</span>
         <span class="n">get_job_request</span> <span class="o">=</span> <span class="n">GetJobRequest</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/jobs/</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">get_job</span><span class="p">(</span><span class="n">get_job_request</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">get_job</span><span class="p">(</span>
+            <span class="n">get_job_request</span>
+        <span class="p">)</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
@@ -955,6 +1010,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">list_jobs</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
         <span class="n">show_deleted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -966,7 +1022,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">parent</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">show_deleted</span><span class="o">=</span><span class="n">show_deleted</span>
         <span class="p">)</span>
 
-        <span class="n">jobs</span><span class="p">:</span> <span class="n">pagers</span><span class="o">.</span><span class="n">ListJobsPager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">list_jobs</span><span class="p">(</span><span class="n">request</span><span class="o">=</span><span class="n">list_jobs_request</span><span class="p">)</span>
+        <span class="n">jobs</span><span class="p">:</span> <span class="n">pagers</span><span class="o">.</span><span class="n">ListJobsPager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span>
+            <span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">list_jobs</span><span class="p">(</span><span class="n">request</span><span class="o">=</span><span class="n">list_jobs_request</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">islice</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">limit</span><span class="p">))</span></div>
 </div>
@@ -1015,23 +1073,44 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="CloudRunAsyncHook.get_conn">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunAsyncHook.get_conn">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JobsAsyncClient</span> <span class="o">|</span> <span class="n">JobsClient</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve the connection to Google Cloud Run.</span>
+
+<span class="sd">        :param location: The location of the project.</span>
+<span class="sd">        :param use_regional_endpoint: If set to True, regional endpoint will be used while creating Client.</span>
+<span class="sd">            If not provided, the default one is global endpoint.</span>
+
+<span class="sd">        :return: Cloud Run Jobs client object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">sync_hook</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sync_hook</span><span class="p">()</span>
             <span class="n">credentials</span> <span class="o">=</span> <span class="n">sync_hook</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">()</span>
+            <span class="n">common_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;credentials&quot;</span><span class="p">:</span> <span class="n">credentials</span><span class="p">,</span>
+                <span class="s2">&quot;client_info&quot;</span><span class="p">:</span> <span class="n">CLIENT_INFO</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="n">use_regional_endpoint</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">location</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">NoLocationSpecifiedException</span><span class="p">(</span>
+                        <span class="s2">&quot;No location was specified while using use_regional_endpoint parameter&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">common_kwargs</span><span class="p">[</span><span class="s2">&quot;client_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ClientOptions</span><span class="p">(</span>
+                    <span class="n">api_endpoint</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">-run.googleapis.com:443&quot;</span>
+                <span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;rest&quot;</span><span class="p">:</span>
                 <span class="c1"># REST transport is synchronous-only. Use the sync JobsClient here;</span>
                 <span class="c1"># get_operation() wraps calls with asyncio.to_thread() for async compat.</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">JobsClient</span><span class="p">(</span>
-                    <span class="n">credentials</span><span class="o">=</span><span class="n">credentials</span><span class="p">,</span>
-                    <span class="n">client_info</span><span class="o">=</span><span class="n">CLIENT_INFO</span><span class="p">,</span>
                     <span class="n">transport</span><span class="o">=</span><span class="s2">&quot;rest&quot;</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">common_kwargs</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="c1"># Default: use JobsAsyncClient which picks grpc_asyncio transport.</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">JobsAsyncClient</span><span class="p">(</span>
-                    <span class="n">credentials</span><span class="o">=</span><span class="n">credentials</span><span class="p">,</span>
-                    <span class="n">client_info</span><span class="o">=</span><span class="n">CLIENT_INFO</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">common_kwargs</span><span class="p">,</span>
                 <span class="p">)</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span></div>
@@ -1039,8 +1118,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="CloudRunAsyncHook.get_operation">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunAsyncHook.get_operation">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_operation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operation_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">operations_pb2</span><span class="o">.</span><span class="n">Operation</span><span class="p">:</span>
-        <span class="n">conn</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_operation</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">operation_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">operations_pb2</span><span class="o">.</span><span class="n">Operation</span><span class="p">:</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">location</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span>
         <span class="n">request</span> <span class="o">=</span> <span class="n">operations_pb2</span><span class="o">.</span><span class="n">GetOperationRequest</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">operation_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;rest&quot;</span><span class="p">:</span>
             <span class="c1"># REST client is synchronous — run in a thread to avoid blocking the event loop.</span>
@@ -1078,28 +1159,63 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="CloudRunServiceHook.get_conn">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceHook.get_conn">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">ServicesClient</span><span class="p">(</span><span class="n">credentials</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span> <span class="n">client_info</span><span class="o">=</span><span class="n">CLIENT_INFO</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ServicesClient</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve the connection to Google Cloud Run.</span>
 
+<span class="sd">        :param location: The location of the project.</span>
+<span class="sd">        :param use_regional_endpoint: If set to True, regional endpoint will be used while creating Client.</span>
+<span class="sd">            If not provided, the default one is global endpoint.</span>
+
+<span class="sd">        :return: Google Cloud Run client object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">client_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;credentials&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span>
+                <span class="s2">&quot;client_info&quot;</span><span class="p">:</span> <span class="n">CLIENT_INFO</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="n">use_regional_endpoint</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">location</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">NoLocationSpecifiedException</span><span class="p">(</span>
+                        <span class="s2">&quot;No location was specified while using use_regional_endpoint parameter&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">client_kwargs</span><span class="p">[</span><span class="s2">&quot;client_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ClientOptions</span><span class="p">(</span>
+                    <span class="n">api_endpoint</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">-run.googleapis.com:443&quot;</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">ServicesClient</span><span class="p">(</span><span class="o">**</span><span class="n">client_kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunServiceHook.get_service">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceHook.get_service">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_service</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_service</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
+    <span class="p">):</span>
         <span class="n">get_service_request</span> <span class="o">=</span> <span class="n">GetServiceRequest</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/services/</span><span class="si">{</span><span class="n">service_name</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">get_service</span><span class="p">(</span><span class="n">get_service_request</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span><span class="o">.</span><span class="n">get_service</span><span class="p">(</span>
+            <span class="n">get_service_request</span>
+        <span class="p">)</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunServiceHook.create_service">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceHook.create_service">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">service</span><span class="p">:</span> <span class="n">Service</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">service</span><span class="p">:</span> <span class="n">Service</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Service</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="n">service</span> <span class="o">=</span> <span class="n">Service</span><span class="p">(</span><span class="n">service</span><span class="p">)</span>
@@ -1110,19 +1226,29 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">service_id</span><span class="o">=</span><span class="n">service_name</span><span class="p">,</span>
         <span class="p">)</span>
 
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">create_service</span><span class="p">(</span><span class="n">create_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span>
+            <span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">create_service</span><span class="p">(</span><span class="n">create_request</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span><span class="o">.</span><span class="n">result</span><span class="p">()</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunServiceHook.delete_service">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceHook.delete_service">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_service</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Service</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_service</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Service</span><span class="p">:</span>
         <span class="n">delete_request</span> <span class="o">=</span> <span class="n">DeleteServiceRequest</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/services/</span><span class="si">{</span><span class="n">service_name</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
 
-        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">delete_service</span><span class="p">(</span><span class="n">delete_request</span><span class="p">)</span>
+        <span class="n">operation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span>
+            <span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">delete_service</span><span class="p">(</span><span class="n">delete_request</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">operation</span><span class="o">.</span><span class="n">result</span><span class="p">()</span></div>
 </div>
 
@@ -1156,15 +1282,36 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">impersonation_chain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_client</span><span class="p">:</span> <span class="n">ServicesClient</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_client</span><span class="p">:</span> <span class="n">ServicesClient</span> <span class="o">|</span> <span class="n">ServicesAsyncClient</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">gcp_conn_id</span><span class="o">=</span><span class="n">gcp_conn_id</span><span class="p">,</span> <span class="n">impersonation_chain</span><span class="o">=</span><span class="n">impersonation_chain</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="CloudRunServiceAsyncHook.get_conn">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceAsyncHook.get_conn">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">ServicesAsyncClient</span><span class="p">(</span><span class="n">credentials</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span> <span class="n">client_info</span><span class="o">=</span><span class="n">CLIENT_INFO</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ServicesClient</span> <span class="o">|</span> <span class="n">ServicesAsyncClient</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve the connection to Google Cloud Run.</span>
 
+<span class="sd">        :param location: The location of the project.</span>
+<span class="sd">        :param use_regional_endpoint: If set to True, regional endpoint will be used while creating Client.</span>
+<span class="sd">            If not provided, the default one is global endpoint.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sync_hook</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sync_hook</span><span class="p">()</span>
+            <span class="n">client_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;credentials&quot;</span><span class="p">:</span> <span class="n">sync_hook</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span>
+                <span class="s2">&quot;client_info&quot;</span><span class="p">:</span> <span class="n">CLIENT_INFO</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="n">use_regional_endpoint</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">location</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">NoLocationSpecifiedException</span><span class="p">(</span>
+                        <span class="s2">&quot;No location was specified while using use_regional_endpoint parameter&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">client_kwargs</span><span class="p">[</span><span class="s2">&quot;client_options&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ClientOptions</span><span class="p">(</span>
+                    <span class="n">api_endpoint</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">-run.googleapis.com:443&quot;</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_client</span> <span class="o">=</span> <span class="n">ServicesAsyncClient</span><span class="p">(</span><span class="o">**</span><span class="n">client_kwargs</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_client</span></div>
 
 
@@ -1172,7 +1319,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="CloudRunServiceAsyncHook.create_service">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceAsyncHook.create_service">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_service</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">service</span><span class="p">:</span> <span class="n">Service</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">service</span><span class="p">:</span> <span class="n">Service</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncOperation</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="n">service</span> <span class="o">=</span> <span class="n">Service</span><span class="p">(</span><span class="n">service</span><span class="p">)</span>
@@ -1182,21 +1334,27 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">service</span><span class="o">=</span><span class="n">service</span><span class="p">,</span>
             <span class="n">service_id</span><span class="o">=</span><span class="n">service_name</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">create_service</span><span class="p">(</span><span class="n">create_request</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">create_service</span><span class="p">(</span><span class="n">create_request</span><span class="p">)</span>  <span class="c1"># type: ignore[misc]</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudRunServiceAsyncHook.delete_service">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_run/index.html#airflow.providers.google.cloud.hooks.cloud_run.CloudRunServiceAsyncHook.delete_service">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_service</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">service_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">use_regional_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncOperation</span><span class="p">:</span>
         <span class="n">delete_request</span> <span class="o">=</span> <span class="n">DeleteServiceRequest</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s2">/locations/</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">/services/</span><span class="si">{</span><span class="n">service_name</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">use_regional_endpoint</span><span class="o">=</span><span class="n">use_regional_endpoint</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">delete_service</span><span class="p">(</span><span class="n">delete_request</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">delete_service</span><span class="p">(</span><span class="n">delete_request</span><span class="p">)</span>  <span class="c1"># type: ignore[misc]</span></div>
 </div>
 
 </pre></div>

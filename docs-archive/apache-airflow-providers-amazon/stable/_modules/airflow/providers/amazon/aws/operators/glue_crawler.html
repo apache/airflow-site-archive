@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -801,6 +801,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientError</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.glue_crawler</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueCrawlerHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.operators.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsBaseOperator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.triggers.glue_crawler</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueCrawlerCompleteTrigger</span>
@@ -832,6 +834,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the crawl to complete.</span>
 <span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
 <span class="sd">        (default: False)</span>
+<span class="sd">    :param fail_on_already_running: If True (default), the operator will raise an exception when</span>
+<span class="sd">        ``start_crawler()`` or ``update_crawler()`` encounters a ``CrawlerRunningException``</span>
+<span class="sd">        (i.e., the crawler is already running). If False, the operator logs a warning</span>
+<span class="sd">        and waits for the existing run to complete. Setting this to False is useful for handling</span>
+<span class="sd">        retry-induced race conditions where boto3 retries trigger a second ``start_crawler()``</span>
+<span class="sd">        call after a network timeout on the first (successful) call. (default: True)</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -866,6 +874,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">poll_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
         <span class="n">wait_for_completion</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">&quot;operators&quot;</span><span class="p">,</span> <span class="s2">&quot;default_deferrable&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+        <span class="n">fail_on_already_running</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -880,6 +889,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="GlueCrawlerOperator.deferrable">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue_crawler/index.html#airflow.providers.amazon.aws.operators.glue_crawler.GlueCrawlerOperator.deferrable">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
+
+<div class="viewcode-block" id="GlueCrawlerOperator.fail_on_already_running">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue_crawler/index.html#airflow.providers.amazon.aws.operators.glue_crawler.GlueCrawlerOperator.fail_on_already_running">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_already_running</span> <span class="o">=</span> <span class="n">fail_on_already_running</span></div>
 
 <div class="viewcode-block" id="GlueCrawlerOperator.config">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue_crawler/index.html#airflow.providers.amazon.aws.operators.glue_crawler.GlueCrawlerOperator.config">[docs]</a>
@@ -896,12 +909,36 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">crawler_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;Name&quot;</span><span class="p">]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">has_crawler</span><span class="p">(</span><span class="n">crawler_name</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">update_crawler</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">update_crawler</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_already_running</span>
+                    <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s2">&quot;Error&quot;</span><span class="p">][</span><span class="s2">&quot;Code&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;CrawlerRunningException&quot;</span>
+                <span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Crawler &#39;</span><span class="si">%s</span><span class="s2">&#39; is currently running. &quot;</span>
+                        <span class="s2">&quot;Skipping update and waiting for the existing run to complete.&quot;</span><span class="p">,</span>
+                        <span class="n">crawler_name</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">create_crawler</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Triggering AWS Glue Crawler&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">start_crawler</span><span class="p">(</span><span class="n">crawler_name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">start_crawler</span><span class="p">(</span><span class="n">crawler_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_already_running</span> <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s2">&quot;Error&quot;</span><span class="p">][</span><span class="s2">&quot;Code&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;CrawlerRunningException&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Crawler &#39;</span><span class="si">%s</span><span class="s2">&#39; is already running. &quot;</span>
+                    <span class="s2">&quot;Waiting for the existing run to complete instead of failing.&quot;</span><span class="p">,</span>
+                    <span class="n">crawler_name</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">GlueCrawlerCompleteTrigger</span><span class="p">(</span>

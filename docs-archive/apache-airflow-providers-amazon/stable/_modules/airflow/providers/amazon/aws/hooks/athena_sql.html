@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -817,6 +817,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DbApiHook</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pyathena.connection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Connection</span> <span class="k">as</span> <span class="n">AthenaConnection</span>
 
 
@@ -870,8 +871,30 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">supports_autocommit</span> <span class="o">=</span> <span class="kc">True</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">athena_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">default_conn_name</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">athena_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">default_conn_name</span><span class="p">,</span>
+        <span class="n">aws_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">AwsBaseHook</span><span class="o">.</span><span class="n">default_conn_name</span><span class="p">,</span>
+        <span class="n">verify</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">client_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">resource_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">config</span><span class="p">:</span> <span class="n">Config</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># AwsGenericHook.__init__() only accepts the params declared above.</span>
+        <span class="c1"># Connection extras like s3_staging_dir and work_group are not</span>
+        <span class="c1"># constructor params — they are read later from the connection in</span>
+        <span class="c1"># get_conn(). BaseSQLOperator.get_hook() passes all connection extras</span>
+        <span class="c1"># as kwargs, so we absorb them here via **kwargs and discard them.</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span>
+            <span class="n">verify</span><span class="o">=</span><span class="n">verify</span><span class="p">,</span>
+            <span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">,</span>
+            <span class="n">client_type</span><span class="o">=</span><span class="n">client_type</span><span class="p">,</span>
+            <span class="n">resource_type</span><span class="o">=</span><span class="n">resource_type</span><span class="p">,</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+        <span class="p">)</span>
 <div class="viewcode-block" id="AthenaSQLHook.athena_conn_id">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/athena_sql/index.html#airflow.providers.amazon.aws.hooks.athena_sql.AthenaSQLHook.athena_conn_id">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">athena_conn_id</span> <span class="o">=</span> <span class="n">athena_conn_id</span></div>

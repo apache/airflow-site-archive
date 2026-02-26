@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -833,9 +833,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.lineage.hook</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_hook_lineage_collector</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">AirflowOptionalProviderFeatureException</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.lineage</span><span class="w"> </span><span class="kn">import</span> <span class="n">send_sql_hook_lineage</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DbApiHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.utils.bigquery</span><span class="w"> </span><span class="kn">import</span> <span class="n">bq_cast</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.utils.credentials_provider</span><span class="w"> </span><span class="kn">import</span> <span class="n">_get_scopes</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.utils.lineage</span><span class="w"> </span><span class="kn">import</span> <span class="n">send_hook_lineage_for_bq_job</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.consts</span><span class="w"> </span><span class="kn">import</span> <span class="n">CLIENT_INFO</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.deprecated</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecated</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.hooks.base_google</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -858,6 +860,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.retry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Retry</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">requests</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
 
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.sqlparser</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseInfo</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 <div class="viewcode-block" id="log">
@@ -1199,11 +1202,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">            defaults to use `self.use_legacy_sql` if not specified</span>
 <span class="sd">        :param kwargs: (optional) passed into pandas_gbq.read_gbq method</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">df_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_polars_df</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">dialect</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
         <span class="k">if</span> <span class="n">df_type</span> <span class="o">==</span> <span class="s2">&quot;pandas&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pandas_df</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">dialect</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="n">result</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pandas_df</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">dialect</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">df_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_polars_df</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">dialect</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported df_type: </span><span class="si">{</span><span class="n">df_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">send_sql_hook_lineage</span><span class="p">(</span>
+            <span class="n">context</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">sql</span><span class="o">=</span><span class="n">sql</span><span class="p">,</span>
+            <span class="n">sql_parameters</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
 
     <span class="nd">@deprecated</span><span class="p">(</span>
         <span class="n">planned_removal_date</span><span class="o">=</span><span class="s2">&quot;November 30, 2025&quot;</span><span class="p">,</span>
@@ -1563,6 +1574,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">ignore_unknown_values</span><span class="o">=</span><span class="n">ignore_unknown_values</span><span class="p">,</span>
             <span class="n">skip_invalid_rows</span><span class="o">=</span><span class="n">skip_invalid_rows</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="n">get_hook_lineage_collector</span><span class="p">()</span><span class="o">.</span><span class="n">add_output_asset</span><span class="p">(</span>
+            <span class="n">context</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">scheme</span><span class="o">=</span><span class="s2">&quot;bigquery&quot;</span><span class="p">,</span>
+            <span class="n">asset_kwargs</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;project_id&quot;</span><span class="p">:</span> <span class="n">table</span><span class="o">.</span><span class="n">project</span><span class="p">,</span>
+                <span class="s2">&quot;dataset_id&quot;</span><span class="p">:</span> <span class="n">table</span><span class="o">.</span><span class="n">dataset_id</span><span class="p">,</span>
+                <span class="s2">&quot;table_id&quot;</span><span class="p">:</span> <span class="n">table</span><span class="o">.</span><span class="n">table_id</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">)</span>
         <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
             <span class="n">error_msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2"> insert error(s) occurred. Details: </span><span class="si">{</span><span class="n">errors</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">error_msg</span><span class="p">)</span>
@@ -1886,13 +1906,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">table_id</span><span class="o">=</span><span class="n">table_id</span><span class="p">,</span>
         <span class="p">)</span>
 
+        <span class="n">table_object</span> <span class="o">=</span> <span class="n">Table</span><span class="o">.</span><span class="n">from_api_repr</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
         <span class="n">iterator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_client</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="n">project_id</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="n">location</span><span class="p">)</span><span class="o">.</span><span class="n">list_rows</span><span class="p">(</span>
-            <span class="n">table</span><span class="o">=</span><span class="n">Table</span><span class="o">.</span><span class="n">from_api_repr</span><span class="p">(</span><span class="n">table</span><span class="p">),</span>
+            <span class="n">table</span><span class="o">=</span><span class="n">table_object</span><span class="p">,</span>
             <span class="n">selected_fields</span><span class="o">=</span><span class="n">selected_fields_sequence</span><span class="p">,</span>
             <span class="n">max_results</span><span class="o">=</span><span class="n">max_results</span><span class="p">,</span>
             <span class="n">page_token</span><span class="o">=</span><span class="n">page_token</span><span class="p">,</span>
             <span class="n">start_index</span><span class="o">=</span><span class="n">start_index</span><span class="p">,</span>
             <span class="n">retry</span><span class="o">=</span><span class="n">retry</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">get_hook_lineage_collector</span><span class="p">()</span><span class="o">.</span><span class="n">add_input_asset</span><span class="p">(</span>
+            <span class="n">context</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
+            <span class="n">scheme</span><span class="o">=</span><span class="s2">&quot;bigquery&quot;</span><span class="p">,</span>
+            <span class="n">asset_kwargs</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;project_id&quot;</span><span class="p">:</span> <span class="n">table_object</span><span class="o">.</span><span class="n">project</span><span class="p">,</span>
+                <span class="s2">&quot;dataset_id&quot;</span><span class="p">:</span> <span class="n">table_object</span><span class="o">.</span><span class="n">dataset_id</span><span class="p">,</span>
+                <span class="s2">&quot;table_id&quot;</span><span class="p">:</span> <span class="n">table_object</span><span class="o">.</span><span class="n">table_id</span><span class="p">,</span>
+            <span class="p">},</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">return_iterator</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">iterator</span>
@@ -2190,6 +2220,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># Start the job and wait for it to complete and get the result.</span>
             <span class="n">job_api_repr</span><span class="o">.</span><span class="n">result</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="n">retry</span><span class="p">)</span>
+
+        <span class="n">send_hook_lineage_for_bq_job</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">job</span><span class="o">=</span><span class="n">job_api_repr</span><span class="p">)</span>
+
         <span class="k">return</span> <span class="n">job_api_repr</span></div>
 
 
@@ -2366,6 +2399,40 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">else</span><span class="p">:</span>
             <span class="n">scope_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_field</span><span class="p">(</span><span class="s2">&quot;scope&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">_get_scopes</span><span class="p">(</span><span class="n">scope_value</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BigQueryHook.get_openlineage_database_info">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/bigquery/index.html#airflow.providers.google.cloud.hooks.bigquery.BigQueryHook.get_openlineage_database_info">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_openlineage_database_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DatabaseInfo</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return BigQuery specific information for OpenLineage.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.sqlparser</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseInfo</span>
+
+        <span class="k">return</span> <span class="n">DatabaseInfo</span><span class="p">(</span>
+            <span class="n">scheme</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_openlineage_database_dialect</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span>
+            <span class="n">authority</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">database</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span>
+            <span class="n">information_schema_columns</span><span class="o">=</span><span class="p">[</span>
+                <span class="s2">&quot;table_schema&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;table_name&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;column_name&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;ordinal_position&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;data_type&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;table_catalog&quot;</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="n">information_schema_table_name</span><span class="o">=</span><span class="s2">&quot;INFORMATION_SCHEMA.COLUMNS&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BigQueryHook.get_openlineage_database_dialect">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/bigquery/index.html#airflow.providers.google.cloud.hooks.bigquery.BigQueryHook.get_openlineage_database_dialect">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_openlineage_database_dialect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;bigquery&quot;</span></div>
+
+
+<div class="viewcode-block" id="BigQueryHook.get_openlineage_default_schema">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/bigquery/index.html#airflow.providers.google.cloud.hooks.bigquery.BigQueryHook.get_openlineage_default_schema">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_openlineage_default_schema</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
 </div>
 
 

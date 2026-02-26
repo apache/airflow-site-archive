@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -1344,15 +1344,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
             <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExecuteTask</span>
 
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ExecuteTask</span><span class="p">):</span>
-                <span class="n">workload</span> <span class="o">=</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-                <span class="n">ser_input</span> <span class="o">=</span> <span class="n">workload</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">()</span>
-                <span class="n">command</span> <span class="o">=</span> <span class="p">[</span>
-                    <span class="s2">&quot;python&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;-m&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;airflow.sdk.execution_time.execute_workload&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;--json-string&quot;</span><span class="p">,</span>
-                    <span class="n">ser_input</span><span class="p">,</span>
-                <span class="p">]</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_workload_to_command</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;EcsExecutor doesn&#39;t know how to handle workload of type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -1424,6 +1416,39 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
         <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No such container found by container name: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">container_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_serialize_workload_to_command</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CommandType</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Serialize an ExecuteTask workload into a command for the Task SDK.</span>
+
+<span class="sd">        :param workload: ExecuteTask workload to serialize</span>
+<span class="sd">        :return: Command as list of strings for Task SDK execution</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="s2">&quot;python&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-m&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;airflow.sdk.execution_time.execute_workload&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--json-string&quot;</span><span class="p">,</span>
+            <span class="n">workload</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(),</span>
+        <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_task_command</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ti</span><span class="p">:</span> <span class="n">TaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CommandType</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Build task command for execution based on Airflow version.</span>
+
+<span class="sd">        For Airflow 3.x+, generates an ExecuteTask workload with JSON serialization.</span>
+<span class="sd">        For Airflow 2.x, uses the legacy command_as_list() method.</span>
+
+<span class="sd">        :param ti: TaskInstance to build command for</span>
+<span class="sd">        :return: Command as list of strings</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExecuteTask</span>
+
+            <span class="n">workload</span> <span class="o">=</span> <span class="n">ExecuteTask</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="n">ti</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_workload_to_command</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ti</span><span class="o">.</span><span class="n">command_as_list</span><span class="p">()</span>
+
 <div class="viewcode-block" id="AwsEcsExecutor.try_adopt_task_instances">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/ecs/ecs_executor/index.html#airflow.providers.amazon.aws.executors.ecs.ecs_executor.AwsEcsExecutor.try_adopt_task_instances">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">try_adopt_task_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tis</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">]:</span>
@@ -1440,11 +1465,13 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
                 <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">task_descriptions</span><span class="p">:</span>
                     <span class="n">ti</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">ti</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">tis</span> <span class="k">if</span> <span class="n">ti</span><span class="o">.</span><span class="n">external_executor_id</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">task_arn</span><span class="p">)</span>
+                    <span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_task_command</span><span class="p">(</span><span class="n">ti</span><span class="p">)</span>
+
                     <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span><span class="o">.</span><span class="n">add_task</span><span class="p">(</span>
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">,</span>
                         <span class="n">ti</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span>
-                        <span class="n">ti</span><span class="o">.</span><span class="n">command_as_list</span><span class="p">(),</span>
+                        <span class="n">command</span><span class="p">,</span>
                         <span class="n">ti</span><span class="o">.</span><span class="n">executor_config</span><span class="p">,</span>
                         <span class="n">ti</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
                     <span class="p">)</span>

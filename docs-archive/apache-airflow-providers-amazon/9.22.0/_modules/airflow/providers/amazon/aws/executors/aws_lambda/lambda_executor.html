@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -822,7 +822,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.lambda_function</span><span class="w"> </span><span class="kn">import</span> <span class="n">LambdaHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.sqs</span><span class="w"> </span><span class="kn">import</span> <span class="n">SqsHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">Stats</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">Stats</span><span class="p">,</span> <span class="n">timezone</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
@@ -844,6 +844,11 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="sd">    to update task state in Airflow.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
+<div class="viewcode-block" id="AwsLambdaExecutor.supports_multi_team">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.supports_multi_team">[docs]</a>
+    <span class="n">supports_multi_team</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
     <span class="k">if</span> <span class="n">TYPE_CHECKING</span> <span class="ow">and</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
         <span class="c1"># In the v3 path, we store workloads, not commands as strings.</span>
         <span class="c1"># TODO: TaskSDK: move this type change into BaseExecutor</span>
@@ -862,26 +867,37 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.running_tasks">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">running_tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">TaskInstanceKey</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
+
+        <span class="c1"># Check if self has the ExecutorConf set on the self.conf attribute, and if not, set it to the global</span>
+        <span class="c1"># configuration object. This allows the changes to be backwards compatible with older versions of</span>
+        <span class="c1"># Airflow.</span>
+        <span class="c1"># Can be removed when minimum supported provider version is equal to the version of core airflow</span>
+        <span class="c1"># which introduces multi-team configuration.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;conf&quot;</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">conf</span> <span class="o">=</span> <span class="n">conf</span>
+
 <div class="viewcode-block" id="AwsLambdaExecutor.lambda_function_name">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.lambda_function_name">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">lambda_function_name</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">FUNCTION_NAME</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lambda_function_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">FUNCTION_NAME</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AwsLambdaExecutor.sqs_queue_url">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.sqs_queue_url">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">sqs_queue_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">QUEUE_URL</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sqs_queue_url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">QUEUE_URL</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AwsLambdaExecutor.dlq_url">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.dlq_url">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dlq_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">DLQ_URL</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dlq_url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">DLQ_URL</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AwsLambdaExecutor.qualifier">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.qualifier">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">qualifier</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">QUALIFIER</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qualifier</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">QUALIFIER</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
 
         <span class="c1"># Maximum number of retries to invoke Lambda.</span>
 <div class="viewcode-block" id="AwsLambdaExecutor.max_invoke_attempts">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.max_invoke_attempts">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">max_invoke_attempts</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_invoke_attempts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
             <span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span>
             <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">MAX_INVOKE_ATTEMPTS</span><span class="p">,</span>
         <span class="p">)</span></div>
@@ -901,7 +917,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/aws_lambda/lambda_executor/index.html#airflow.providers.amazon.aws.executors.aws_lambda.lambda_executor.AwsLambdaExecutor.start">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Call this when the Executor is run for the first time by the scheduler.&quot;&quot;&quot;</span>
-        <span class="n">check_health</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">CHECK_HEALTH_ON_STARTUP</span><span class="p">)</span>
+        <span class="n">check_health</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">CHECK_HEALTH_ON_STARTUP</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">check_health</span><span class="p">:</span>
             <span class="k">return</span>
@@ -973,8 +989,8 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="sd">        :param check_connection: If True, check the health of the connection after loading it.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Loading Connections&quot;</span><span class="p">)</span>
-        <span class="n">aws_conn_id</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">AWS_CONN_ID</span><span class="p">)</span>
-        <span class="n">region_name</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">REGION_NAME</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">aws_conn_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">AWS_CONN_ID</span><span class="p">)</span>
+        <span class="n">region_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">REGION_NAME</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sqs_client</span> <span class="o">=</span> <span class="n">SqsHook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">)</span><span class="o">.</span><span class="n">conn</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lambda_client</span> <span class="o">=</span> <span class="n">LambdaHook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">)</span><span class="o">.</span><span class="n">conn</span>
 
@@ -1337,7 +1353,9 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="sd">        :param heartbeat_interval: The interval in seconds to wait between checks for task completion.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Received signal to end, waiting for outstanding tasks to finish.&quot;</span><span class="p">)</span>
-        <span class="n">time_to_wait</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">END_WAIT_TIMEOUT</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">))</span>
+        <span class="n">time_to_wait</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllLambdaConfigKeys</span><span class="o">.</span><span class="n">END_WAIT_TIMEOUT</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
         <span class="n">start_time</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
         <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">time_to_wait</span><span class="p">:</span>

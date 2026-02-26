@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -939,11 +939,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="FacebookAdsReportToGcsOperator.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/transfers/facebook_ads_to_gcs/index.html#airflow.providers.google.cloud.transfers.facebook_ads_to_gcs.FacebookAdsReportToGcsOperator.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Execute the operator.</span>
+
+<span class="sd">        Fetches Facebook Ads reports and uploads them to Google Cloud Storage.</span>
+
+<span class="sd">        :return: List of GCS URIs where the reports were uploaded.</span>
+<span class="sd">            This value is pushed to XCom for downstream tasks.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">service</span> <span class="o">=</span> <span class="n">FacebookAdsReportingHook</span><span class="p">(</span>
             <span class="n">facebook_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">facebook_conn_id</span><span class="p">,</span> <span class="n">api_version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">api_version</span>
         <span class="p">)</span>
         <span class="n">bulk_report</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">bulk_facebook_report</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">,</span> <span class="n">fields</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fields</span><span class="p">)</span>
+        <span class="n">files_uploaded</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bulk_report</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="n">converted_rows_with_action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_rows_with_action</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
@@ -968,8 +977,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="sa">f</span><span class="s2">&quot;List or Dict. Actual return type of the Hook: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">bulk_report</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="p">)</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
-        <span class="n">total_row_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decide_and_flush</span><span class="p">(</span><span class="n">converted_rows_with_action</span><span class="o">=</span><span class="n">converted_rows_with_action</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Facebook Returned </span><span class="si">%s</span><span class="s2"> data points in total: &quot;</span><span class="p">,</span> <span class="n">total_row_count</span><span class="p">)</span></div>
+        <span class="n">files_uploaded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decide_and_flush</span><span class="p">(</span><span class="n">converted_rows_with_action</span><span class="o">=</span><span class="n">converted_rows_with_action</span><span class="p">)</span>
+        <span class="n">total_row_count</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">files_uploaded</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Facebook Returned data points across </span><span class="si">%s</span><span class="s2"> files&quot;</span><span class="p">,</span> <span class="n">total_row_count</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">files_uploaded</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_generate_rows_with_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_check</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
@@ -996,35 +1007,37 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Facebook Returned </span><span class="si">%s</span><span class="s2"> data points &quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">converted_rows</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">converted_rows_with_action</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_decide_and_flush</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">converted_rows_with_action</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">FlushAction</span><span class="p">,</span> <span class="nb">list</span><span class="p">]):</span>
-        <span class="n">total_data_count</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decide_and_flush</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">converted_rows_with_action</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">FlushAction</span><span class="p">,</span> <span class="nb">list</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">files_uploaded</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">once_action</span> <span class="o">=</span> <span class="n">converted_rows_with_action</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FlushAction</span><span class="o">.</span><span class="n">EXPORT_ONCE</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">once_action</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_flush_rows</span><span class="p">(</span>
+            <span class="n">gcs_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flush_rows</span><span class="p">(</span>
                 <span class="n">converted_rows</span><span class="o">=</span><span class="n">once_action</span><span class="p">,</span>
                 <span class="n">object_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">object_name</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">total_data_count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">once_action</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">gcs_uri</span><span class="p">:</span>
+                <span class="n">files_uploaded</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gcs_uri</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">every_account_action</span> <span class="o">=</span> <span class="n">converted_rows_with_action</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FlushAction</span><span class="o">.</span><span class="n">EXPORT_EVERY_ACCOUNT</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">every_account_action</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">converted_rows</span> <span class="ow">in</span> <span class="n">every_account_action</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_flush_rows</span><span class="p">(</span>
+                    <span class="n">gcs_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_flush_rows</span><span class="p">(</span>
                         <span class="n">converted_rows</span><span class="o">=</span><span class="n">converted_rows</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;converted_rows&quot;</span><span class="p">),</span>
                         <span class="n">object_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_transform_object_name_with_account_id</span><span class="p">(</span>
                             <span class="n">account_id</span><span class="o">=</span><span class="n">converted_rows</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;account_id&quot;</span><span class="p">)</span>
                         <span class="p">),</span>
                     <span class="p">)</span>
-                    <span class="n">total_data_count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">converted_rows</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;converted_rows&quot;</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">gcs_uri</span><span class="p">:</span>
+                        <span class="n">files_uploaded</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gcs_uri</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">message</span> <span class="o">=</span> <span class="p">(</span>
                     <span class="s2">&quot;FlushAction not found in the data. Please check the FlushAction in &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;the operator. Converted Rows with Action: </span><span class="si">{</span><span class="n">converted_rows_with_action</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
                 <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">total_data_count</span>
+        <span class="k">return</span> <span class="n">files_uploaded</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_flush_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">converted_rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">object_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_flush_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">converted_rows</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">object_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">converted_rows</span><span class="p">:</span>
             <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fields</span>
             <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">csvfile</span><span class="p">:</span>
@@ -1042,7 +1055,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">filename</span><span class="o">=</span><span class="n">csvfile</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                     <span class="n">gzip</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">gzip</span><span class="p">,</span>
                 <span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> uploaded to GCS&quot;</span><span class="p">,</span> <span class="n">csvfile</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">gcs_uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;gs://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">object_name</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> uploaded to GCS at </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">csvfile</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">gcs_uri</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">gcs_uri</span>
+        <span class="k">return</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_transform_object_name_with_account_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">account_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="n">directory_parts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">object_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>

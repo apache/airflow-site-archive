@@ -14,7 +14,7 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=2452474a" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=3d63ac2e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=1afea566" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -848,6 +848,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        If set as a sequence, the identities from the list must grant</span>
 <span class="sd">        Service Account Token Creator IAM role to the directly preceding identity, with first</span>
 <span class="sd">        account from the list granting this role to the originating account (templated).</span>
+<span class="sd">    :param unwrap_single: If True (default), returns a single URI string when there&#39;s only one file.</span>
+<span class="sd">        If False, always returns a list of URIs. Default will change to False in a future release.</span>
+<span class="sd">    :param return_gcs_uri: If True, returns the full GCS URI (e.g., ``gs://bucket/path/to/file``).</span>
+<span class="sd">        If False (default), returns the destination file name only (e.g., ``bucket/path/to/file``).</span>
+<span class="sd">        This parameter is deprecated and will be removed in a future release.</span>
+<span class="sd">        When this parameter&#39;s value is False, it cannot be used altogether with ``unwrap_single=False``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="GoogleCalendarToGCSOperator.template_fields">
@@ -884,6 +890,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">destination_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">gcp_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;google_cloud_default&quot;</span><span class="p">,</span>
         <span class="n">impersonation_chain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">unwrap_single</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">return_gcs_uri</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -972,10 +980,45 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">impersonation_chain</span> <span class="o">=</span> <span class="n">impersonation_chain</span></div>
 
 
+        <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+        <span class="k">if</span> <span class="n">unwrap_single</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">unwrap_single</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;The default value of unwrap_single will change from True to False in a future release. &quot;</span>
+                <span class="s2">&quot;Please set unwrap_single explicitly to avoid this warning.&quot;</span><span class="p">,</span>
+                <span class="ne">FutureWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">unwrap_single</span> <span class="o">=</span> <span class="n">unwrap_single</span>
+
+        <span class="k">if</span> <span class="n">return_gcs_uri</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">return_gcs_uri</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;The return_gcs_uri parameter is deprecated and will be removed in a future release. &quot;</span>
+                <span class="s2">&quot;In the future, operators will always return full GCS URIs.&quot;</span><span class="p">,</span>
+                <span class="ne">FutureWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">return_gcs_uri</span> <span class="o">=</span> <span class="n">return_gcs_uri</span>
+
+        <span class="c1"># Validate that the combination is valid: we cannot have both unwrap_single=False</span>
+        <span class="c1"># and return_gcs_uri=False as this combination is backward-incompatible with the</span>
+        <span class="c1"># future behavior of always returning lists of URIs.</span>
+        <span class="c1"># Note: After None handling above, both values are guaranteed to be bool (not None).</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">unwrap_single</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">return_gcs_uri</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;return_gcs_uri cannot be False together with unwrap_single=False. &quot;</span>
+                <span class="s2">&quot;In the future, all operators will return list of URIs, so please set &quot;</span>
+                <span class="s2">&quot;return_gcs_uri=True when using unwrap_single=False.&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_upload_data</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
         <span class="n">gcs_hook</span> <span class="o">=</span> <span class="n">GCSHook</span><span class="p">(</span>
             <span class="n">gcp_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">gcp_conn_id</span><span class="p">,</span>
             <span class="n">impersonation_chain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">impersonation_chain</span><span class="p">,</span>
@@ -998,11 +1041,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">object_name</span><span class="o">=</span><span class="n">dest_file_name</span><span class="p">,</span>
                 <span class="n">filename</span><span class="o">=</span><span class="n">temp_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
             <span class="p">)</span>
-        <span class="k">return</span> <span class="n">dest_file_name</span>
+        <span class="n">gcs_uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;gs://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_bucket</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">dest_file_name</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">dest_file_name</span><span class="p">,</span> <span class="n">gcs_uri</span>
 
 <div class="viewcode-block" id="GoogleCalendarToGCSOperator.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/transfers/calendar_to_gcs/index.html#airflow.providers.google.cloud.transfers.calendar_to_gcs.GoogleCalendarToGCSOperator.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">calendar_hook</span> <span class="o">=</span> <span class="n">GoogleCalendarHook</span><span class="p">(</span>
             <span class="n">api_version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">api_version</span><span class="p">,</span>
             <span class="n">gcp_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">gcp_conn_id</span><span class="p">,</span>
@@ -1027,9 +1071,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">time_zone</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">time_zone</span><span class="p">,</span>
             <span class="n">updated_min</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">updated_min</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">gcs_path_to_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_upload_data</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+        <span class="n">dest_file_name</span><span class="p">,</span> <span class="n">gcs_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_upload_data</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">gcs_path_to_file</span></div>
+        <span class="c1"># Determine what to return based on flags</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">return_gcs_uri</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">gcs_uri</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># For backward compatibility, return dest_file_name when unwrap_single=False</span>
+            <span class="c1"># and return_gcs_uri=False (default behavior)</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">dest_file_name</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unwrap_single</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span></div>
 </div>
 
 </pre></div>
