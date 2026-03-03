@@ -878,6 +878,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">sub_proc</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_bundle_cleanup_main</span><span class="p">(</span><span class="n">check_interval</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Entry point for the stale bundle cleanup subprocess.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.dag_processing.bundles.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BundleUsageTrackingManager</span>
+
+    <span class="n">mgr</span> <span class="o">=</span> <span class="n">BundleUsageTrackingManager</span><span class="p">()</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span>
+        <span class="n">mgr</span><span class="o">.</span><span class="n">remove_stale_bundle_versions</span><span class="p">()</span>
+
+
 <span class="nd">@contextmanager</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_run_stale_bundle_cleanup</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Start stale bundle cleanup sub-process.&quot;&quot;&quot;</span>
@@ -892,19 +902,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">with</span> <span class="n">suppress</span><span class="p">(</span><span class="ne">BaseException</span><span class="p">):</span>
             <span class="k">yield</span>
         <span class="k">return</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.dag_processing.bundles.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BundleUsageTrackingManager</span>
 
     <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;starting stale bundle cleanup process&quot;</span><span class="p">)</span>
     <span class="n">sub_proc</span> <span class="o">=</span> <span class="kc">None</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">bundle_cleanup_main</span><span class="p">():</span>
-        <span class="n">mgr</span> <span class="o">=</span> <span class="n">BundleUsageTrackingManager</span><span class="p">()</span>
-        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span>
-            <span class="n">mgr</span><span class="o">.</span><span class="n">remove_stale_bundle_versions</span><span class="p">()</span>
-
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">sub_proc</span> <span class="o">=</span> <span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">bundle_cleanup_main</span><span class="p">)</span>
+        <span class="n">sub_proc</span> <span class="o">=</span> <span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">_bundle_cleanup_main</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">check_interval</span><span class="p">,))</span>
         <span class="n">sub_proc</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
         <span class="k">yield</span>
     <span class="k">finally</span><span class="p">:</span>

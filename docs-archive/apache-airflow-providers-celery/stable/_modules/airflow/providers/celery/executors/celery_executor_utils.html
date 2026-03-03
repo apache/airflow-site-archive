@@ -802,6 +802,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.dag_parsing_context</span><span class="w"> </span><span class="kn">import</span> <span class="n">_airflow_parsing_context_manager</span>
 
+<span class="k">if</span> <span class="n">AIRFLOW_V_3_2_PLUS</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads.callback</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_callback_workload</span>
+
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor_utils/index.html#airflow.providers.celery.executors.celery_executor_utils.log">[docs]</a>
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
@@ -822,6 +825,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors</span><span class="w"> </span><span class="kn">import</span> <span class="n">workloads</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.base_executor</span><span class="w"> </span><span class="kn">import</span> <span class="n">EventBufferValueType</span><span class="p">,</span> <span class="n">ExecutorConf</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkloadKey</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.taskinstance</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceKey</span>
 
     <span class="c1"># We can&#39;t use `if AIRFLOW_V_3_0_PLUS` conditions in type checks, so unfortunately we just have to define</span>
@@ -831,9 +835,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">CommandType</span> <span class="o">=</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></div>
 
 
-    <span class="n">TaskInstanceInCelery</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span>
-        <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span> <span class="o">|</span> <span class="n">CommandType</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">WorkloadInCelery</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">WorkloadKey</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span> <span class="o">|</span> <span class="n">CommandType</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">WorkloadInCeleryResult</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span>
+        <span class="n">WorkloadKey</span><span class="p">,</span> <span class="n">CommandType</span><span class="p">,</span> <span class="n">AsyncResult</span> <span class="o">|</span> <span class="s2">&quot;ExceptionWithTraceback&quot;</span>
     <span class="p">]</span>
+
+    <span class="c1"># Deprecated alias for backward compatibility</span>
+    <span class="n">TaskInstanceInCelery</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="n">WorkloadInCelery</span>
 
     <span class="n">TaskTuple</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">CommandType</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span>
 
@@ -960,9 +968,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
     <span class="n">celery_task_id</span> <span class="o">=</span> <span class="n">app</span><span class="o">.</span><span class="n">current_task</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">id</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteTask</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CeleryExecutor does not know how to handle </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
     <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;[</span><span class="si">%s</span><span class="s2">] Executing workload in Celery: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">celery_task_id</span><span class="p">,</span> <span class="n">workload</span><span class="p">)</span>
 
     <span class="n">base_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;api&quot;</span><span class="p">,</span> <span class="s2">&quot;base_url&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
@@ -971,15 +976,22 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">base_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;http://localhost:8080</span><span class="si">{</span><span class="n">base_url</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="n">default_execution_api_server</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">/execution/&quot;</span>
 
-    <span class="n">supervise</span><span class="p">(</span>
-        <span class="c1"># This is the &quot;wrong&quot; ti type, but it duck types the same. TODO: Create a protocol for this.</span>
-        <span class="n">ti</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
-        <span class="n">dag_rel_path</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">dag_rel_path</span><span class="p">,</span>
-        <span class="n">bundle_info</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">bundle_info</span><span class="p">,</span>
-        <span class="n">token</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">token</span><span class="p">,</span>
-        <span class="n">server</span><span class="o">=</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;core&quot;</span><span class="p">,</span> <span class="s2">&quot;execution_api_server_url&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="n">default_execution_api_server</span><span class="p">),</span>
-        <span class="n">log_path</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">log_path</span><span class="p">,</span>
-    <span class="p">)</span></div>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteTask</span><span class="p">):</span>
+        <span class="n">supervise</span><span class="p">(</span>
+            <span class="c1"># This is the &quot;wrong&quot; ti type, but it duck types the same. TODO: Create a protocol for this.</span>
+            <span class="n">ti</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
+            <span class="n">dag_rel_path</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">dag_rel_path</span><span class="p">,</span>
+            <span class="n">bundle_info</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">bundle_info</span><span class="p">,</span>
+            <span class="n">token</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">token</span><span class="p">,</span>
+            <span class="n">server</span><span class="o">=</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;core&quot;</span><span class="p">,</span> <span class="s2">&quot;execution_api_server_url&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="n">default_execution_api_server</span><span class="p">),</span>
+            <span class="n">log_path</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">log_path</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteCallback</span><span class="p">):</span>
+        <span class="n">success</span><span class="p">,</span> <span class="n">error_msg</span> <span class="o">=</span> <span class="n">execute_callback_workload</span><span class="p">(</span><span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="p">,</span> <span class="n">log</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">error_msg</span> <span class="ow">or</span> <span class="s2">&quot;Callback execution failed&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CeleryExecutor does not know how to handle </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -1094,18 +1106,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
-<div class="viewcode-block" id="send_task_to_executor">
-<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor_utils/index.html#airflow.providers.celery.executors.celery_executor_utils.send_task_to_executor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">send_task_to_executor</span><span class="p">(</span>
-    <span class="n">task_tuple</span><span class="p">:</span> <span class="n">TaskInstanceInCelery</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">CommandType</span><span class="p">,</span> <span class="n">AsyncResult</span> <span class="o">|</span> <span class="n">ExceptionWithTraceback</span><span class="p">]:</span>
+<div class="viewcode-block" id="send_workload_to_executor">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor_utils/index.html#airflow.providers.celery.executors.celery_executor_utils.send_workload_to_executor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">send_workload_to_executor</span><span class="p">(</span>
+    <span class="n">workload_tuple</span><span class="p">:</span> <span class="n">WorkloadInCelery</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WorkloadInCeleryResult</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Send task to executor.</span>
+<span class="sd">    Send workload to executor.</span>
 
 <span class="sd">    This function is called in ProcessPoolExecutor subprocesses. To avoid pickling issues with</span>
 <span class="sd">    team-specific Celery apps, we pass the team_name and reconstruct the Celery app here.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">team_name</span> <span class="o">=</span> <span class="n">task_tuple</span>
+    <span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">team_name</span> <span class="o">=</span> <span class="n">workload_tuple</span>
 
     <span class="c1"># Reconstruct the Celery app from configuration, which may or may not be team-specific.</span>
     <span class="c1"># ExecutorConf wraps config access to automatically use team-specific config where present.</span>
@@ -1119,7 +1131,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">else</span><span class="p">:</span>
         <span class="c1"># Airflow &lt;3.2 ExecutorConf doesn&#39;t exist (at least not with the required attributes), fall back to global conf</span>
         <span class="n">_conf</span> <span class="o">=</span> <span class="n">conf</span>
-
     <span class="c1"># Create the Celery app with the correct configuration</span>
     <span class="n">celery_app</span> <span class="o">=</span> <span class="n">create_celery_app</span><span class="p">(</span><span class="n">_conf</span><span class="p">)</span>
 
@@ -1153,6 +1164,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="c1"># The type is right for the version, but the type cannot be defined correctly for Airflow 2 and 3</span>
     <span class="c1"># concurrently;</span>
     <span class="k">return</span> <span class="n">key</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">result</span></div>
+
+
+
+<span class="c1"># Backward compatibility alias</span>
+<div class="viewcode-block" id="send_task_to_executor">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor_utils/index.html#airflow.providers.celery.executors.celery_executor_utils.send_task_to_executor">[docs]</a>
+<span class="n">send_task_to_executor</span> <span class="o">=</span> <span class="n">send_workload_to_executor</span></div>
 
 
 

@@ -788,7 +788,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.base_executor</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseExecutor</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">,</span> <span class="n">AIRFLOW_V_3_2_PLUS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTaskTimeout</span><span class="p">,</span> <span class="n">Stats</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceState</span>
 
@@ -807,13 +807,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
-
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.cli.cli_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupCommand</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors</span><span class="w"> </span><span class="kn">import</span> <span class="n">workloads</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.taskinstance</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstance</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.taskinstancekey</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceKey</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.executors.celery_executor_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceInCelery</span><span class="p">,</span> <span class="n">TaskTuple</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.executors.celery_executor_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskTuple</span><span class="p">,</span> <span class="n">WorkloadInCelery</span>
 
 
 <span class="c1"># PEP562</span>
@@ -854,6 +852,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.supports_ad_hoc_ti_run">[docs]</a>
     <span class="n">supports_ad_hoc_ti_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
 
+<div class="viewcode-block" id="CeleryExecutor.supports_callbacks">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.supports_callbacks">[docs]</a>
+    <span class="n">supports_callbacks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
+
 <div class="viewcode-block" id="CeleryExecutor.sentry_integration">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.sentry_integration">[docs]</a>
     <span class="n">sentry_integration</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sentry_sdk.integrations.celery.CeleryIntegration&quot;</span></div>
@@ -864,13 +866,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.supports_sentry">[docs]</a>
     <span class="n">supports_sentry</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
 
+<div class="viewcode-block" id="CeleryExecutor.supports_multi_team">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.supports_multi_team">[docs]</a>
+    <span class="n">supports_multi_team</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
 
-    <span class="k">if</span> <span class="n">TYPE_CHECKING</span> <span class="ow">and</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
-        <span class="c1"># In the v3 path, we store workloads, not commands as strings.</span>
-        <span class="c1"># TODO: TaskSDK: move this type change into BaseExecutor</span>
+
+    <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+            <span class="c1"># TODO: TaskSDK: move this type change into BaseExecutor</span>
 <div class="viewcode-block" id="CeleryExecutor.queued_tasks">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.queued_tasks">[docs]</a>
-        <span class="n">queued_tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span><span class="p">]</span>  <span class="c1"># type: ignore[assignment]</span></div>
+            <span class="n">queued_tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span><span class="p">]</span>  <span class="c1"># type: ignore[assignment]</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -949,18 +955,25 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="c1"># Airflow V3 version -- have to delay imports until we know we are on v3</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExecuteTask</span>
 
-        <span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="p">(</span><span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">workload</span><span class="p">,</span> <span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">team_name</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">workload</span> <span class="ow">in</span> <span class="n">workloads</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">ExecuteTask</span><span class="p">)</span>
-        <span class="p">]</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">workloads</span><span class="p">):</span>
-            <span class="n">invalid</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">workload</span> <span class="k">for</span> <span class="n">workload</span> <span class="ow">in</span> <span class="n">workloads</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">ExecuteTask</span><span class="p">))</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2">._process_workloads cannot handle </span><span class="si">{</span><span class="n">invalid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_2_PLUS</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.workloads</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExecuteCallback</span>
+
+        <span class="n">tasks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">WorkloadInCelery</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">workload</span> <span class="ow">in</span> <span class="n">workloads</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">ExecuteTask</span><span class="p">):</span>
+                <span class="n">tasks</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">workload</span><span class="p">,</span> <span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">team_name</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="n">AIRFLOW_V_3_2_PLUS</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">ExecuteCallback</span><span class="p">):</span>
+                <span class="c1"># Use default queue for callbacks, or extract from callback data if available</span>
+                <span class="n">queue</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">&quot;queue&quot;</span> <span class="ow">in</span> <span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="n">queue</span> <span class="o">=</span> <span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;queue&quot;</span><span class="p">]</span>
+                <span class="n">tasks</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">workload</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">team_name</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2">._process_workloads cannot handle </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_send_tasks</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_send_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_tuples_to_send</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstanceInCelery</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_send_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_tuples_to_send</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">WorkloadInCelery</span><span class="p">]):</span>
         <span class="c1"># Celery state queries will be stuck if we do not use one same backend</span>
         <span class="c1"># for all tasks.</span>
         <span class="n">cached_celery_backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">celery_app</span><span class="o">.</span><span class="n">backend</span>
@@ -984,7 +997,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">task_publish_retries</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">retries</span> <span class="o">+</span> <span class="mi">1</span>
                     <span class="k">continue</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">queued_tasks</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queued_tasks</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">queued_tasks</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">queued_callbacks</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">task_publish_retries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">ExceptionWithTraceback</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="se">\n</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">CELERY_SEND_ERR_MSG_HEADER</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">exception</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">traceback</span><span class="p">)</span>
@@ -999,7 +1015,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="c1"># which point we don&#39;t need the ID anymore anyway</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">event_buffer</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">QUEUED</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">task_id</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_send_tasks_to_celery</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_tuples_to_send</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstanceInCelery</span><span class="p">]):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_send_tasks_to_celery</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_tuples_to_send</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">WorkloadInCelery</span><span class="p">]):</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.executors.celery_executor_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">send_task_to_executor</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">task_tuples_to_send</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_parallelism</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -1196,17 +1212,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.cli.definition</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_celery_cli_commands</span>
 
         <span class="k">return</span> <span class="n">get_celery_cli_commands</span><span class="p">()</span></div>
-
-
-<div class="viewcode-block" id="CeleryExecutor.queue_workload">
-<a class="viewcode-back" href="../../../../../_api/airflow/providers/celery/executors/celery_executor/index.html#airflow.providers.celery.executors.celery_executor.CeleryExecutor.queue_workload">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">queue_workload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workload</span><span class="p">:</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors</span><span class="w"> </span><span class="kn">import</span> <span class="n">workloads</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteTask</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2"> cannot handle workloads of type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">ti</span> <span class="o">=</span> <span class="n">workload</span><span class="o">.</span><span class="n">ti</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">queued_tasks</span><span class="p">[</span><span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">workload</span></div>
 </div>
 
 </pre></div>
