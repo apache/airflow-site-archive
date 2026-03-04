@@ -1053,6 +1053,115 @@ between two connections.</p>
 </div>
 </div>
 </section>
+<section id="analytics-operator">
+<h2>Analytics Operator<a class="headerlink" href="#analytics-operator" title="Link to this heading">¶</a></h2>
+<p>The Analytics operator is designed to run analytic queries on data stored in various datastores. It is a generic operator that can query data in S3, GCS, Azure, and Local File System.</p>
+<section id="when-to-use-analytics-operator">
+<h3>When to Use Analytics Operator<a class="headerlink" href="#when-to-use-analytics-operator" title="Link to this heading">¶</a></h3>
+<p>The Analytics Operator is ideal for performing efficient, high-performance analytics on large volumes of data across various storage systems. Under the hood, it uses Apache DataFusion, a high-performance, extensible query engine for Apache Arrow, which enables fast SQL queries on various data formats and storage systems. DataFusion is chosen for its ability to handle large-scale data processing on a single node, providing low-latency analytics without the need for a full database setup and without the need for high compute clusters. For more on Analytics Operator with DataFusion use cases, see <a class="reference external" href="https://datafusion.apache.org/user-guide/introduction.html#use-cases">https://datafusion.apache.org/user-guide/introduction.html#use-cases</a>.</p>
+</section>
+<section id="supported-storage-systems">
+<h3>Supported Storage Systems<a class="headerlink" href="#supported-storage-systems" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>S3</p></li>
+<li><p>Local File System</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>GCS, Azure, HTTP, Delta, Iceberg are not yet supported but will be added in the future.</p>
+</div>
+</section>
+<section id="supported-file-formats">
+<h3>Supported File Formats<a class="headerlink" href="#supported-file-formats" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Parquet</p></li>
+<li><p>CSV</p></li>
+<li><p>Avro</p></li>
+</ul>
+<p id="howto-operator-analyticsoperator">Use the <a class="reference internal" href="_api/airflow/providers/common/sql/operators/analytics/index.html#airflow.providers.common.sql.operators.analytics.AnalyticsOperator" title="airflow.providers.common.sql.operators.analytics.AnalyticsOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnalyticsOperator</span></code></a> to run analytic queries.</p>
+</section>
+<section id="parameters">
+<h3>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">datasource_configs</span></code> (list[DataSourceConfig], required): List of datasource configurations</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">queries</span></code> (list[str], required): List of SQL queries to run on the data</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_rows_check</span></code> (int, optional): Maximum number of rows to check for each query. Default is 100. If any query returns more than this number of rows, it will be skipped in the results returned by the operator. This is to prevent returning too many rows in the results which can cause xcom rendering issues in Airflow UI.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">engine</span></code> (DataFusionEngine, optional): Query engine to use. Default is “datafusion”. Currently, only “datafusion” is supported.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result_output_format</span></code> (str, optional): Output format for the results. Default is <code class="docutils literal notranslate"><span class="pre">tabulate</span></code>. Supported formats are <code class="docutils literal notranslate"><span class="pre">tabulate</span></code>, <code class="docutils literal notranslate"><span class="pre">json</span></code>.</p></li>
+</ul>
+</section>
+<section id="datasourceconfig-parameters">
+<h3>DataSourceConfig Parameters<a class="headerlink" href="#datasourceconfig-parameters" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">conn_id</span></code> (str, required): Connection ID of the storage. e.g: “aws_default” for S3.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uri</span></code> (str, required): URI of the datasource.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">format</span></code> (str, required): Format of the data.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">table_name</span></code> (str, required): Name of the table. Note: This name can be any identifier and should match the table name used in the SQL queries.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">db_name</span></code> (str, optional): Name of the database. Default is None. Ideally this is for catalog based storages like iceberg, provide the database name here and it will be used to fetch the table metadata.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">storage_type</span></code> (StorageType, optional): Type of storage. Default is None. If not provided, it will be inferred from the URI.</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">options</span></code> (dict, optional): Additional options for the datasource. eg: if the datasource is partitioned, you can provide partitioning information in the options, e.g: <code class="docutils literal notranslate"><span class="pre">{&quot;table_partition_cols&quot;:</span> <span class="pre">[(&quot;year&quot;,</span> <span class="pre">&quot;integer&quot;)]}</span></code></dt><dd><p>look at here for more options: <cite>&lt;https://datafusion.apache.org/python/autoapi/datafusion/context/index.html#datafusion.context.SessionContext&gt;_.</cite></p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="s3-storage">
+<h3>S3 Storage<a class="headerlink" href="#s3-storage" title="Link to this heading">¶</a></h3>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/sql/example_dags/example_analytics.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/sql/example_dags/example_analytics.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">analytics_with_s3</span> <span class="o">=</span> <span class="n">AnalyticsOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;analytics_with_s3&quot;</span><span class="p">,</span>
+    <span class="n">datasource_configs</span><span class="o">=</span><span class="p">[</span><span class="n">datasource_config_s3</span><span class="p">],</span>
+    <span class="n">queries</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SELECT * FROM users_data&quot;</span><span class="p">,</span> <span class="s2">&quot;SELECT count(*) FROM users_data&quot;</span><span class="p">],</span>
+<span class="p">)</span>
+
+</pre></div>
+</div>
+</div>
+</section>
+<section id="local-file-system-storage">
+<h3>Local File System Storage<a class="headerlink" href="#local-file-system-storage" title="Link to this heading">¶</a></h3>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/sql/example_dags/example_analytics.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/sql/example_dags/example_analytics.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">analytics_with_local</span> <span class="o">=</span> <span class="n">AnalyticsOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;analytics_with_local&quot;</span><span class="p">,</span>
+    <span class="n">datasource_configs</span><span class="o">=</span><span class="p">[</span><span class="n">datasource_config_local</span><span class="p">],</span>
+    <span class="n">queries</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SELECT * FROM users_data&quot;</span><span class="p">,</span> <span class="s2">&quot;SELECT count(*) FROM users_data&quot;</span><span class="p">],</span>
+<span class="p">)</span>
+<span class="n">analytics_with_s3</span> <span class="o">&gt;&gt;</span> <span class="n">analytics_with_local</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="analytics-taskflow-decorator">
+<h3>Analytics TaskFlow Decorator<a class="headerlink" href="#analytics-taskflow-decorator" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">&#64;task.analytics</span></code> decorator lets you write a function that returns the
+analytics sql queries:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/sql/example_dags/example_analytics.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/sql/example_dags/example_analytics.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="nd">@task</span><span class="o">.</span><span class="n">analytics</span><span class="p">(</span><span class="n">datasource_configs</span><span class="o">=</span><span class="p">[</span><span class="n">datasource_config_s3</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_user_summary_queries</span><span class="p">():</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s2">&quot;SELECT * FROM users_data LIMIT 10&quot;</span><span class="p">,</span> <span class="s2">&quot;SELECT count(*) FROM users_data&quot;</span><span class="p">]</span>
+
+</pre></div>
+</div>
+</div>
+</section>
+<section id="analytics-with-iceberg">
+<h3>Analytics with Iceberg<a class="headerlink" href="#analytics-with-iceberg" title="Link to this heading">¶</a></h3>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/sql/example_dags/example_analytics.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/sql/example_dags/example_analytics.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+<span class="nd">@task</span><span class="o">.</span><span class="n">analytics</span><span class="p">(</span><span class="n">datasource_configs</span><span class="o">=</span><span class="p">[</span><span class="n">datasource_config_iceberg</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_users_product_queries_from_iceberg_catalog</span><span class="p">():</span>
+    <span class="k">return</span> <span class="p">[</span><span class="s2">&quot;SELECT * FROM users_data LIMIT 10&quot;</span><span class="p">,</span> <span class="s2">&quot;SELECT count(*) FROM users_data&quot;</span><span class="p">]</span>
+
+</pre></div>
+</div>
+</div>
+</section>
+</section>
 </section>
 
 
@@ -1138,6 +1247,18 @@ between two connections.</p>
 <li><a class="reference internal" href="#check-values-against-a-threshold">Check values against a threshold</a></li>
 <li><a class="reference internal" href="#insert-rows-into-table">Insert rows into Table</a></li>
 <li><a class="reference internal" href="#generic-transfer">Generic Transfer</a></li>
+<li><a class="reference internal" href="#analytics-operator">Analytics Operator</a><ul>
+<li><a class="reference internal" href="#when-to-use-analytics-operator">When to Use Analytics Operator</a></li>
+<li><a class="reference internal" href="#supported-storage-systems">Supported Storage Systems</a></li>
+<li><a class="reference internal" href="#supported-file-formats">Supported File Formats</a></li>
+<li><a class="reference internal" href="#parameters">Parameters</a></li>
+<li><a class="reference internal" href="#datasourceconfig-parameters">DataSourceConfig Parameters</a></li>
+<li><a class="reference internal" href="#s3-storage">S3 Storage</a></li>
+<li><a class="reference internal" href="#local-file-system-storage">Local File System Storage</a></li>
+<li><a class="reference internal" href="#analytics-taskflow-decorator">Analytics TaskFlow Decorator</a></li>
+<li><a class="reference internal" href="#analytics-with-iceberg">Analytics with Iceberg</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

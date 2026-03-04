@@ -827,12 +827,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="c1"># provided.</span>
         <span class="k">if</span> <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;account_id&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-            <span class="n">default_account_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">login</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">default_account_id</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">&quot;Could not determine the dbt Cloud account.&quot;</span><span class="p">)</span>
-
-            <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="s2">&quot;account_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">default_account_id</span><span class="p">)</span>
-
+            <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="s2">&quot;account_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_account_id</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">bound_args</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">bound_args</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">wrapper</span></div>
@@ -989,11 +984,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;account_id&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dbt_cloud_conn_id</span><span class="p">:</span>
-                <span class="n">connection</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_async_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dbt_cloud_conn_id</span><span class="p">)</span>
-                <span class="n">default_account_id</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">login</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">default_account_id</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">&quot;Could not determine the dbt Cloud account.&quot;</span><span class="p">)</span>
-                <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="s2">&quot;account_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">default_account_id</span><span class="p">)</span>
+                <span class="n">bound_args</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="s2">&quot;account_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_account_id_async</span><span class="p">()</span>
 
         <span class="k">return</span> <span class="k">await</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">bound_args</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">bound_args</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span>
 
@@ -1308,6 +1299,32 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">data</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span>
             <span class="n">extra_options</span><span class="o">=</span><span class="n">extra_options</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
         <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_account_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve and cache the dbt Cloud account ID (sync).&quot;&quot;&quot;</span>
+        <span class="c1"># Lazily initialized; absence means &quot;not resolved yet&quot;.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_cached_account_id&quot;</span><span class="p">):</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dbt_cloud_conn_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">&quot;Could not determine the dbt Cloud account.&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Cache is shared between sync and async resolution to avoid duplicate</span>
+            <span class="c1"># metadata DB lookups on the same hook instance.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cached_account_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_account_id</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_account_id_async</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve and cache the dbt Cloud account ID (async).&quot;&quot;&quot;</span>
+        <span class="c1"># Lazily initialized; absence means &quot;not resolved yet&quot;.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_cached_account_id&quot;</span><span class="p">):</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_async_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dbt_cloud_conn_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">&quot;Could not determine the dbt Cloud account.&quot;</span><span class="p">)</span>
+
+            <span class="c1"># Cache is shared between sync and async resolution to avoid duplicate</span>
+            <span class="c1"># metadata DB lookups on the same hook instance.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cached_account_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_account_id</span>
 
 <div class="viewcode-block" id="DbtCloudHook.list_accounts">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/dbt/cloud/hooks/dbt/index.html#airflow.providers.dbt.cloud.hooks.dbt.DbtCloudHook.list_accounts">[docs]</a>
@@ -1716,20 +1733,32 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        :param check_interval: Time in seconds to check on a pipeline run&#39;s status.</span>
 <span class="sd">        :param timeout: Time in seconds to wait for a pipeline to reach a terminal status or the expected</span>
 <span class="sd">            status.</span>
-<span class="sd">        :return: Boolean indicating if the job run has reached the ``expected_status``.</span>
+<span class="sd">        :return: ``True`` if the job run has reached the ``expected_status``.</span>
+<span class="sd">        :raises: ``DbtCloudJobRunException`` If the job run reaches an unexpected terminal status</span>
+<span class="sd">            or does not reach an expected status within the timeout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">expected_statuses</span> <span class="o">=</span> <span class="p">(</span><span class="n">expected_statuses</span><span class="p">,)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expected_statuses</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="n">expected_statuses</span>
 
         <span class="n">DbtCloudJobRunStatus</span><span class="o">.</span><span class="n">check_is_valid</span><span class="p">(</span><span class="n">expected_statuses</span><span class="p">)</span>
 
         <span class="n">job_run_info</span> <span class="o">=</span> <span class="n">JobRunInfo</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">run_id</span><span class="o">=</span><span class="n">run_id</span><span class="p">)</span>
-        <span class="n">job_run_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_job_run_status</span><span class="p">(</span><span class="o">**</span><span class="n">job_run_info</span><span class="p">)</span>
 
         <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
 
-        <span class="k">while</span> <span class="p">(</span>
-            <span class="ow">not</span> <span class="n">DbtCloudJobRunStatus</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">(</span><span class="n">job_run_status</span><span class="p">)</span> <span class="ow">and</span> <span class="n">job_run_status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">expected_statuses</span>
-        <span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">job_run_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_job_run_status</span><span class="p">(</span><span class="o">**</span><span class="n">job_run_info</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">job_run_status</span> <span class="ow">in</span> <span class="n">expected_statuses</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+
+            <span class="c1"># Reached terminal failure before expected state.</span>
+            <span class="k">if</span> <span class="n">DbtCloudJobRunStatus</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">(</span><span class="n">job_run_status</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">DbtCloudJobRunException</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Job run </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2"> reached terminal status &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">DbtCloudJobRunStatus</span><span class="p">(</span><span class="n">job_run_status</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;before reaching expected statuses </span><span class="si">{</span><span class="n">expected_statuses</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+
             <span class="c1"># Check if the job-run duration has exceeded the ``timeout`` configured.</span>
             <span class="k">if</span> <span class="n">start_time</span> <span class="o">+</span> <span class="n">timeout</span> <span class="o">&lt;</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">():</span>
                 <span class="k">raise</span> <span class="n">DbtCloudJobRunException</span><span class="p">(</span>
@@ -1737,11 +1766,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="p">)</span>
 
             <span class="c1"># Wait to check the status of the job run based on the ``check_interval`` configured.</span>
-            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span>
-
-            <span class="n">job_run_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_job_run_status</span><span class="p">(</span><span class="o">**</span><span class="n">job_run_info</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">job_run_status</span> <span class="ow">in</span> <span class="n">expected_statuses</span></div>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">check_interval</span><span class="p">)</span></div>
 
 
     <span class="nd">@fallback_to_default_account</span>

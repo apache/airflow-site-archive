@@ -1094,9 +1094,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="DbtCloudRunJobOperator.on_kill">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/dbt/cloud/operators/dbt/index.html#airflow.providers.dbt.cloud.operators.dbt.DbtCloudRunJobOperator.on_kill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">on_kill</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">cancel_job_run</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">run_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">:</span>
+            <span class="k">return</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">cancel_job_run</span><span class="p">(</span><span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">run_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
+
+        <span class="c1"># Attempt best-effort confirmation of cancellation.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># This can raise a DbtCloudJobRunException under normal operation.</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">wait_for_job_run_status</span><span class="p">(</span>
                 <span class="n">run_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span>
                 <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
@@ -1104,7 +1109,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">check_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_interval</span><span class="p">,</span>
                 <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
             <span class="p">):</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Job run </span><span class="si">%s</span><span class="s2"> has been cancelled successfully.&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span></div>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Job run </span><span class="si">%s</span><span class="s2"> has been cancelled successfully.&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="n">DbtCloudJobRunException</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Failed to confirm cancellation of job run </span><span class="si">%s</span><span class="s2"> during task kill: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span></div>
 
 
     <span class="nd">@cached_property</span>
