@@ -71,8 +71,10 @@ jobs:
           echo "Processes: ${PROCESSES}"
           if [[ "${SOURCE}"  == "live" ]]; then
              echo "source-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-source-location=s3://live-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           else
              echo "source-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-source-location=s3://staging-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           fi
 
       - name: "Install uv"
@@ -101,6 +103,7 @@ jobs:
           echo "sparse-checkout<<EOF" >> ${GITHUB_OUTPUT}
           echo ".github" >> ${GITHUB_OUTPUT}
           echo "scripts" >> ${GITHUB_OUTPUT}
+          echo "registry" >> ${GITHUB_OUTPUT}
           if [[ "${DOCUMENT_PACKAGES}" != "all" ]]; then
             echo "Preprocessing docs packages: ${DOCUMENT_PACKAGES}"
             packages=""
@@ -165,6 +168,17 @@ jobs:
             --local-path ./docs-archive \
             --document-packages "${DOCUMENT_PACKAGES}" \
             --processes "${PROCESSES}"
+        working-directory: /mnt/cloned-airflow-site-archive
+
+      - name: Syncing registry (${{ inputs.source }})
+        env:
+          REGISTRY_SOURCE_LOCATION: ${{ steps.parameters.outputs.registry-source-location }}
+        run: |
+          set -x
+          aws configure set default.s3.max_concurrent_requests 10
+          aws s3 sync --delete --no-progress \
+            "${REGISTRY_SOURCE_LOCATION}" \
+            ./registry
         working-directory: /mnt/cloned-airflow-site-archive
 
       - uses: actions/checkout@v4
