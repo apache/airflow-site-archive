@@ -38,6 +38,11 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: true
         type: boolean
+      sync-registry:
+        description: "Sync registry files from S3"
+        required: false
+        default: true
+        type: boolean
       sync-back-references:
         description: "Sync generated back-references to S3"
         required: false
@@ -71,8 +76,10 @@ jobs:
           echo "Processes: ${PROCESSES}"
           if [[ "${SOURCE}"  == "live" ]]; then
              echo "source-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-source-location=s3://live-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           else
              echo "source-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-source-location=s3://staging-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           fi
 
       - name: "Install uv"
@@ -101,6 +108,7 @@ jobs:
           echo "sparse-checkout<<EOF" >> ${GITHUB_OUTPUT}
           echo ".github" >> ${GITHUB_OUTPUT}
           echo "scripts" >> ${GITHUB_OUTPUT}
+          echo "registry-archive" >> ${GITHUB_OUTPUT}
           if [[ "${DOCUMENT_PACKAGES}" != "all" ]]; then
             echo "Preprocessing docs packages: ${DOCUMENT_PACKAGES}"
             packages=""
@@ -166,6 +174,15 @@ jobs:
             --document-packages "${DOCUMENT_PACKAGES}" \
             --processes "${PROCESSES}"
         working-directory: /mnt/cloned-airflow-site-archive
+
+      - name: Syncing registry from ${{ inputs.source }}
+        env:
+          REGISTRY_SOURCE_LOCATION: ${{ steps.parameters.outputs.registry-source-location }}
+        run: |
+          set -x
+          aws s3 sync "${REGISTRY_SOURCE_LOCATION}" ./registry-archive/ --delete
+        working-directory: /mnt/cloned-airflow-site-archive
+        if: inputs.sync-registry == true
 
       - uses: actions/checkout@v4
         # Checkout airflow to run breeze
