@@ -1,9 +1,13 @@
 # Airflow sync archive
 
-The repository stores the archive of generated documentation from Apache Airflow.
+The repository stores the archive of generated documentation and provider registry data from Apache Airflow.
+
+The `docs-archive/` directory contains the published documentation, and `registry-archive/` contains the
+provider registry files. The `docs` and `registry` symlinks point to these directories respectively,
+matching the S3 path structure used by the live and staging buckets.
 
 The scripts and workflows here allow to keep the repository in sync with the S3 buckets - both live and
-sync - wehre the documentation is stored. Sync in both direction is possible.
+sync - where the documentation is stored. Sync in both direction is possible.
 
 In the future we will automate synchronization of the repoitory after any change to the buckets, currently
 manual synchronization S3 -> Bucket for the `live` ucket documentation is done using the `S3 to GitHub workflow`
