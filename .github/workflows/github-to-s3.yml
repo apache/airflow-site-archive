@@ -43,6 +43,11 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: false
         type: boolean
+      sync-registry:
+        description: "Sync registry files to S3"
+        required: false
+        default: true
+        type: boolean
       processes:
         description: "Number of processes to use for syncing"
         required: false
@@ -72,8 +77,10 @@ jobs:
           set -x
           if [[ "${DESTINATION}"  == "live" ]]; then
              echo "destination-location=s3://live-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-destination-location=s3://live-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           else
              echo "destination-location=s3://staging-docs-airflow-apache-org/docs/" >> ${GITHUB_OUTPUT}
+             echo "registry-destination-location=s3://staging-docs-airflow-apache-org/registry/" >> ${GITHUB_OUTPUT}
           fi
           if [[ "${FULL_SYNC}" == "true" ]] ; then
             echo "sync-type=full-sync" >> ${GITHUB_OUTPUT}
@@ -152,6 +159,7 @@ jobs:
             packages="all"
             echo "docs-archive" >> ${GITHUB_OUTPUT}
           fi
+          echo "registry-archive" >> ${GITHUB_OUTPUT}
           echo "EOF" >> ${GITHUB_OUTPUT}
           set -x
           echo "docs-packages-processed=${packages}" >> ${GITHUB_OUTPUT}
@@ -214,3 +222,10 @@ jobs:
             --document-packages "${DOCUMENTS_PACKAGES}" \
             --commit-ref ${COMMIT_REF} --sync-type ${SYNC_TYPE} \
             --processes ${PROCESSES}
+      - name: Syncing registry to ${{ inputs.destination }}
+        env:
+          REGISTRY_DESTINATION_LOCATION: ${{ steps.parameters.outputs.registry-destination-location }}
+        run: |
+          set -x
+          aws s3 sync /mnt/cloned-airflow-site-archive/registry-archive/ "${REGISTRY_DESTINATION_LOCATION}" --delete
+        if: inputs.sync-registry == true
