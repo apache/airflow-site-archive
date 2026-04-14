@@ -53,10 +53,17 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: "4"
         type: string
+permissions:
+  contents: read
+concurrency:
+  group: s3-to-github-${{ github.ref }}-${{ inputs.source }}
+  cancel-in-progress: false
 jobs:
-  s3-to-github:
+  s3-to-github:  # zizmor: ignore[secrets-outside-env]
     name: S3 to GitHub
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push synced docs back to main/staging branches
     env:
       SOURCE: ${{ inputs.source }}
       DOCUMENT_PACKAGES: ${{ inputs.document-packages }}
@@ -94,7 +101,7 @@ jobs:
           rm -rf /tmp/aws/
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a  # v4.0.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
         with:
           aws-access-key-id: ${{ secrets.DOCS_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
@@ -141,20 +148,22 @@ jobs:
       - name: >
           Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive
           with docs: ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 1
           sparse-checkout: |
             ${{ steps.docs-packages-processed.outputs.sparse-checkout }}
+          persist-credentials: true
         if: steps.docs-packages-processed.outputs.docs-packages-processed != 'all'
 
       - name: >
           Checkout (${{  inputs.commit-sha || github.sha }}) to /mnt/cloned-airflow-site-archive (whole repo)
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 1
+          persist-credentials: true
         if: steps.docs-packages-processed.outputs.docs-packages-processed == 'all'
 
       - name: "Check space available"
@@ -184,12 +193,13 @@ jobs:
         working-directory: /mnt/cloned-airflow-site-archive
         if: inputs.sync-registry == true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         # Checkout airflow to run breeze
         with:
           repository: 'apache/airflow'
           path: airflow
           fetch-depth: 1
+          persist-credentials: false
 
       - name: "Install breeze"
         run: uv tool install -e ./dev/breeze

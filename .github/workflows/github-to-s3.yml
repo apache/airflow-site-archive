@@ -53,8 +53,13 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: "4"
         type: string
+permissions:
+  contents: read
+concurrency:
+  group: github-to-s3-${{ github.ref }}-${{ inputs.destination }}
+  cancel-in-progress: false
 jobs:
-  github-to-s3:
+  github-to-s3:  # zizmor: ignore[secrets-outside-env]
     name: GitHub to S3
     runs-on: ubuntu-latest
     steps:
@@ -87,14 +92,15 @@ jobs:
           else
             echo "sync-type=single-commit" >> ${GITHUB_OUTPUT}
           fi
-          echo "commit-ref=${{ env.COMMIT_REFERENCE }}" >> ${GITHUB_OUTPUT}
+          echo "commit-ref=${COMMIT_REFERENCE}" >> ${GITHUB_OUTPUT}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         # Checkout only workflow and scripts directory to run scripts from
         with:
           sparse-checkout: |
             .github
             scripts
+          persist-credentials: false
 
       - name: Install AWS CLI v2
         run: |
@@ -105,7 +111,7 @@ jobs:
           rm -rf /tmp/aws/
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a  # v4.0.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
         with:
           aws-access-key-id: ${{ secrets.DOCS_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
@@ -119,12 +125,13 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
       - name: "Checkout ${{ github.ref }} ( ${{ github.sha }} ) for scripts"
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         # Checkout only workflow and scripts directory to run scripts from
         with:
           sparse-checkout: |
             .github
             scripts
+          persist-credentials: false
 
       - name: Create /mnt/cloned-airflow-site-archive directory
         run: |
@@ -166,21 +173,23 @@ jobs:
       - name: >
           Checkout (${{  steps.parameters.outputs.commit-ref }}) to /mnt/cloned-airflow-site-archive
           with docs packages: ${{ steps.docs-packages-processed.outputs.docs-packages-processed }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 2
           sparse-checkout: |
             ${{ steps.docs-packages-processed.outputs.sparse-checkout }}
           ref: ${{ steps.parameters.outputs.commit-ref }}
+          persist-credentials: false
         if: steps.docs-packages-processed.outputs.docs-packages-processed != 'all'
       - name: >
           Checkout (${{  steps.parameters.outputs.commit-ref }}) to /mnt/cloned-airflow-site-archive (all packages)
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           path: ./cloned-airflow-site-archive
           fetch-depth: 2
           ref: ${{ steps.parameters.outputs.commit-ref }}
+          persist-credentials: false
         if: steps.docs-packages-processed.outputs.docs-packages-processed == 'all'
       - name: "Install uv"
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
