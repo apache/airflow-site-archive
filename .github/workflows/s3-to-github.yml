@@ -199,7 +199,7 @@ jobs:
           repository: 'apache/airflow'
           path: airflow
           fetch-depth: 1
-          persist-credentials: true
+          persist-credentials: false
 
       - name: "Install breeze"
         run: uv tool install -e ./dev/breeze
@@ -245,7 +245,10 @@ jobs:
              github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
           ) && inputs.commit-changes == true
 
+
       - name: Committing live changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
@@ -254,11 +257,13 @@ jobs:
           git add --verbose .
           echo "Running git commit"
           git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
-          git push --force origin main
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
         working-directory: /mnt/cloned-airflow-site-archive
         if: inputs.commit-changes == true && github.ref == 'refs/heads/main' && inputs.source == 'live'
 
       - name: Committing staging changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
@@ -267,6 +272,6 @@ jobs:
           git add --verbose .
           echo "Running git commit"
           git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
-          git push --force origin staging
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:staging
         working-directory: /mnt/cloned-airflow-site-archive
         if: inputs.commit-changes == true && github.ref == 'refs/heads/staging' && inputs.source == 'staging'
