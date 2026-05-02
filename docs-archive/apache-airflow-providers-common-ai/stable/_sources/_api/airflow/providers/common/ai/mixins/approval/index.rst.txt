@@ -1,0 +1,116 @@
+airflow.providers.common.ai.mixins.approval
+===========================================
+
+.. py:module:: airflow.providers.common.ai.mixins.approval
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.approval.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.approval.DeferForApprovalProtocol
+   airflow.providers.common.ai.mixins.approval.LLMApprovalMixin
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: DeferForApprovalProtocol
+
+   Bases: :py:obj:`Protocol`
+
+
+   Protocol for defer for approval mixin.
+
+
+   .. py:attribute:: approval_timeout
+      :type:  datetime.timedelta | None
+
+
+   .. py:attribute:: allow_modifications
+      :type:  bool
+
+
+   .. py:attribute:: prompt
+      :type:  str
+
+
+   .. py:attribute:: task_id
+      :type:  str
+
+
+   .. py:attribute:: defer
+      :type:  Any
+
+
+.. py:class:: LLMApprovalMixin
+
+   Mixin that pauses an operator for human review before returning output.
+
+   When ``require_approval=True`` on the operator, the generated output is
+   presented to a human reviewer via the Airflow Human-in-the-Loop (HITL)
+   interface.  The task defers until the reviewer approves or rejects.
+
+   If ``allow_modifications=True``, the reviewer can also edit the output
+   before approving.  The (possibly modified) output is then returned as the
+   task result.
+
+   Operators that use this mixin must set the following attributes:
+
+   - ``require_approval`` (``bool``)
+   - ``allow_modifications`` (``bool``)
+   - ``approval_timeout`` (``timedelta | None``)
+   - ``prompt`` (``str``)
+
+
+   .. py:attribute:: APPROVE
+      :value: 'Approve'
+
+
+
+   .. py:attribute:: REJECT
+      :value: 'Reject'
+
+
+
+   .. py:method:: defer_for_approval(context, output, *, subject = None, body = None)
+
+      Write HITL detail, then defer to HITLTrigger for human review.
+
+      :param context: Airflow task context.
+      :param output: The generated output to present for review.
+      :param subject: Headline shown on the Required Actions page.
+          Defaults to ``"Review output for task `<task_id>`"``.
+      :param body: Markdown body shown below the headline.
+          Defaults to the prompt and output wrapped in a code block.
+
+
+
+   .. py:method:: execute_complete(context, generated_output, event)
+
+      Resume after human review.
+
+      Called automatically by Airflow when the HITL trigger fires.
+      Returns the original or reviewer-modified output on approval.
+
+      :param context: Airflow task context.
+      :param generated_output: The output that was deferred for review.
+      :param event: Trigger event payload containing ``chosen_options``,
+          ``params_input``, and ``responded_by_user``.
+      :raises HITLRejectException: If the reviewer rejected the output.
+      :raises HITLTriggerEventError: If the trigger reported an error.
+      :raises HITLTimeoutError: If the approval timed out.
+
+
+
