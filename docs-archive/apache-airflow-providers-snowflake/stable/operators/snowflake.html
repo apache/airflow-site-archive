@@ -695,6 +695,18 @@ the connection metadata is structured as follows:</p>
     <span class="n">sql</span><span class="o">=</span><span class="s2">&quot;example_snowflake_snowflake_op_template_file.sql&quot;</span><span class="p">,</span>
 <span class="p">)</span>
 
+<span class="c1"># Create and populate a small dataset for the data quality operator examples.</span>
+<span class="c1"># We insert one row for `ds` and one for `ds - 1`, each with value = 4.</span>
+<span class="n">create_check_table</span> <span class="o">=</span> <span class="n">SQLExecuteQueryOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;create_check_table&quot;</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="n">CREATE_CHECK_TABLE_SQL_STRING</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">populate_check_table</span> <span class="o">=</span> <span class="n">SQLExecuteQueryOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;populate_check_table&quot;</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="n">SQL_CHECK_TABLE_INSERT</span><span class="p">,</span>
+<span class="p">)</span>
+
 </pre></div>
 </div>
 </div>
@@ -702,6 +714,58 @@ the connection metadata is structured as follows:</p>
 <p class="admonition-title">Note</p>
 <p>Parameters that can be passed onto the operator will be given priority over the parameters already given
 in the Airflow connection metadata (such as <code class="docutils literal notranslate"><span class="pre">schema</span></code>, <code class="docutils literal notranslate"><span class="pre">role</span></code>, <code class="docutils literal notranslate"><span class="pre">database</span></code> and so forth).</p>
+</div>
+</section>
+<section id="snowflakecheckoperator">
+<span id="howto-operator-snowflakecheckoperator"></span><h2>SnowflakeCheckOperator<a class="headerlink" href="#snowflakecheckoperator" title="Link to this heading">¶</a></h2>
+<p>To perform checks against Snowflake you can use
+<a class="reference internal" href="../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeCheckOperator" title="airflow.providers.snowflake.operators.snowflake.SnowflakeCheckOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">SnowflakeCheckOperator</span></code></a></p>
+<p>This operator expects a SQL query that will return a single row. Each value on
+that first row is evaluated using Python <code class="docutils literal notranslate"><span class="pre">bool</span></code> casting. If any of the values
+return <code class="docutils literal notranslate"><span class="pre">False</span></code> the check fails and errors out.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/snowflake/example_snowflake.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/tests/system/snowflake/example_snowflake.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">snowflake_check</span> <span class="o">=</span> <span class="n">SnowflakeCheckOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;snowflake_check&quot;</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;SELECT COUNT(*) FROM </span><span class="si">{</span><span class="n">SNOWFLAKE_CHECK_TABLE</span><span class="si">}</span><span class="s2"> WHERE ds = TO_DATE(&#39;</span><span class="se">{{{{</span><span class="s2"> ds </span><span class="se">}}}}</span><span class="s2">&#39;)&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="snowflakevaluecheckoperator">
+<span id="howto-operator-snowflakevaluecheckoperator"></span><h2>SnowflakeValueCheckOperator<a class="headerlink" href="#snowflakevaluecheckoperator" title="Link to this heading">¶</a></h2>
+<p>To perform a simple value check using SQL code you can use
+<a class="reference internal" href="../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeValueCheckOperator" title="airflow.providers.snowflake.operators.snowflake.SnowflakeValueCheckOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">SnowflakeValueCheckOperator</span></code></a></p>
+<p>This operator expects a SQL query that will return a single row. That value is
+evaluated against <code class="docutils literal notranslate"><span class="pre">pass_value</span></code>, which can be either a string or numeric value.
+If numeric, you can also specify <code class="docutils literal notranslate"><span class="pre">tolerance</span></code>.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/snowflake/example_snowflake.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/tests/system/snowflake/example_snowflake.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">snowflake_value_check</span> <span class="o">=</span> <span class="n">SnowflakeValueCheckOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;snowflake_value_check&quot;</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;SELECT SUM(value) FROM </span><span class="si">{</span><span class="n">SNOWFLAKE_CHECK_TABLE</span><span class="si">}</span><span class="s2"> WHERE ds = TO_DATE(&#39;</span><span class="se">{{{{</span><span class="s2"> ds </span><span class="se">}}}}</span><span class="s2">&#39;)&quot;</span><span class="p">,</span>
+    <span class="n">pass_value</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="snowflakeintervalcheckoperator">
+<span id="howto-operator-snowflakeintervalcheckoperator"></span><h2>SnowflakeIntervalCheckOperator<a class="headerlink" href="#snowflakeintervalcheckoperator" title="Link to this heading">¶</a></h2>
+<p>To check that the values of metrics given as SQL expressions are within a certain
+tolerance of the ones from <code class="docutils literal notranslate"><span class="pre">days_back</span></code> before you can use
+<a class="reference internal" href="../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeIntervalCheckOperator" title="airflow.providers.snowflake.operators.snowflake.SnowflakeIntervalCheckOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">SnowflakeIntervalCheckOperator</span></code></a></p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/snowflake/example_snowflake.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/tests/system/snowflake/example_snowflake.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">snowflake_interval_check</span> <span class="o">=</span> <span class="n">SnowflakeIntervalCheckOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;snowflake_interval_check&quot;</span><span class="p">,</span>
+    <span class="n">table</span><span class="o">=</span><span class="n">SNOWFLAKE_CHECK_TABLE</span><span class="p">,</span>
+    <span class="n">metrics_thresholds</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;COUNT(*)&quot;</span><span class="p">:</span> <span class="mf">1.5</span><span class="p">},</span>
+    <span class="n">days_back</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
 </div>
 </section>
 </section>
@@ -837,6 +901,9 @@ in the Airflow connection metadata (such as <code class="docutils literal notran
             <ul>
 <li><a class="reference internal" href="#">SQLExecuteQueryOperator for Snowflake</a><ul>
 <li><a class="reference internal" href="#using-the-operator">Using the Operator</a></li>
+<li><a class="reference internal" href="#snowflakecheckoperator">SnowflakeCheckOperator</a></li>
+<li><a class="reference internal" href="#snowflakevaluecheckoperator">SnowflakeValueCheckOperator</a></li>
+<li><a class="reference internal" href="#snowflakeintervalcheckoperator">SnowflakeIntervalCheckOperator</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#snowflakesqlapioperator">SnowflakeSqlApiOperator</a><ul>

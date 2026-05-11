@@ -1,0 +1,181 @@
+airflow.providers.common.ai.example_dags.example_llm_survey_analysis
+====================================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_llm_survey_analysis
+
+.. autoapi-nested-parse::
+
+   Natural language analysis of a survey CSV -- interactive and scheduled variants.
+
+   Both DAGs query the `Airflow Community Survey 2025
+   <https://airflow.apache.org/survey/>`__ CSV using
+   :class:`~airflow.providers.common.ai.operators.llm_sql.LLMSQLQueryOperator`
+   and :class:`~airflow.providers.common.sql.operators.analytics.AnalyticsOperator`.
+
+   **example_llm_survey_interactive** (five tasks, manual trigger) adds
+   human-in-the-loop review at both ends of the pipeline: HITLEntryOperator,
+   LLMSQLQueryOperator, AnalyticsOperator, a ``@task`` extraction step, and
+   ApprovalOperator.
+
+   **example_llm_survey_scheduled** (seven tasks, runs monthly) downloads the CSV,
+   validates its schema, generates and executes SQL, then emails or logs the result.
+   No human review steps -- suitable for recurring reporting or dashboards.
+
+   Before running either DAG:
+
+   1. Create an LLM connection named ``pydanticai_default`` (or the value of
+      ``LLM_CONN_ID`` below) for your chosen model provider.
+   2. Place the survey CSV at the path set by the ``SURVEY_CSV_PATH``
+      environment variable, or update ``SURVEY_CSV_PATH`` below.
+      A cleaned copy of the 2025 survey CSV (duplicate columns renamed, embedded
+      newlines removed) is required -- Apache DataFusion is strict about these.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.LLM_CONN_ID
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.AIRFLOW_WEBSITE_CONN_ID
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SURVEY_CSV_ENDPOINT
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SURVEY_CSV_PATH
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SURVEY_CSV_URI
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.REFERENCE_CSV_PATH
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.REFERENCE_CSV_URI
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SMTP_CONN_ID
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.NOTIFY_EMAIL
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.INTERACTIVE_PROMPT
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SCHEDULED_PROMPT
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.SURVEY_SCHEMA
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.survey_datasource
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.reference_datasource
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.example_llm_survey_interactive
+   airflow.providers.common.ai.example_dags.example_llm_survey_analysis.example_llm_survey_scheduled
+
+
+Module Contents
+---------------
+
+.. py:data:: LLM_CONN_ID
+   :value: 'pydanticai_default'
+
+
+.. py:data:: AIRFLOW_WEBSITE_CONN_ID
+   :value: 'airflow_website'
+
+
+.. py:data:: SURVEY_CSV_ENDPOINT
+   :value: '/survey/airflow-user-survey-2025.csv'
+
+
+.. py:data:: SURVEY_CSV_PATH
+
+.. py:data:: SURVEY_CSV_URI
+
+.. py:data:: REFERENCE_CSV_PATH
+
+.. py:data:: REFERENCE_CSV_URI
+
+.. py:data:: SMTP_CONN_ID
+
+.. py:data:: NOTIFY_EMAIL
+
+.. py:data:: INTERACTIVE_PROMPT
+   :value: 'How does AI tool usage for writing Airflow code compare between Airflow 3 users and Airflow 2 users?'
+
+
+.. py:data:: SCHEDULED_PROMPT
+   :value: 'What is the breakdown of respondents by Airflow version currently in use?'
+
+
+.. py:data:: SURVEY_SCHEMA
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """
+      Table: survey
+      Key columns (quote all names in SQL):
+        "How important is Airflow to your business?"                                                TEXT
+        "Which version of Airflow do you currently use?"                                            TEXT
+        "CeleryExecutor"                                                                            TEXT
+        "KubernetesExecutor"                                                                        TEXT
+        "LocalExecutor"                                                                             TEXT
+        "How do you deploy Airflow?"                                                                TEXT
+        "What best describes your current occupation?"                                              TEXT
+        "What industry do you currently work in?"                                                   TEXT
+        "What city do you currently reside in?"                                                     TEXT
+        "How many years of experience do you have with Airflow?"                                    TEXT
+        "Which of the following is your company's primary cloud provider for Airflow?"              TEXT
+        "How many people work at your company?"                                                     TEXT
+        "How many people at your company directly work on data?"                                    TEXT
+        "How many people at your company use Airflow?"                                              TEXT
+        "How likely are you to recommend Apache Airflow?"                                           TEXT
+        "Are you using AI/LLM (ChatGPT/Cursor/Claude etc) to assist you in writing Airflow code?"  TEXT
+      """
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:data:: survey_datasource
+
+.. py:data:: reference_datasource
+
+.. py:function:: example_llm_survey_interactive()
+
+   Ask a natural language question about the survey with human review at each end.
+
+   Task graph::
+
+       prompt_confirmation (HITLEntryOperator)
+           → generate_sql (LLMSQLQueryOperator)
+           → run_query (AnalyticsOperator)
+           → extract_data (@task)
+           → result_confirmation (ApprovalOperator)
+
+   The first HITL step lets the analyst review and optionally reword the
+   question before it reaches the LLM.  The final HITL step presents the
+   query result for approval or rejection.
+
+
+.. py:function:: example_llm_survey_scheduled()
+
+   Download, validate, query, and report on the survey CSV on a schedule.
+
+   Task graph::
+
+       download_survey (HttpOperator)
+           → prepare_csv (@task)
+           → check_schema (LLMSchemaCompareOperator)
+           → generate_sql (LLMSQLQueryOperator)
+           → run_query (AnalyticsOperator)
+           → extract_data (@task)
+           → send_result (@task)
+
+   No human review steps -- suitable for recurring reporting or dashboards.
+   Change ``schedule`` to any cron expression or Airflow timetable to adjust
+   the run frequency.
+
+   Prerequisites:
+
+   - HTTP connection ``airflow_website`` pointing at ``https://airflow.apache.org``.
+   - Set ``SMTP_CONN_ID`` and ``NOTIFY_EMAIL`` environment variables to enable
+     email delivery of results; otherwise results are logged to the task log.
+
+
