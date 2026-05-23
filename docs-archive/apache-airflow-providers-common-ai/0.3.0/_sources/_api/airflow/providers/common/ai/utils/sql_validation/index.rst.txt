@@ -1,0 +1,74 @@
+airflow.providers.common.ai.utils.sql_validation
+================================================
+
+.. py:module:: airflow.providers.common.ai.utils.sql_validation
+
+.. autoapi-nested-parse::
+
+   SQL safety validation for LLM-generated queries.
+
+   Uses an allowlist approach: only explicitly permitted statement types pass.
+   This is safer than a denylist because new/unexpected statement types
+   (INSERT, UPDATE, MERGE, TRUNCATE, COPY, etc.) are blocked by default.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.DEFAULT_ALLOWED_TYPES
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.SQLSafetyError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.validate_sql
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_ALLOWED_TYPES
+   :type:  tuple[type[sqlglot.exp.Expr], Ellipsis]
+
+.. py:exception:: SQLSafetyError
+
+   Bases: :py:obj:`Exception`
+
+
+   Generated SQL failed safety validation.
+
+
+.. py:function:: validate_sql(sql, *, allowed_types = None, dialect = None, allow_multiple_statements = False)
+
+   Parse SQL and verify all statements are in the allowed types list.
+
+   By default, only a single SELECT-family statement is allowed. Multi-statement
+   SQL (separated by semicolons) is rejected unless ``allow_multiple_statements=True``,
+   because multi-statement inputs can hide dangerous operations after a benign SELECT.
+
+   Returns parsed statements on success, raises :class:`SQLSafetyError` on violation.
+
+   :param sql: SQL string to validate.
+   :param allowed_types: Tuple of sqlglot expression types to permit.
+       Defaults to ``(Select, Union, Intersect, Except)``.
+   :param dialect: SQL dialect for parsing (``postgres``, ``mysql``, etc.).
+   :param allow_multiple_statements: Whether to allow multiple semicolon-separated
+       statements. Default ``False``.
+   :return: List of parsed sqlglot Expression objects.
+   :raises SQLSafetyError: If the SQL is empty, contains disallowed statement types,
+       or has multiple statements when not permitted.
+
+

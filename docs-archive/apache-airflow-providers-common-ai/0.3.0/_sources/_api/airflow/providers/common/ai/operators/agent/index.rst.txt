@@ -1,0 +1,204 @@
+airflow.providers.common.ai.operators.agent
+===========================================
+
+.. py:module:: airflow.providers.common.ai.operators.agent
+
+.. autoapi-nested-parse::
+
+   Operator for running pydantic-ai agents with tools and multi-turn reasoning.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.operators.agent.HITLReviewLink
+   airflow.providers.common.ai.operators.agent.AgentOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: HITLReviewLink
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperatorLink`
+
+
+   Link that opens the live chat window for a running feedback session.
+
+   The URL is constructed directly from the task instance key so that the
+   link is available immediately — even while the task is still running —
+   without waiting for an XCom value to be committed.
+
+
+   .. py:attribute:: name
+      :value: 'HITL Review'
+
+
+      Name of the link. This will be the button name on the task UI.
+
+
+
+   .. py:method:: get_link(operator, *, ti_key)
+
+      Link to external system.
+
+      :param operator: The Airflow operator object this link is associated to.
+      :param ti_key: TaskInstance ID to return link for.
+      :return: link to external system
+
+
+
+.. py:class:: AgentOperator(*, prompt, llm_conn_id, model_id = None, system_prompt = '', output_type = str, toolsets = None, enable_tool_logging = True, agent_params = None, usage_limits = None, durable = False, enable_hitl_review = False, max_hitl_iterations = 5, hitl_timeout = None, hitl_poll_interval = 10.0, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin`
+
+
+   Run a pydantic-ai Agent with tools and multi-turn reasoning.
+
+   Provide ``llm_conn_id`` and optional ``toolsets`` to let the operator build
+   and run the agent. The agent reasons about the prompt, calls tools in a
+   multi-turn loop, and returns a final answer.
+
+   :param prompt: The prompt to send to the agent.
+   :param llm_conn_id: Connection ID for the LLM provider.
+   :param model_id: Model identifier (e.g. ``"openai:gpt-5"``).
+       Overrides the model stored in the connection's extra field.
+   :param system_prompt: System-level instructions for the agent.
+   :param output_type: Expected output type. Default ``str``. Set to a Pydantic
+       ``BaseModel`` subclass for structured output.
+   :param toolsets: List of pydantic-ai toolsets the agent can use
+       (e.g. ``SQLToolset``, ``HookToolset``).
+   :param enable_tool_logging: When ``True`` (default), wraps each toolset in a
+       ``LoggingToolset`` that logs tool calls with timing at INFO level and
+       arguments at DEBUG level. Set to ``False`` to disable.
+   :param agent_params: Additional keyword arguments passed to the pydantic-ai
+       ``Agent`` constructor (e.g. ``retries``, ``model_settings``).
+   :param usage_limits: Optional pydantic-ai
+       :class:`~pydantic_ai.usage.UsageLimits` enforced on every agent run
+       (initial run, durable replay, and HITL regeneration). Pass
+       ``UsageLimits(request_limit=..., total_tokens_limit=..., tool_calls_limit=..., ...)``
+       to fail the task when the agent exceeds the configured token, request,
+       or tool budget. ``None`` (default) means no enforcement.
+   :param durable: When ``True``, enables step-level caching of model
+       responses and tool results for durable execution.  On retry, cached
+       steps are replayed instead of re-executing.  Default ``False``.
+       Requires ``[common.ai] durable_cache_path`` to be set.
+
+   **HITL Review parameters** (requires the ``hitl_review`` plugin):
+
+   :param enable_hitl_review: When ``True``, the operator enters an
+       iterative review loop after the first generation.  A human reviewer
+       can approve, reject, or request changes via the plugin's REST API
+       at ``/hitl-review`` or through the **HITL Review** extra link
+       on the task instance.  Default ``False``.
+   :param max_hitl_iterations: Maximum outputs shown to the reviewer (1 =
+       initial output). When the reviewer requests changes at
+       iteration >= this limit, the task fails with ``HITLMaxIterationsError``
+       without calling the LLM. E.g. 5 allows changes at iterations 1–4.
+       Default ``5``.
+   :param hitl_timeout: Maximum wall-clock time to wait for
+       all review rounds combined.  ``None`` means no timeout (the
+       operator blocks until a terminal action).
+   :param hitl_poll_interval: Seconds between XCom polls
+       while waiting for a human response.  Default ``10``.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('prompt', 'llm_conn_id', 'model_id', 'system_prompt', 'agent_params')
+
+
+
+   .. py:attribute:: operator_extra_links
+
+
+   .. py:attribute:: prompt
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: model_id
+      :value: None
+
+
+
+   .. py:attribute:: system_prompt
+      :value: ''
+
+
+
+   .. py:attribute:: output_type
+
+
+   .. py:attribute:: toolsets
+      :value: None
+
+
+
+   .. py:attribute:: enable_tool_logging
+      :value: True
+
+
+
+   .. py:attribute:: agent_params
+
+
+   .. py:attribute:: usage_limits
+      :value: None
+
+
+
+   .. py:attribute:: durable
+      :value: False
+
+
+
+   .. py:attribute:: enable_hitl_review
+      :value: False
+
+
+
+   .. py:attribute:: max_hitl_iterations
+      :value: 5
+
+
+
+   .. py:attribute:: hitl_timeout
+      :value: None
+
+
+
+   .. py:attribute:: hitl_poll_interval
+      :value: 10.0
+
+
+
+   .. py:property:: llm_hook
+      :type: airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook
+
+
+      Return PydanticAIHook for the configured LLM connection.
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: regenerate_with_feedback(*, feedback, message_history)
+
+      Re-run the agent with *feedback* appended to the conversation history.
+
+
+
