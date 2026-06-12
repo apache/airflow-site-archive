@@ -1,0 +1,194 @@
+airflow.providers.common.ai.example_dags.example_aip_progress_tracker
+=====================================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_aip_progress_tracker
+
+.. autoapi-nested-parse::
+
+   AIP progress tracker -- multi-source data fusion with common.ai operators.
+
+   Demonstrates Dynamic Task Mapping, structured LLM output, cost-controlled
+   synthesis, and HITL approval using only ``LLMOperator`` -- no LlamaIndex or
+   LangChain dependency required.
+
+   For each active Airflow Improvement Proposal the Dag gathers evidence from
+   two sources (Confluence spec text, GitHub PRs and commits), asks an LLM to
+   assess spec-vs-implementation progress, then synthesizes a cross-AIP report
+   for maintainer review.
+
+   ``example_aip_progress_tracker`` (manual trigger):
+
+   .. code-block:: text
+
+       fetch_aip_list (@task)
+           → gather_aip_evidence  (@task, mapped ×N AIPs)
+           → format_analysis_prompt (@task, mapped ×N)
+           → analyze_aip          (LLMOperator, mapped ×N)
+           → collect_analyses     (@task)
+           → synthesize_report    (LLMOperator, with UsageLimits)
+           → review_report        (ApprovalOperator)
+
+   **What this makes visible that a notebook hides:**
+
+   * Each AIP investigation is a named, logged task instance with its own
+     retry behaviour -- not a loop iteration buried inside one cell.
+   * If the GitHub API is rate-limited for one AIP, only that mapped
+     instance retries; the others preserve their XCom results.
+   * The synthesis step's inputs and token budget are fully auditable.
+   * A maintainer reviews the report before it goes to the dev list.
+
+   Before running:
+
+   1. Create an LLM connection named ``pydanticai_default`` (or the value of
+      ``LLM_CONN_ID``) for your chosen model provider.
+   2. Trigger the DAG with the default ``aip_numbers`` param or edit it to
+      choose which AIPs to investigate.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.LLM_CONN_ID
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.CONFLUENCE_BASE_URL
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.AIP_LISTING_PAGE_ID
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.GITHUB_REPO
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.DEFAULT_AIP_NUMBERS
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.ANALYSIS_SYSTEM_PROMPT
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.SYNTHESIS_SYSTEM_PROMPT
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.AIPStatus
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.example_aip_progress_tracker
+
+
+Module Contents
+---------------
+
+.. py:data:: LLM_CONN_ID
+   :value: 'pydanticai_default'
+
+
+.. py:data:: CONFLUENCE_BASE_URL
+   :value: 'https://cwiki.apache.org/confluence'
+
+
+.. py:data:: AIP_LISTING_PAGE_ID
+   :value: '89066602'
+
+
+.. py:data:: GITHUB_REPO
+   :value: 'apache/airflow'
+
+
+.. py:data:: DEFAULT_AIP_NUMBERS
+   :value: '76,99,103,105,108'
+
+
+.. py:class:: AIPStatus(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Per-AIP analysis produced by the LLM.
+
+
+   .. py:attribute:: aip_number
+      :type:  int
+
+
+   .. py:attribute:: title
+      :type:  str
+
+
+   .. py:attribute:: spec_summary
+      :type:  str
+
+
+   .. py:attribute:: implementation_status
+      :type:  str
+
+
+   .. py:attribute:: key_prs
+      :type:  list[str]
+
+
+   .. py:attribute:: blockers
+      :type:  list[str]
+
+
+   .. py:attribute:: next_steps
+      :type:  list[str]
+
+
+   .. py:attribute:: completion_pct
+      :type:  int
+
+
+.. py:data:: ANALYSIS_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an Airflow project analyst. Given an AIP specification and its GitHub evidence (pull requests and commits), produce a structured status assessment.
+      
+      Be specific about what has been implemented versus what remains. Rate completion percentage based on the ratio of spec goals that have corresponding PRs or commits."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:data:: SYNTHESIS_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an Airflow release coordinator. Given individual AIP status assessments, produce a concise cross-AIP progress report.
+      
+      Identify the top priorities, shared blockers across AIPs, and recommend where maintainer attention is most needed. Keep the report actionable and under 500 words."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: example_aip_progress_tracker()
+
+   Track AIP progress by analyzing Confluence specs against GitHub evidence.
+
+   Task graph::
+
+       fetch_aip_list (@task)
+           → gather_aip_evidence    (@task ×N, via Dynamic Task Mapping)
+           → format_analysis_prompt (@task ×N)
+           → analyze_aip            (LLMOperator ×N, structured output)
+           → collect_analyses       (@task)
+           → synthesize_report      (LLMOperator, with UsageLimits)
+           → review_report          (ApprovalOperator)
+
+

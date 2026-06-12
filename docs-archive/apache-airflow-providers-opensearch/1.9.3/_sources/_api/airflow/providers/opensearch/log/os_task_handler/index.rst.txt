@@ -1,0 +1,363 @@
+airflow.providers.opensearch.log.os_task_handler
+================================================
+
+.. py:module:: airflow.providers.opensearch.log.os_task_handler
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.opensearch.log.os_task_handler.OsLogMsgType
+   airflow.providers.opensearch.log.os_task_handler.USE_PER_RUN_LOG_ID
+   airflow.providers.opensearch.log.os_task_handler.LOG_LINE_DEFAULTS
+   airflow.providers.opensearch.log.os_task_handler.TASK_LOG_FIELDS
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.opensearch.log.os_task_handler.OpensearchTaskHandler
+   airflow.providers.opensearch.log.os_task_handler.OpensearchRemoteLogIO
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.opensearch.log.os_task_handler.getattr_nested
+   airflow.providers.opensearch.log.os_task_handler.get_os_kwargs_from_config
+
+
+Module Contents
+---------------
+
+.. py:data:: OsLogMsgType
+
+.. py:data:: USE_PER_RUN_LOG_ID
+   :value: True
+
+
+.. py:data:: LOG_LINE_DEFAULTS
+
+.. py:data:: TASK_LOG_FIELDS
+   :value: ['timestamp', 'event', 'level', 'chan', 'logger', 'error_detail', 'message', 'levelname']
+
+
+.. py:function:: getattr_nested(obj, item, default)
+
+   Get item from obj but return default if not found.
+
+   E.g. calling ``getattr_nested(a, 'b.c', "NA")`` will return
+   ``a.b.c`` if such a value exists, and "NA" otherwise.
+
+   :meta private:
+
+
+.. py:function:: get_os_kwargs_from_config()
+
+.. py:class:: OpensearchTaskHandler(base_log_folder, end_of_log_mark, write_stdout, json_format, json_fields, host, port, username, password, write_to_opensearch = False, target_index = 'airflow-logs', host_field = 'host', offset_field = 'offset', index_patterns = conf.get('opensearch', 'index_patterns', fallback='_all'), index_patterns_callable = conf.get('opensearch', 'index_patterns_callable', fallback=''), log_id_template = conf.get('opensearch', 'log_id_template', fallback='') or '{dag_id}-{task_id}-{run_id}-{map_index}-{try_number}', os_kwargs = 'default_os_kwargs', max_bytes = 0, backup_count = 0, delay = False, **kwargs)
+
+   Bases: :py:obj:`airflow.utils.log.file_task_handler.FileTaskHandler`, :py:obj:`airflow.utils.log.logging_mixin.ExternalLoggingMixin`, :py:obj:`airflow.utils.log.logging_mixin.LoggingMixin`
+
+
+   OpensearchTaskHandler is a Python log handler that reads logs from OpenSearch.
+
+   Airflow flushes task logs to local files. Additional software setup can then ship those
+   logs to OpenSearch. On Airflow 3, this task handler also registers a matching
+   ``OpensearchRemoteLogIO`` so the new remote logging path can read from OpenSearch too.
+   Airflow can also be configured to write task logs to OpenSearch directly. To enable this
+   feature, set ``json_format`` and ``write_to_opensearch`` to ``True``.
+
+   To efficiently query and sort OpenSearch results, this handler assumes each
+   log message has a field `log_id` consists of ti primary keys:
+   `log_id = {dag_id}-{task_id}-{logical_date}-{try_number}`
+   Log messages with specific log_id are sorted based on `offset`,
+   which is a unique integer indicates log message's order.
+   Timestamps here are unreliable because multiple log messages
+   might have the same timestamp.
+
+   :param base_log_folder: Base folder to store logs locally.
+   :param end_of_log_mark: A marker string to signify the end of logs.
+   :param write_stdout: Whether to also write logs to stdout.
+   :param json_format: Whether to format logs as JSON.
+   :param json_fields: Comma-separated list of fields to include in the JSON log output.
+   :param host: OpenSearch host name.
+   :param port: OpenSearch port.
+   :param username: Username for OpenSearch authentication.
+   :param password: Password for OpenSearch authentication.
+   :param write_to_opensearch: Whether to write logs directly to OpenSearch.
+   :param target_index: Name of the index to write to when direct OpenSearch writes are enabled.
+   :param host_field: The field name for the host in the logs (default is "host").
+   :param offset_field: The field name for the log offset (default is "offset").
+   :param index_patterns: Index pattern or template for storing logs.
+   :param index_patterns_callable: Callable that dynamically generates index patterns based on context.
+   :param os_kwargs: Additional OpenSearch client options. This can be set to "default_os_kwargs" to
+                     load the default configuration from Airflow's settings.
+
+
+   .. py:attribute:: PAGE
+      :value: 0
+
+
+
+   .. py:attribute:: MAX_LINE_PER_PAGE
+      :value: 1000
+
+
+
+   .. py:attribute:: LOG_NAME
+      :value: 'Opensearch'
+
+
+
+   .. py:attribute:: trigger_should_wrap
+      :value: True
+
+
+
+   .. py:attribute:: closed
+      :value: False
+
+
+
+   .. py:attribute:: mark_end_on_close
+      :value: True
+
+
+
+   .. py:attribute:: end_of_log_mark
+
+
+   .. py:attribute:: write_stdout
+
+
+   .. py:attribute:: write_to_opensearch
+      :value: False
+
+
+
+   .. py:attribute:: json_format
+
+
+   .. py:attribute:: json_fields
+
+
+   .. py:attribute:: host
+
+
+   .. py:attribute:: host_field
+      :value: 'host'
+
+
+
+   .. py:attribute:: offset_field
+      :value: 'offset'
+
+
+
+   .. py:attribute:: target_index
+      :value: 'airflow-logs'
+
+
+
+   .. py:attribute:: index_patterns
+
+
+   .. py:attribute:: index_patterns_callable
+
+
+   .. py:attribute:: context_set
+      :value: False
+
+
+
+   .. py:attribute:: client
+
+
+   .. py:attribute:: delete_local_copy
+
+
+   .. py:attribute:: log_id_template
+
+
+   .. py:attribute:: formatter
+      :type:  logging.Formatter
+
+
+   .. py:attribute:: handler
+      :type:  logging.FileHandler | logging.StreamHandler | None
+      :value: None
+
+
+
+   .. py:attribute:: io
+
+
+   .. py:method:: set_context(ti, *, identifier = None)
+
+      Provide task_instance context to airflow task handler.
+
+      :param ti: task instance object
+      :param identifier: if set, identifies the Airflow component which is relaying logs from
+          exceptional scenarios related to the task instance
+
+
+
+   .. py:method:: emit(record)
+
+      Do whatever it takes to actually log the specified logging record.
+
+      This version is intended to be implemented by subclasses and so
+      raises a NotImplementedError.
+
+
+
+   .. py:method:: close()
+
+      Tidy up any resources used by the handler.
+
+      This version removes the handler from an internal map of handlers,
+      _handlers, which is used for handler lookup by name. Subclasses
+      should ensure that this gets called from overridden close()
+      methods.
+
+
+
+   .. py:method:: concat_logs(hits)
+
+
+   .. py:property:: supports_external_link
+      :type: bool
+
+
+      Whether we can support external links.
+
+      TODO: It should support frontend just like ElasticSearchTaskhandler.
+
+
+
+   .. py:method:: get_external_log_url(task_instance, try_number)
+
+      Create an address for an external log collecting service.
+
+      TODO: It should support frontend just like ElasticSearchTaskhandler.
+
+
+
+   .. py:property:: log_name
+      :type: str
+
+
+      The log name.
+
+
+
+   .. py:method:: format_url(host)
+      :staticmethod:
+
+
+
+.. py:class:: OpensearchRemoteLogIO(context=None)
+
+   Bases: :py:obj:`airflow.utils.log.logging_mixin.LoggingMixin`
+
+
+   Convenience super-class to have a logger configured with the class name.
+
+
+   .. py:attribute:: json_format
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: write_stdout
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: write_to_opensearch
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: delete_local_copy
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: host
+      :type:  str
+      :value: 'localhost'
+
+
+
+   .. py:attribute:: port
+      :type:  int | None
+      :value: 9200
+
+
+
+   .. py:attribute:: username
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: password
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: host_field
+      :type:  str
+      :value: 'host'
+
+
+
+   .. py:attribute:: target_index
+      :type:  str
+      :value: 'airflow-logs'
+
+
+
+   .. py:attribute:: offset_field
+      :type:  str
+      :value: 'offset'
+
+
+
+   .. py:attribute:: base_log_folder
+      :type:  pathlib.Path
+
+
+   .. py:attribute:: log_id_template
+      :type:  str
+
+
+   .. py:attribute:: processors
+      :value: ()
+
+
+
+   .. py:method:: __attrs_post_init__()
+
+
+   .. py:method:: upload(path, ti)
+
+      Emit structured task logs to stdout and/or write them directly to OpenSearch.
+
+
+
+   .. py:method:: read(_relative_path, ti)
+
+
