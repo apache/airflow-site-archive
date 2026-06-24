@@ -12,9 +12,9 @@
         <title>airflow.triggers.base &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -108,7 +108,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -694,6 +697,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.mappedoperator</span><span class="w"> </span><span class="kn">import</span> <span class="n">MappedOperator</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.taskinstance</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstance</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.definitions.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.execution_time.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">AssetStateStoreAccessors</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.serialized_objects</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedBaseOperator</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.triggers.shared_stream</span><span class="w"> </span><span class="kn">import</span> <span class="n">SharedStreamProducer</span>
 
@@ -792,8 +796,8 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="nd">@property</span>
 <div class="viewcode-block" id="BaseTrigger.task_instance">
 <a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseTrigger.task_instance">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">task_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskInstance</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_task_instance</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">task_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_task_instance&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
 
 
     <span class="nd">@task_instance</span><span class="o">.</span><span class="n">setter</span>
@@ -1013,6 +1017,15 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="BaseEventTrigger.supports_triggerer_queue">
 <a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.supports_triggerer_queue">[docs]</a>
     <span class="n">supports_triggerer_queue</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c1"># Injected by the triggerer before run() is called</span>
+<div class="viewcode-block" id="BaseEventTrigger.asset_state_store">
+<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.asset_state_store">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">asset_state_store</span><span class="p">:</span> <span class="n">AssetStateStoreAccessors</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -1352,6 +1365,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     
+
+
+    
+
 
 
 

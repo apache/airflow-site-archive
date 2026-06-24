@@ -13,9 +13,9 @@
         <title data-pagefind-weight="10.0">Dag-level Retry via on_failure_callback &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,7 +111,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -417,7 +420,10 @@
 <li class="toctree-l3"><a class="reference internal" href="#how-it-works">How it works</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#basic-example-clear-the-failed-dag-run">Basic example: clear the failed Dag run</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#guarding-automated-remediation-dags">Guarding automated remediation Dags</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#caveats">Caveats</a></li>
 </ul>
 </li>
@@ -577,7 +583,10 @@
 <li class="toctree-l3"><a class="reference internal" href="#how-it-works">How it works</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#basic-example-clear-the-failed-dag-run">Basic example: clear the failed Dag run</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#guarding-automated-remediation-dags">Guarding automated remediation Dags</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#caveats">Caveats</a></li>
 </ul>
 </li>
@@ -899,6 +908,23 @@ second clear is a no-op (the first one already reset the run), but you may
 see duplicate API calls. For stricter guarantees, use a backend with
 compare-and-swap semantics.</p>
 </div>
+<section id="guarding-automated-remediation-dags">
+<h3>Guarding automated remediation Dags<a class="headerlink" href="#guarding-automated-remediation-dags" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Dag-level retry patterns can also be used in automated remediation Dags that
+run actions affecting external systems, such as clearing failed work, replaying
+messages, or restarting an external job. These actions should have guardrails
+so that a persistent failure does not cause the same recovery action to run
+repeatedly across Dag runs.</p>
+<p>Pools can limit how many recovery tasks run at the same time, but they do not
+limit how often the same recovery action is attempted. For automated remediation
+workflows, consider adding a small cooldown marker for each target and a maximum
+automatic action count before requiring manual review.</p>
+<p>For small guard values, such as a cooldown timestamp or attempt counter, an
+Airflow Variable may be sufficient. Do not use Variables as a high-volume state
+store or as a strongly consistent locking mechanism. If the workflow needs
+atomic updates, strict concurrency control, or many per-target state records,
+use an external store designed for that purpose.</p>
+</section>
 </section>
 <section id="caveats">
 <span id="clear-retry-caveats"></span><h2>Caveats<a class="headerlink" href="#caveats" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -1009,7 +1035,10 @@ refresh the credential periodically or use a longer-lived service credential.</p
 <li><a class="reference internal" href="#how-it-works">How it works</a></li>
 <li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li><a class="reference internal" href="#basic-example-clear-the-failed-dag-run">Basic example: clear the failed Dag run</a></li>
-<li><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a></li>
+<li><a class="reference internal" href="#limiting-the-number-of-retries">Limiting the number of retries</a><ul>
+<li><a class="reference internal" href="#guarding-automated-remediation-dags">Guarding automated remediation Dags</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#caveats">Caveats</a></li>
 </ul>
 </li>
@@ -1020,6 +1049,9 @@ refresh the credential periodically or use a longer-lived service credential.</p
             
         </div>
         
+
+
+    
 
 
     
@@ -1055,6 +1087,7 @@ refresh the credential periodically or use a longer-lived service credential.</p
             </a>
         </div>
     
+
 
     </div>
 

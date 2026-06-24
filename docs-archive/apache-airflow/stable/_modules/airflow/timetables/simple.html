@@ -12,9 +12,9 @@
         <title>airflow.timetables.simple &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -108,7 +108,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -662,11 +665,13 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeAlias</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">structlog</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow._shared.timezones</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">InvalidPartitionKeyError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.partition_mappers.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">IdentityMapper</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.assets</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">SerializedAsset</span><span class="p">,</span>
@@ -1086,6 +1091,46 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">entries</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_partition_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">partition_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Decode *partition_key* into the period-start datetime shared by all asset mappers.</span>
+
+<span class="sd">        Iterates every asset (and asset ref) reachable from the asset condition, asks</span>
+<span class="sd">        each mapper for the temporal anchor of *partition_key*, and returns it when all</span>
+<span class="sd">        temporal mappers agree. Returns ``None`` when no mapper is temporal or when the</span>
+<span class="sd">        mappers disagree — consistent with how the scheduler resolves ``partition_date``</span>
+<span class="sd">        for asset-triggered runs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">anchors</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">unique_key</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="o">.</span><span class="n">iter_assets</span><span class="p">():</span>
+            <span class="n">mapper</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_partition_mapper</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">unique_key</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">uri</span><span class="o">=</span><span class="n">unique_key</span><span class="o">.</span><span class="n">uri</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">anchor</span> <span class="o">=</span> <span class="n">mapper</span><span class="o">.</span><span class="n">to_partition_date</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InvalidPartitionKeyError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Partition key </span><span class="si">{</span><span class="n">partition_key</span><span class="si">!r}</span><span class="s2"> is invalid for this timetable&#39;s mappers: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+            <span class="k">if</span> <span class="n">anchor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">anchors</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">anchor</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">s_asset_ref</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="o">.</span><span class="n">iter_asset_refs</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s_asset_ref</span><span class="p">,</span> <span class="n">SerializedAssetNameRef</span><span class="p">):</span>
+                <span class="n">mapper</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_partition_mapper</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">s_asset_ref</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s_asset_ref</span><span class="p">,</span> <span class="n">SerializedAssetUriRef</span><span class="p">):</span>
+                <span class="n">mapper</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_partition_mapper</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="n">s_asset_ref</span><span class="o">.</span><span class="n">uri</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">anchor</span> <span class="o">=</span> <span class="n">mapper</span><span class="o">.</span><span class="n">to_partition_date</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InvalidPartitionKeyError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Partition key </span><span class="si">{</span><span class="n">partition_key</span><span class="si">!r}</span><span class="s2"> is invalid for this timetable&#39;s mappers: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+            <span class="k">if</span> <span class="n">anchor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">anchors</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">anchor</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">anchors</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">anchors</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
 <div class="viewcode-block" id="PartitionedAssetTimetable.serialize">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.serialize">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
@@ -1200,6 +1245,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     
+
+
+    
+
 
 
 

@@ -13,16 +13,16 @@
         <title data-pagefind-weight="10.0">Asset Definitions &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
             <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=fb71bbff" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
-            <link rel="next" title="Non-Python Task SDKs" href="language-sdks/index.html" />
+            <link rel="next" title="DAG Result" href="dag-result.html" />
             <link rel="prev" title="Dynamic Task Mapping" href="dynamic-task-mapping.html" />
 
     <link rel="canonical" href="https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/assets.html" />
@@ -111,7 +111,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -442,6 +445,7 @@
 </li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="dag-result.html">DAG Result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="language-sdks/index.html">Non-Python Task SDKs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cron.html">Cron &amp; Time Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="timezone.html">Time Zones</a></li>
@@ -598,6 +602,7 @@
 </li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="dag-result.html">DAG Result</a></li>
 <li class="toctree-l2"><a class="reference internal" href="language-sdks/index.html">Non-Python Task SDKs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cron.html">Cron &amp; Time Intervals</a></li>
 <li class="toctree-l2"><a class="reference internal" href="timezone.html">Time Zones</a></li>
@@ -1262,7 +1267,19 @@ uses <code class="docutils literal notranslate"><span class="pre">DailyMapper</s
 partition match can be produced, so the downstream Dag is not triggered for
 that key.</p>
 <p>Inside partitioned Dag runs, access the resolved partition through
-<code class="docutils literal notranslate"><span class="pre">dag_run.partition_key</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">dag_run.partition_key</span></code>. When the consumer’s partition mapper can
+resolve the key to a <code class="docutils literal notranslate"><span class="pre">datetime</span></code>, that value is also available as
+<code class="docutils literal notranslate"><span class="pre">dag_run.partition_date</span></code>, so templates can use
+<code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">partition_date</span> <span class="pre">|</span> <span class="pre">ds</span> <span class="pre">}}</span></code>. This covers the <code class="docutils literal notranslate"><span class="pre">StartOf*Mapper</span></code> family
+(which decode the key directly), <code class="docutils literal notranslate"><span class="pre">IdentityMapper</span></code> (which carries the
+producer’s <code class="docutils literal notranslate"><span class="pre">partition_date</span></code> through), and composite mappers —
+<code class="docutils literal notranslate"><span class="pre">RollupMapper</span></code>, <code class="docutils literal notranslate"><span class="pre">ChainMapper</span></code> and <code class="docutils literal notranslate"><span class="pre">FanOutMapper</span></code> — whose effective
+child mapper is temporal (they delegate the anchor to that child).
+Mappers whose key carries no temporal meaning (<code class="docutils literal notranslate"><span class="pre">ProductMapper</span></code>,
+<code class="docutils literal notranslate"><span class="pre">AllowedKeyMapper</span></code> and custom mappers that do not implement
+<code class="docutils literal notranslate"><span class="pre">to_partition_date</span></code>) leave <code class="docutils literal notranslate"><span class="pre">partition_date</span></code> <code class="docutils literal notranslate"><span class="pre">None</span></code> even when the
+resulting key is date-shaped, so those consumers should keep parsing
+<code class="docutils literal notranslate"><span class="pre">partition_key</span></code>.</p>
 <p>You can also trigger a DagRun manually with a partition key (for example,
 through the Trigger Dag window in the UI, or through the REST API by
 including <code class="docutils literal notranslate"><span class="pre">partition_key</span></code> in the request body):</p>
@@ -1482,7 +1499,7 @@ these events the same way as timetable-produced partitions, through
             <a rel="prev" title="Dynamic Task Mapping" href="dynamic-task-mapping.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="p">Previous</button>
             </a>
-            <a rel="next" title="Non-Python Task SDKs" href="language-sdks/index.html" >
+            <a rel="next" title="DAG Result" href="dag-result.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="n">Next</button>
             </a>
     </div>
@@ -1595,6 +1612,9 @@ these events the same way as timetable-produced partitions, through
     
 
 
+    
+
+
 
 
 
@@ -1625,6 +1645,7 @@ these events the same way as timetable-produced partitions, through
             </a>
         </div>
     
+
 
     </div>
 

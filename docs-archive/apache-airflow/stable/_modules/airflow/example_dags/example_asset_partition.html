@@ -12,9 +12,9 @@
         <title>airflow.example_dags.example_asset_partition &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -108,7 +108,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -673,6 +676,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">FanOutMapper</span><span class="p">,</span>
     <span class="n">FixedKeyMapper</span><span class="p">,</span>
     <span class="n">IdentityMapper</span><span class="p">,</span>
+    <span class="n">MinimumCount</span><span class="p">,</span>
     <span class="n">MonthWindow</span><span class="p">,</span>
     <span class="n">PartitionAtRuntime</span><span class="p">,</span>
     <span class="n">PartitionedAssetTimetable</span><span class="p">,</span>
@@ -684,7 +688,9 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">StartOfMonthMapper</span><span class="p">,</span>
     <span class="n">StartOfWeekMapper</span><span class="p">,</span>
     <span class="n">StartOfYearMapper</span><span class="p">,</span>
+    <span class="n">WaitForAll</span><span class="p">,</span>
     <span class="n">WeekWindow</span><span class="p">,</span>
+    <span class="n">Window</span><span class="p">,</span>
     <span class="n">asset</span><span class="p">,</span>
     <span class="n">task</span><span class="p">,</span>
 <span class="p">)</span>
@@ -765,7 +771,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Merge the aligned hourly partitions into a combined dataset.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
             <span class="k">assert</span> <span class="n">dag_run</span>
-        <span class="nb">print</span><span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="p">)</span></div>
+        <span class="nb">print</span><span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="p">,</span> <span class="n">dag_run</span><span class="o">.</span><span class="n">partition_date</span><span class="p">)</span></div>
 
 
     <span class="n">combine_player_stats</span><span class="p">()</span>
@@ -829,17 +835,19 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_regional_sales&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">CronPartitionTimetable</span><span class="p">(</span><span class="s2">&quot;0 * * * *&quot;</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;ingestion&quot;</span><span class="p">],</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Produce hourly regional sales data with composite partition keys.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Produce regional sales data with composite ``region|timestamp`` partition keys at runtime.&quot;&quot;&quot;</span>
 
     <span class="nd">@task</span><span class="p">(</span><span class="n">outlets</span><span class="o">=</span><span class="p">[</span><span class="n">regional_sales</span><span class="p">])</span>
 <div class="viewcode-block" id="ingest_sales">
 <a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.ingest_sales">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ingest_sales</span><span class="p">():</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Ingest regional sales data partitioned by region and time.&quot;&quot;&quot;</span>
-        <span class="k">pass</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ingest_sales</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">outlet_events</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit one composite ``region|timestamp`` partition per region.&quot;&quot;&quot;</span>
+        <span class="n">timestamp</span> <span class="o">=</span> <span class="s2">&quot;2026-06-14T03:00:00&quot;</span>
+        <span class="k">for</span> <span class="n">region</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">):</span>
+            <span class="n">outlet_events</span><span class="p">[</span><span class="n">regional_sales</span><span class="p">]</span><span class="o">.</span><span class="n">add_partitions</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region</span><span class="si">}</span><span class="s2">|</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
     <span class="n">ingest_sales</span><span class="p">()</span>
@@ -883,7 +891,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_region_stats&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;regional&quot;</span><span class="p">],</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -993,7 +1001,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.daily_costs">[docs]</a>
 <span class="n">daily_costs</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s2">&quot;s3://costs/daily&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;daily_costs&quot;</span><span class="p">)</span></div>
 
-<span class="c1"># --- Chained rollup: hourly → daily → monthly --------------------------------</span>
+<span class="c1"># --- Chained rollup: hourly -&gt; daily -&gt; monthly --------------------------------</span>
 <span class="c1"># The hourly source asset already exists above (``team_a_player_stats``).</span>
 <span class="c1"># Each rollup Dag publishes its own asset so the next level can consume it.</span>
 
@@ -1014,13 +1022,17 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">RollupMapper</span><span class="p">(</span>
             <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">StartOfDayMapper</span><span class="p">(),</span>
             <span class="n">window</span><span class="o">=</span><span class="n">DayWindow</span><span class="p">(),</span>
+            <span class="c1"># Explicit default wait policy: hold the run until all 24 hourly</span>
+            <span class="c1"># partitions arrive. Identical to omitting wait_policy entirely; shown</span>
+            <span class="c1"># here as the counterpart to the early-firing MinimumCount example below.</span>
+            <span class="n">wait_policy</span><span class="o">=</span><span class="n">WaitForAll</span><span class="p">(),</span>
         <span class="p">),</span>
     <span class="p">),</span>
     <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;rollup&quot;</span><span class="p">],</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    First rollup level: 24 hourly partitions of ``team_a_player_stats`` → one daily summary.</span>
+<span class="sd">    First rollup level: 24 hourly partitions of ``team_a_player_stats`` -&gt; one daily summary.</span>
 
 <span class="sd">    ``StartOfDayMapper`` normalizes each upstream hourly timestamp (``%Y-%m-%dT%H:%M:%S``)</span>
 <span class="sd">    to its day-start (``%Y-%m-%d``); ``DayWindow`` declares the downstream run needs</span>
@@ -1056,7 +1068,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;rollup&quot;</span><span class="p">],</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Chained rollup: every day of ``daily_team_a`` (itself a rollup) → one monthly summary.</span>
+<span class="sd">    Chained rollup: every day of ``daily_team_a`` (itself a rollup) -&gt; one monthly summary.</span>
 
 <span class="sd">    Demonstrates how a rollup output can feed another rollup. ``StartOfMonthMapper``</span>
 <span class="sd">    is configured with ``input_format=&quot;%Y-%m-%d&quot;`` so it can parse the day keys</span>
@@ -1078,7 +1090,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">summarise_team_a_month</span><span class="p">()</span>
 
 
-<span class="c1"># --- Fan-out: one weekly upstream → seven daily downstream Dag runs ----------</span>
+<span class="c1"># --- Fan-out: one weekly upstream -&gt; seven daily downstream Dag runs ----------</span>
 
 <div class="viewcode-block" id="weekly_model_artifact">
 <a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.weekly_model_artifact">[docs]</a>
@@ -1116,6 +1128,13 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">FanOutMapper</span><span class="p">(</span>
             <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">StartOfWeekMapper</span><span class="p">(),</span>
             <span class="n">window</span><span class="o">=</span><span class="n">WeekWindow</span><span class="p">(),</span>
+            <span class="c1"># Safety cap on how many downstream keys one upstream event may create.</span>
+            <span class="c1"># WeekWindow has exactly seven members, so max_downstream_keys=7 sits at</span>
+            <span class="c1"># the boundary and never blocks. A smaller value would skip queuing the</span>
+            <span class="c1"># runs for that event and record a &quot;partition fan-out exceeded&quot; audit log</span>
+            <span class="c1"># entry instead. Omitting it falls back to the global</span>
+            <span class="c1"># ``[scheduler] partition_mapper_max_downstream_keys`` (default 1000).</span>
+            <span class="n">max_downstream_keys</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
         <span class="p">),</span>
     <span class="p">),</span>
     <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -1134,6 +1153,41 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     <span class="n">run_inference</span><span class="p">()</span>
+
+
+<span class="c1"># --- Fan-out over a trailing window (Window.Direction.BACKWARD) --------------</span>
+<span class="c1"># ``daily_inference`` above fans the weekly artifact FORWARD: the seven days</span>
+<span class="c1"># *starting* at the upstream key. The same artifact can drive a trailing window —</span>
+<span class="c1"># the seven days *ending* at the key — e.g. to score the week leading up to a</span>
+<span class="c1"># model release. Direction is the only difference between the two Dags.</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;trailing_week_inference&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+        <span class="n">assets</span><span class="o">=</span><span class="n">weekly_model_artifact</span><span class="p">,</span>
+        <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">FanOutMapper</span><span class="p">(</span>
+            <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">StartOfWeekMapper</span><span class="p">(),</span>
+            <span class="c1"># BACKWARD yields the trailing period ending at the upstream key — the</span>
+            <span class="c1"># mirror of the default FORWARD that daily_inference uses.</span>
+            <span class="n">window</span><span class="o">=</span><span class="n">WeekWindow</span><span class="p">(</span><span class="n">direction</span><span class="o">=</span><span class="n">Window</span><span class="o">.</span><span class="n">Direction</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;model&quot;</span><span class="p">,</span> <span class="s2">&quot;inference&quot;</span><span class="p">],</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run inference over the trailing week: the seven days ending at the weekly key.&quot;&quot;&quot;</span>
+
+    <span class="nd">@task</span>
+<div class="viewcode-block" id="run_trailing_inference">
+<a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.run_trailing_inference">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_trailing_inference</span><span class="p">(</span><span class="n">dag_run</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run inference for one daily partition in the trailing week.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">dag_run</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="p">)</span></div>
+
+
+    <span class="n">run_trailing_inference</span><span class="p">()</span>
 
 
 <span class="c1"># --- Segment (categorical) rollup -------------------------------------------</span>
@@ -1175,6 +1229,86 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     <span class="n">aggregate_all_regions</span><span class="p">()</span>
+
+
+<span class="c1"># --- Segment rollup with an early-fire wait policy (MinimumCount) ------------</span>
+<span class="c1"># ``segment_region_stats_rollup`` above waits for all three regions (WaitForAll).</span>
+<span class="c1"># This sibling fires as soon as any two of the three have arrived, tolerating one</span>
+<span class="c1"># slow or missing region rather than holding the downstream run indefinitely.</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;segment_region_stats_early_rollup&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+        <span class="n">assets</span><span class="o">=</span><span class="n">Asset</span><span class="o">.</span><span class="n">ref</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;multi_region_player_stats&quot;</span><span class="p">),</span>
+        <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">RollupMapper</span><span class="p">(</span>
+            <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">FixedKeyMapper</span><span class="p">(</span><span class="s2">&quot;all_regions&quot;</span><span class="p">),</span>
+            <span class="n">window</span><span class="o">=</span><span class="n">SegmentWindow</span><span class="p">([</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">]),</span>
+            <span class="c1"># Fire once at least two of the three declared regions have arrived.</span>
+            <span class="c1"># MinimumCount(-1) (&quot;at most one missing&quot;) is equivalent for this window.</span>
+            <span class="n">wait_policy</span><span class="o">=</span><span class="n">MinimumCount</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;rollup&quot;</span><span class="p">,</span> <span class="s2">&quot;segment&quot;</span><span class="p">],</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Categorical rollup that fires early.</span>
+
+<span class="sd">    Produces the cross-region summary once two of the three regions have arrived</span>
+<span class="sd">    instead of waiting for all of them — the early-firing counterpart to</span>
+<span class="sd">    ``segment_region_stats_rollup``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@task</span>
+<div class="viewcode-block" id="aggregate_available_regions">
+<a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.aggregate_available_regions">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate_available_regions</span><span class="p">(</span><span class="n">dag_run</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Produce the cross-region summary once the minimum region count is met.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">dag_run</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Minimum region partitions received. Partition: </span><span class="si">{</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+    <span class="n">aggregate_available_regions</span><span class="p">()</span>
+
+
+<span class="c1"># --- Segment fan-out: one upstream event scatters across the segment set -----</span>
+<span class="c1"># The 1 -&gt; N mirror of ``segment_region_stats_rollup``: a single upstream event</span>
+<span class="c1"># fans OUT to one downstream run per declared region. ``SegmentWindow`` has no</span>
+<span class="c1"># default-table entry, so an explicit ``downstream_mapper`` is required.</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;scatter_live_region_to_segments&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+        <span class="n">assets</span><span class="o">=</span><span class="n">Asset</span><span class="o">.</span><span class="n">ref</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;live_region_player_stats&quot;</span><span class="p">),</span>
+        <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">FanOutMapper</span><span class="p">(</span>
+            <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">IdentityMapper</span><span class="p">(),</span>
+            <span class="n">window</span><span class="o">=</span><span class="n">SegmentWindow</span><span class="p">([</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">]),</span>
+            <span class="n">downstream_mapper</span><span class="o">=</span><span class="n">IdentityMapper</span><span class="p">(),</span>  <span class="c1"># required: SegmentWindow has no default-table entry</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;fan-out&quot;</span><span class="p">,</span> <span class="s2">&quot;segment&quot;</span><span class="p">],</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Categorical fan-out: scatter one upstream event across a fixed segment set.</span>
+
+<span class="sd">    One ``live_region_player_stats`` event fans out to one downstream run per</span>
+<span class="sd">    declared region (``us``, ``eu``, ``apac``) — the 1-&gt;N counterpart to the</span>
+<span class="sd">    segment rollup above.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@task</span>
+<div class="viewcode-block" id="process_region_segment">
+<a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.process_region_segment">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">process_region_segment</span><span class="p">(</span><span class="n">dag_run</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Process one region segment produced by the fan-out.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">dag_run</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="p">)</span></div>
+
+
+    <span class="n">process_region_segment</span><span class="p">()</span>
 </pre></div>
 
     <div class="pager" role="navigation" aria-label="related navigation"><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Previous</button><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Next</button>
@@ -1253,6 +1387,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     
+
+
+    
+
 
 
 

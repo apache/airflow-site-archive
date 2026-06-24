@@ -12,9 +12,9 @@
         <title>airflow.timetables.base &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -108,7 +108,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -997,11 +1000,16 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">iter_partition_dagrun_infos</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">earliest_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
-        <span class="n">latest_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">earliest</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+        <span class="n">latest</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">DagRunInfo</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Yield one DagRunInfo per partition for calendar days in ``[earliest_date, latest_date]`` (both inclusive).</span>
+<span class="sd">        Yield one DagRunInfo per partition whose ``partition_date`` lies in ``[earliest, latest]`` (both inclusive).</span>
+
+<span class="sd">        The iteration granularity follows the timetable&#39;s own partition cadence</span>
+<span class="sd">        (e.g. one tick per hour for ``CronPartitionTimetable(&quot;0 * * * *&quot;)``), so a</span>
+<span class="sd">        sub-day window yields only the partitions inside it rather than every</span>
+<span class="sd">        partition of the surrounding calendar day.</span>
 
 <span class="sd">        Only called for partitioned timetables (``partitioned is True``). The default</span>
 <span class="sd">        implementation raises :exc:`NotImplementedError`; timetables that set</span>
@@ -1014,23 +1022,67 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="Timetable.resolve_day_bound">
-<a class="viewcode-back" href="../../../_api/airflow/timetables/base/index.html#airflow.timetables.base.Timetable.resolve_day_bound">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_day_bound</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">day</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DateTime</span><span class="p">:</span>
+<div class="viewcode-block" id="Timetable.localize_partition_datetime">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/base/index.html#airflow.timetables.base.Timetable.localize_partition_datetime">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">localize_partition_datetime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DateTime</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Return the UTC instant of *day*&#39;s start (midnight).</span>
+<span class="sd">        Re-interpret *dt*&#39;s wall-clock reading as a moment in this timetable&#39;s timezone.</span>
 
-<span class="sd">        By default a calendar day starts at midnight UTC. Timetables with a local</span>
-<span class="sd">        timezone (e.g. :class:`~airflow.timetables._cron.CronMixin` subclasses)</span>
-<span class="sd">        override this to anchor at local midnight in their timezone, converted to</span>
-<span class="sd">        UTC. Callers pass *day* for an inclusive lower bound and</span>
-<span class="sd">        ``day + timedelta(days=1)`` for a half-open upper bound (e.g. ``dag_clear``</span>
-<span class="sd">        uses it to bound ``partition_date`` queries).</span>
+<span class="sd">        The base implementation treats the timetable as UTC: the wall-clock is kept</span>
+<span class="sd">        as-is and the result is simply a timezone-aware UTC instant (a no-op for</span>
+<span class="sd">        already-UTC inputs). Timetables with a local timezone (e.g.</span>
+<span class="sd">        :class:`~airflow.timetables._cron.CronMixin` subclasses) override this to</span>
+<span class="sd">        re-localize the wall-clock to their own timezone before converting to UTC,</span>
+<span class="sd">        preserving sub-day precision for narrow windows on sub-daily schedules.</span>
+
+<span class="sd">        Used by :meth:`~airflow.models.dagrun.DagRun.apply_partition_date_window` to</span>
+<span class="sd">        convert user-supplied ``partition_date`` filter bounds without truncating the</span>
+<span class="sd">        time component.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">timezone</span><span class="o">.</span><span class="n">coerce_datetime</span><span class="p">(</span>
-            <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="n">day</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">day</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">day</span><span class="o">.</span><span class="n">day</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
-        <span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">timezone</span><span class="o">.</span><span class="n">coerce_datetime</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span></div>
 
+
+<div class="viewcode-block" id="Timetable.resolve_partition_date">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/base/index.html#airflow.timetables.base.Timetable.resolve_partition_date">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_partition_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">partition_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Decode *partition_key* into the period-start datetime it represents.</span>
+
+<span class="sd">        Returns the timezone-aware datetime that was used to format *partition_key*</span>
+<span class="sd">        when the timetable originally created the run, or ``None`` when no temporal</span>
+<span class="sd">        meaning can be derived from the key. ``None`` is returned without decoding</span>
+<span class="sd">        when *partition_key* is ``None``, when this timetable is not ``partitioned``,</span>
+<span class="sd">        or when it defers partition selection to runtime (``partitioned_at_runtime``).</span>
+
+<span class="sd">        Partitioned timetables whose keys carry a temporal structure override</span>
+<span class="sd">        :meth:`_decode_partition_date`:</span>
+
+<span class="sd">        - :class:`~airflow.timetables.trigger.CronPartitionTimetable` parses the</span>
+<span class="sd">          key with ``strptime`` using its ``key_format`` and localizes with its</span>
+<span class="sd">          timezone.</span>
+<span class="sd">        - :class:`~airflow.timetables.simple.PartitionedAssetTimetable` delegates</span>
+<span class="sd">          to each asset&#39;s partition mapper; when the mappers agree on the same</span>
+<span class="sd">          instant it is returned, otherwise ``None`` is returned.</span>
+
+<span class="sd">        :param partition_key: The partition key string to decode, or ``None``.</span>
+<span class="sd">        :returns: The period-start datetime, or ``None`` if not resolvable.</span>
+<span class="sd">        :raises InvalidPartitionKeyError: When *partition_key* is syntactically</span>
+<span class="sd">            invalid for this timetable&#39;s key format (e.g. ``strptime`` fails).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">partition_key</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">partitioned</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">partitioned_at_runtime</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_partition_date</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_partition_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">partition_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Decode a non-empty *partition_key* into its period-start datetime.</span>
+
+<span class="sd">        Called by :meth:`resolve_partition_date` only after the partitioned-state</span>
+<span class="sd">        guards pass. The default returns ``None``; partitioned timetables whose</span>
+<span class="sd">        keys carry temporal structure override this.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="kc">None</span>
 
     <span class="nd">@property</span>
 <div class="viewcode-block" id="Timetable.partition_mapper_info">
@@ -1374,6 +1426,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     
+
+
+    
+
 
 
 

@@ -12,9 +12,9 @@
         <title>airflow.timetables.trigger &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -108,7 +108,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -666,13 +669,18 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">types</span><span class="w"> </span><span class="kn">import</span> <span class="n">NoneType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">structlog</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow._shared.timezones.timezone</span><span class="w"> </span><span class="kn">import</span> <span class="n">coerce_datetime</span><span class="p">,</span> <span class="n">parse_timezone</span><span class="p">,</span> <span class="n">utcnow</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow._shared.timezones.timezone</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">coerce_datetime</span><span class="p">,</span>
+    <span class="n">make_aware</span><span class="p">,</span>
+    <span class="n">parse_timezone</span><span class="p">,</span>
+    <span class="n">utcnow</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">InvalidPartitionKeyError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables._cron</span><span class="w"> </span><span class="kn">import</span> <span class="n">CronMixin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables._delta</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaMixin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagRunInfo</span><span class="p">,</span> <span class="n">DataInterval</span><span class="p">,</span> <span class="n">Timetable</span>
@@ -1078,9 +1086,6 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="sd">      running every hour, this would run the previous time if less than 6</span>
 <span class="sd">      minutes had past since the previous run time, otherwise it would wait</span>
 <span class="sd">      until the next hour.</span>
-
-<span class="sd">    # todo: AIP-76 talk about how we can have auto-reprocessing of partitions</span>
-<span class="sd">    # todo: AIP-76 we could allow a tuple of integer + time-based</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="CronPartitionTimetable.partitioned">
@@ -1095,12 +1100,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="n">timezone</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Timezone</span> <span class="o">|</span> <span class="n">FixedTimezone</span><span class="p">,</span>
         <span class="n">run_offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span> <span class="o">|</span> <span class="n">relativedelta</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">run_immediately</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-        <span class="c1"># todo: AIP-76 we can&#39;t infer partition date from this, so we need to store it separately.</span>
         <span class="n">key_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">T%H:%M:%S&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cron</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="n">timezone</span><span class="p">,</span> <span class="n">run_immediately</span><span class="o">=</span><span class="n">run_immediately</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">run_offset</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">NoneType</span><span class="p">)):</span>
-            <span class="c1"># todo: AIP-76 implement timedelta / relative delta?</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Run offset other than integer not supported yet.&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_run_offset</span> <span class="o">=</span> <span class="n">run_offset</span> <span class="ow">or</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_key_format</span> <span class="o">=</span> <span class="n">key_format</span>
@@ -1159,8 +1162,8 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">partition_date</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_partition_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">run_date</span><span class="p">:</span> <span class="n">DateTime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">DateTime</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-        <span class="c1"># todo: AIP-76 it does not make sense that we would infer partition info from run date</span>
-        <span class="c1">#  in general, because they might not be 1-1</span>
+        <span class="c1"># Partition info is inferred from the run date here; this is only correct when run date and</span>
+        <span class="c1"># partition are 1-1, which is not guaranteed for every offset.</span>
         <span class="n">partition_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_partition_date</span><span class="p">(</span><span class="n">run_date</span><span class="o">=</span><span class="n">run_date</span><span class="p">)</span>
         <span class="n">partition_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_key</span><span class="p">(</span><span class="n">partition_date</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">partition_date</span><span class="p">,</span> <span class="n">partition_key</span>
@@ -1170,14 +1173,16 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">iter_partition_dagrun_infos</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">earliest_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
-        <span class="n">latest_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+        <span class="n">earliest</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+        <span class="n">latest</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">DagRunInfo</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Yield one DagRunInfo per cron tick for calendar days in ``[earliest_date, latest_date]`` (both inclusive).</span>
+<span class="sd">        Yield one DagRunInfo per cron tick whose partition_date lies in ``[earliest, latest]`` (both inclusive).</span>
 
 <span class="sd">        Iteration walks directly along the partition_date axis — one cron tick per</span>
-<span class="sd">        partition — without any reverse mapping from run_after.  Each tick yields:</span>
+<span class="sd">        partition — honoring the actual datetime window rather than rounding it to</span>
+<span class="sd">        whole calendar days, so a sub-day window (e.g. an hourly cron backfilled for</span>
+<span class="sd">        a single hour) yields only the ticks inside the window.  Each tick yields:</span>
 
 <span class="sd">        - ``partition_date = current`` (the cron tick itself, as a UTC instant)</span>
 <span class="sd">        - ``partition_key`` formatted by :meth:`_format_key` (local-tz label)</span>
@@ -1193,16 +1198,20 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="sd">        final tiebreaker).  Setting ``run_after = partition_date`` is the simplest</span>
 <span class="sd">        correct choice and avoids the need for a reverse mapping.</span>
 
-<span class="sd">        :param earliest_date: inclusive lower bound calendar date; the UTC window start is</span>
-<span class="sd">            ``resolve_day_bound(earliest_date)``, i.e. local midnight of that day.</span>
-<span class="sd">        :param latest_date: inclusive upper bound calendar date; the UTC window end is</span>
-<span class="sd">            ``resolve_day_bound(latest_date + 1 day)`` (exclusive), so all ticks within</span>
-<span class="sd">            ``latest_date``&#39;s local day are included.</span>
+<span class="sd">        :param earliest: inclusive lower bound on ``partition_date``; the wall-clock</span>
+<span class="sd">            reading of *earliest* is re-interpreted in the timetable&#39;s timezone before</span>
+<span class="sd">            alignment, so a UTC-midnight bound from the production backfill path is</span>
+<span class="sd">            treated as the timetable-local midnight rather than the UTC midnight.</span>
+<span class="sd">            Iteration starts at the first cron tick at or after that localized instant.</span>
+<span class="sd">        :param latest: inclusive upper bound on ``partition_date``; the same wall-clock</span>
+<span class="sd">            localization applies; the tick equal to the localized *latest* is included.</span>
+
+<span class="sd">        Both bounds must be timezone-aware; a naive datetime is coerced to UTC before</span>
+<span class="sd">        the wall-clock localization step.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">earliest_partition_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_day_bound</span><span class="p">(</span><span class="n">earliest_date</span><span class="p">)</span>
-        <span class="n">latest_partition_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_day_bound</span><span class="p">(</span><span class="n">latest_date</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
-        <span class="n">current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_to_next</span><span class="p">(</span><span class="n">earliest_partition_date</span><span class="p">)</span>
-        <span class="k">while</span> <span class="n">current</span> <span class="o">&lt;</span> <span class="n">latest_partition_date</span><span class="p">:</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_to_next</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">localize_partition_datetime</span><span class="p">(</span><span class="n">earliest</span><span class="p">))</span>
+        <span class="n">latest_dt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">localize_partition_datetime</span><span class="p">(</span><span class="n">latest</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">current</span> <span class="o">&lt;=</span> <span class="n">latest_dt</span><span class="p">:</span>
             <span class="n">partition_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_key</span><span class="p">(</span><span class="n">current</span><span class="p">)</span>
             <span class="k">yield</span> <span class="n">DagRunInfo</span><span class="p">(</span>
                 <span class="n">run_after</span><span class="o">=</span><span class="n">current</span><span class="p">,</span>
@@ -1219,6 +1228,26 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="c1"># midnight partition keys as &quot;...T00:00:00&quot;, not the prior UTC day&#39;s &quot;...T16:00:00&quot;).</span>
         <span class="k">return</span> <span class="n">partition_date</span><span class="o">.</span><span class="n">in_timezone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_timezone</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_key_format</span><span class="p">)</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_partition_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">partition_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Decode *partition_key* back to the period-start datetime.</span>
+
+<span class="sd">        Parses the key with ``strptime`` using this timetable&#39;s ``key_format``</span>
+<span class="sd">        and localizes with the timetable&#39;s timezone, mirroring the forward</span>
+<span class="sd">        direction in :meth:`_format_key`.</span>
+
+<span class="sd">        :raises InvalidPartitionKeyError: When *partition_key* does not match</span>
+<span class="sd">            the timetable&#39;s ``key_format``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">naive</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">partition_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key_format</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InvalidPartitionKeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Partition key </span><span class="si">{</span><span class="n">partition_key</span><span class="si">!r}</span><span class="s2"> does not match the timetable&#39;s &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;key_format </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_key_format</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="k">return</span> <span class="n">make_aware</span><span class="p">(</span><span class="n">naive</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timezone</span><span class="p">)</span>
+
 <div class="viewcode-block" id="CronPartitionTimetable.next_dagrun_info_v2">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/trigger/index.html#airflow.timetables.trigger.CronPartitionTimetable.next_dagrun_info_v2">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">next_dagrun_info_v2</span><span class="p">(</span>
@@ -1227,7 +1256,6 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="n">last_dagrun_info</span><span class="p">:</span> <span class="n">DagRunInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">restriction</span><span class="p">:</span> <span class="n">TimeRestriction</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DagRunInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># todo: AIP-76 add test for this logic</span>
         <span class="c1"># Scheduler scheduling path: uses next_dagrun_info_v2 to advance run_after one tick</span>
         <span class="c1"># at a time. Backfill iterates partitions directly via timetable.iter_partition_dagrun_infos.</span>
 
@@ -1359,6 +1387,10 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
     
+
+
+    
+
 
 
 

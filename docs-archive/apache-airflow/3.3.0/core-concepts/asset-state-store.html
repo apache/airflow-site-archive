@@ -13,9 +13,9 @@
         <title data-pagefind-weight="10.0">Asset State Store &mdash; Airflow 3.3.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=a73ac430" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=beb61714" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=f9489649" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,7 +111,10 @@
     
 
 <header>
-    <nav class="js-navbar-scroll navbar">
+    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
+        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
+    </a>
+    <nav class="js-navbar-scroll navbar" style="top: 40px;">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -743,6 +746,27 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <section id="when-is-asset-state-store-available">
 <h2>When is <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> available?<a class="headerlink" href="#when-is-asset-state-store-available" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>When using asset state store within a task, <code class="docutils literal notranslate"><span class="pre">context[&quot;asset_state_store&quot;]</span></code> is populated for <strong>concrete</strong> <code class="xref py py-class docutils literal notranslate"><span class="pre">Asset</span></code> inlets and outlets. A task must declare at least one concrete inlet or outlet for <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> to contain any entries.</p>
+<p>If a task has no inlets or outlets and accesses <code class="docutils literal notranslate"><span class="pre">context[&quot;asset_state_store&quot;]</span></code>, a <code class="docutils literal notranslate"><span class="pre">KeyError</span></code> is raised at runtime. Declare at least one asset inlet or outlet on the task to use asset state store.</p>
+<p>This applies to both the <code class="docutils literal notranslate"><span class="pre">&#64;asset</span></code> pattern and the <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> pattern:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Asset</span><span class="p">,</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">asset</span><span class="p">,</span> <span class="n">task</span>
+
+<span class="n">my_asset</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="s2">&quot;my_data&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;s3://bucket/my_data&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># @asset Dags implicitly declare the asset as an outlet</span>
+<span class="nd">@asset</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_asset_dag</span><span class="p">(</span><span class="o">**</span><span class="n">context</span><span class="p">):</span>
+    <span class="n">context</span><span class="p">[</span><span class="s2">&quot;asset_state_store&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;watermark&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-06-01&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># @task within a @dag requires explicit inlets or outlets</span>
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="n">schedule</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+    <span class="nd">@task</span><span class="p">(</span><span class="n">outlets</span><span class="o">=</span><span class="p">[</span><span class="n">my_asset</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">my_task</span><span class="p">(</span><span class="o">**</span><span class="n">context</span><span class="p">):</span>
+        <span class="n">context</span><span class="p">[</span><span class="s2">&quot;asset_state_store&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;watermark&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-06-01&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="accessing-asset-state-store-using-context">
 <h2>Accessing asset state store using <code class="docutils literal notranslate"><span class="pre">context</span></code><a class="headerlink" href="#accessing-asset-state-store-using-context" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -970,6 +994,9 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
     
 
 
+    
+
+
 
 
 
@@ -1000,6 +1027,7 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
             </a>
         </div>
     
+
 
     </div>
 

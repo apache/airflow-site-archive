@@ -251,9 +251,6 @@ Module Contents
      minutes had past since the previous run time, otherwise it would wait
      until the next hour.
 
-   # todo: AIP-76 talk about how we can have auto-reprocessing of partitions
-   # todo: AIP-76 we could allow a tuple of integer + time-based
-
 
    .. py:attribute:: partitioned
       :value: True
@@ -289,12 +286,14 @@ Module Contents
 
 
 
-   .. py:method:: iter_partition_dagrun_infos(*, earliest_date, latest_date)
+   .. py:method:: iter_partition_dagrun_infos(*, earliest, latest)
 
-      Yield one DagRunInfo per cron tick for calendar days in ``[earliest_date, latest_date]`` (both inclusive).
+      Yield one DagRunInfo per cron tick whose partition_date lies in ``[earliest, latest]`` (both inclusive).
 
       Iteration walks directly along the partition_date axis — one cron tick per
-      partition — without any reverse mapping from run_after.  Each tick yields:
+      partition — honoring the actual datetime window rather than rounding it to
+      whole calendar days, so a sub-day window (e.g. an hourly cron backfilled for
+      a single hour) yields only the ticks inside the window.  Each tick yields:
 
       - ``partition_date = current`` (the cron tick itself, as a UTC instant)
       - ``partition_key`` formatted by :meth:`_format_key` (local-tz label)
@@ -310,11 +309,16 @@ Module Contents
       final tiebreaker).  Setting ``run_after = partition_date`` is the simplest
       correct choice and avoids the need for a reverse mapping.
 
-      :param earliest_date: inclusive lower bound calendar date; the UTC window start is
-          ``resolve_day_bound(earliest_date)``, i.e. local midnight of that day.
-      :param latest_date: inclusive upper bound calendar date; the UTC window end is
-          ``resolve_day_bound(latest_date + 1 day)`` (exclusive), so all ticks within
-          ``latest_date``'s local day are included.
+      :param earliest: inclusive lower bound on ``partition_date``; the wall-clock
+          reading of *earliest* is re-interpreted in the timetable's timezone before
+          alignment, so a UTC-midnight bound from the production backfill path is
+          treated as the timetable-local midnight rather than the UTC midnight.
+          Iteration starts at the first cron tick at or after that localized instant.
+      :param latest: inclusive upper bound on ``partition_date``; the same wall-clock
+          localization applies; the tick equal to the localized *latest* is included.
+
+      Both bounds must be timezone-aware; a naive datetime is coerced to UTC before
+      the wall-clock localization step.
 
 
 
