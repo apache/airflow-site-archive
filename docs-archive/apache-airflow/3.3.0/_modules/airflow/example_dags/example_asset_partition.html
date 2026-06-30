@@ -678,8 +678,8 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">IdentityMapper</span><span class="p">,</span>
     <span class="n">MinimumCount</span><span class="p">,</span>
     <span class="n">MonthWindow</span><span class="p">,</span>
-    <span class="n">PartitionAtRuntime</span><span class="p">,</span>
     <span class="n">PartitionedAssetTimetable</span><span class="p">,</span>
+    <span class="n">PartitionedAtRuntime</span><span class="p">,</span>
     <span class="n">ProductMapper</span><span class="p">,</span>
     <span class="n">RollupMapper</span><span class="p">,</span>
     <span class="n">SegmentWindow</span><span class="p">,</span>
@@ -692,6 +692,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="n">WeekWindow</span><span class="p">,</span>
     <span class="n">Window</span><span class="p">,</span>
     <span class="n">asset</span><span class="p">,</span>
+    <span class="n">get_current_context</span><span class="p">,</span>
     <span class="n">task</span><span class="p">,</span>
 <span class="p">)</span>
 
@@ -835,7 +836,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_regional_sales&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;sales&quot;</span><span class="p">,</span> <span class="s2">&quot;ingestion&quot;</span><span class="p">],</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Produce regional sales data with composite ``region|timestamp`` partition keys at runtime.&quot;&quot;&quot;</span>
@@ -891,7 +892,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_region_stats&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;regional&quot;</span><span class="p">],</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -903,9 +904,14 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <span class="nd">@task</span><span class="p">(</span><span class="n">outlets</span><span class="o">=</span><span class="p">[</span><span class="n">region_raw_stats</span><span class="p">])</span>
 <div class="viewcode-block" id="ingest_region">
 <a class="viewcode-back" href="../../../_api/airflow/example_dags/example_asset_partition/index.html#airflow.example_dags.example_asset_partition.ingest_region">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">ingest_region</span><span class="p">():</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ingest_region</span><span class="p">(</span><span class="n">dag_run</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Materialize player statistics for a single region partition.&quot;&quot;&quot;</span>
-        <span class="k">pass</span></div>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">get_current_context</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">dag_run</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;dag_run partition key </span><span class="si">{</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="si">}</span><span class="s2"> context partition key </span><span class="si">{</span><span class="n">context</span><span class="p">[</span><span class="s1">&#39;partition_key&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span></div>
 
 
     <span class="n">ingest_region</span><span class="p">()</span>
@@ -934,7 +940,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="nd">@asset</span><span class="p">(</span>
     <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/live-region.csv&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;runtime&quot;</span><span class="p">],</span>
 <span class="p">)</span>
 <div class="viewcode-block" id="live_region_player_stats">
@@ -943,7 +949,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Produce a single region partition whose key is decided at runtime.</span>
 
-<span class="sd">    This asset demonstrates PartitionAtRuntime, which records the partition key on the</span>
+<span class="sd">    This asset demonstrates PartitionedAtRuntime, which records the partition key on the</span>
 <span class="sd">    emitted event with ``add_partitions`` while the task runs rather than from a timetable.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">outlet_events</span><span class="p">[</span><span class="bp">self</span><span class="p">]</span><span class="o">.</span><span class="n">add_partitions</span><span class="p">(</span><span class="s2">&quot;us&quot;</span><span class="p">)</span></div>
@@ -977,7 +983,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 <span class="nd">@asset</span><span class="p">(</span>
     <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/multi-region.csv&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
     <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;player-stats&quot;</span><span class="p">,</span> <span class="s2">&quot;runtime&quot;</span><span class="p">],</span>
 <span class="p">)</span>
 <div class="viewcode-block" id="multi_region_player_stats">

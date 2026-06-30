@@ -417,6 +417,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#notifiers">Notifiers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#benefits-and-common-use-cases">Benefits and Common Use Cases</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#see-also">See also</a></li>
 </ul>
@@ -547,6 +548,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#notifiers">Notifiers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#benefits-and-common-use-cases">Benefits and Common Use Cases</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#see-also">See also</a></li>
 </ul>
@@ -1057,6 +1059,34 @@ When the operator creates an HITL request that is waiting for a human response, 
 </div>
 </div>
 </section>
+<section id="testing-hitl-dags-locally">
+<h2>Testing HITL Dags locally<a class="headerlink" href="#testing-hitl-dags-locally" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">test</span></code> (and the underlying <code class="docutils literal notranslate"><span class="pre">dag.test()</span></code>) supports HITL tasks. A task that reaches
+the <code class="docutils literal notranslate"><span class="pre">awaiting_input</span></code> state stays parked – the test run never resolves it itself – and the run
+waits, logging which tasks await input, until a response is recorded from outside. The response
+goes through the same channels as on a real deployment: the Required Actions page or the HITL REST
+API (<code class="docutils literal notranslate"><span class="pre">PATCH</span> <span class="pre">.../hitlDetails</span></code>) of an api-server sharing the metadata database (for example
+<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">standalone</span></code>, or a separately started <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">api-server</span></code>). Once the response lands,
+the test run resumes the task and continues with downstream tasks.</p>
+<p>This also lets AI agents drive a HITL pipeline end-to-end locally: run <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">test</span></code>, watch
+for the waiting log line, ask the human, and submit their answer through the HITL REST API. The two
+calls involved (<code class="docutils literal notranslate"><span class="pre">~</span></code> works as a wildcard for <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> and <code class="docutils literal notranslate"><span class="pre">dag_run_id</span></code>):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span># Discover pending requests (subject, options, params, run/task identifiers)
+GET /api/v2/dags/~/dagRuns/~/hitlDetails?response_received=false
+
+# Submit the response; the test run resumes the task on its next poll.
+# map_index is -1 for non-mapped tasks.
+PATCH /api/v2/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances/{task_id}/{map_index}/hitlDetails
+{&quot;chosen_options&quot;: [&quot;Approve&quot;], &quot;params_input&quot;: {}}
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">response_timeout</span></code> and timeout defaults are enforced by the scheduler, which does not run
+under <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">test</span></code>. A parked task therefore waits indefinitely for a response; supply
+one through the UI or REST API to let the run finish.</p>
+</div>
+</section>
 <section id="benefits-and-common-use-cases">
 <h2>Benefits and Common Use Cases<a class="headerlink" href="#benefits-and-common-use-cases" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>HITL functionality is valuable in large language model (LLM) workflows, where human-provided guidance can be essential for achieving better results.
@@ -1153,6 +1183,7 @@ It is also highly beneficial in enterprise data pipelines, where human validatio
 <li><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
 <li><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li><a class="reference internal" href="#notifiers">Notifiers</a></li>
+<li><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>
 <li><a class="reference internal" href="#benefits-and-common-use-cases">Benefits and Common Use Cases</a></li>
 <li><a class="reference internal" href="#see-also">See also</a></li>
 </ul>

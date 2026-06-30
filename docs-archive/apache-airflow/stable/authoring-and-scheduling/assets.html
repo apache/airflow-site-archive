@@ -438,9 +438,14 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#asset-partitions">Asset partitions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pre-determined-vs-runtime-partitioning">Pre-determined vs runtime partitioning</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#rollup-mappers">Rollup mappers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#wait-policies">Wait policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#segment-categorical-rollup">Segment (categorical) rollup</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#setting-partition-keys-at-runtime">Setting partition keys at runtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fan-out-mappers">Fan-out mappers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#window-direction-forward-and-backward">Window direction: FORWARD and BACKWARD</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-partition-mappers-windows-and-timetables-in-plugins">Custom partition mappers, windows, and timetables in plugins</a></li>
 </ul>
 </li>
 </ul>
@@ -595,9 +600,14 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#asset-partitions">Asset partitions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pre-determined-vs-runtime-partitioning">Pre-determined vs runtime partitioning</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#rollup-mappers">Rollup mappers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#wait-policies">Wait policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#segment-categorical-rollup">Segment (categorical) rollup</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#setting-partition-keys-at-runtime">Setting partition keys at runtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fan-out-mappers">Fan-out mappers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#window-direction-forward-and-backward">Window direction: FORWARD and BACKWARD</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-partition-mappers-windows-and-timetables-in-plugins">Custom partition mappers, windows, and timetables in plugins</a></li>
 </ul>
 </li>
 </ul>
@@ -1167,6 +1177,29 @@ creates asset events with a partition key on each run.</p>
 </div>
 <p>Partitioned events are intended for partition-aware downstream scheduling, and
 do not trigger non-partition-aware Dags.</p>
+<section id="pre-determined-vs-runtime-partitioning">
+<h3>Pre-determined vs runtime partitioning<a class="headerlink" href="#pre-determined-vs-runtime-partitioning" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Both kinds attach a partition key to a Dag run — the difference is <em>when</em> and
+<em>by whom</em> the key is decided:</p>
+<ul class="simple">
+<li><p><strong>Pre-determined partitioning</strong> — the partition key is worked out before the
+task runs, using the timetable’s schedule cadence and partition mappers to match
+upstream keys to downstream keys and trigger partition-based Dag runs.
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.CronPartitionTimetable" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">CronPartitionTimetable</span></code></a> uses this kind as a producer;
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.PartitionedAssetTimetable" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code></a> uses it as a consumer.</p></li>
+<li><p><strong>Runtime partitioning</strong> — the partition key is deferred to task runtime:
+the producing task records key(s) via <code class="docutils literal notranslate"><span class="pre">outlet_events[self].add_partitions(...)</span></code>.
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.PartitionedAtRuntime" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionedAtRuntime</span></code></a> uses this kind and never schedules on its
+own (<code class="docutils literal notranslate"><span class="pre">can_be_scheduled=False</span></code>); a schedulable timetable can also defer to runtime
+by subclassing <a class="reference internal" href="../_api/airflow/timetables/trigger/index.html#airflow.timetables.trigger.CronTriggerTimetable" title="airflow.timetables.trigger.CronTriggerTimetable"><code class="xref py py-class docutils literal notranslate"><span class="pre">CronTriggerTimetable</span></code></a> and setting
+<code class="docutils literal notranslate"><span class="pre">partitioned_at_runtime</span> <span class="pre">=</span> <span class="pre">True</span></code> (see the custom plugin example below).</p></li>
+</ul>
+<p>A timetable uses one kind or the other, not both: it either resolves partitions
+ahead of the run or defers them to task runtime.</p>
+<p><strong>Practical rule:</strong> use <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.CronPartitionTimetable" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">CronPartitionTimetable</span></code></a> when the
+partition key follows from the schedule cadence; use <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.PartitionedAtRuntime" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionedAtRuntime</span></code></a>
+when the key is only known once the task runs (e.g. a watermark from source data);
+use <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.PartitionedAssetTimetable" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code></a> downstream to consume either kind.</p>
 <p>For downstream partition-aware scheduling, use <code class="docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">StartOfHourMapper</span><span class="p">,</span> <span class="n">PartitionedAssetTimetable</span>
 
@@ -1291,6 +1324,7 @@ including <code class="docutils literal notranslate"><span class="pre">partition
 <span class="s1">  }&#39;</span>
 </pre></div>
 </div>
+</section>
 <section id="rollup-mappers">
 <h3>Rollup mappers<a class="headerlink" href="#rollup-mappers" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <div class="versionadded">
@@ -1299,25 +1333,25 @@ including <code class="docutils literal notranslate"><span class="pre">partition
 <p>The mappers shown above match upstream keys to a single downstream key one-for-one.
 For a coarser downstream period made up of many upstream events — an hourly upstream
 that drives a daily summary, daily inputs that compose a weekly report — use
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a>. <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a> composes an
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a>. <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a> composes an
 upstream mapper (which normalizes each upstream key to the downstream granularity)
-with a <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.Window" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Window</span></code></a> that declares the full set of upstream keys
+with a <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.Window" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Window</span></code></a> that declares the full set of upstream keys
 required for one downstream key. The scheduler holds the Dag run until every upstream
 key in the window has arrived; partial windows stay pending on the next-run-assets
 view so operators can see progress.</p>
-<p>The shipped windows are <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.HourWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HourWindow</span></code></a> (sixty minutes per hour),
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a> (twenty-four hours per day),
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WeekWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WeekWindow</span></code></a> (seven days per week),
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.MonthWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MonthWindow</span></code></a>, <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.QuarterWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuarterWindow</span></code></a>, and
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.YearWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">YearWindow</span></code></a>. Pair each window with an upstream mapper that
+<p>The shipped windows are <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.HourWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HourWindow</span></code></a> (sixty minutes per hour),
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a> (twenty-four hours per day),
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WeekWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WeekWindow</span></code></a> (seven days per week),
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.MonthWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MonthWindow</span></code></a>, <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.QuarterWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuarterWindow</span></code></a>, and
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.YearWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">YearWindow</span></code></a>. Pair each window with an upstream mapper that
 decodes to the same temporal grain — for example
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.StartOfHourMapper" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">StartOfHourMapper</span></code></a> with <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a>.</p>
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.StartOfHourMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">StartOfHourMapper</span></code></a> with <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a>.</p>
 <p>Each upstream asset event carries a fine-grained partition key such as
-<code class="docutils literal notranslate"><span class="pre">2026-03-10T09:00:00</span></code> (second precision). <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.StartOfHourMapper" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">StartOfHourMapper</span></code></a>
+<code class="docutils literal notranslate"><span class="pre">2026-03-10T09:00:00</span></code> (second precision). <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.StartOfHourMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">StartOfHourMapper</span></code></a>
 normalizes that key to the hour boundary <code class="docutils literal notranslate"><span class="pre">2026-03-10T09</span></code>, which is the format
 it encodes each expected member in — the same
 strings the scheduler matches against the twenty-four required members of
-<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a>.</p>
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a>.</p>
 <p>The following hourly-to-daily example produces a daily summary once all twenty-four
 upstream hourly partitions for a calendar day have arrived:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -1370,7 +1404,7 @@ upstream hourly partitions for a calendar day have arrived:</p>
 with a <code class="docutils literal notranslate"><span class="pre">DayWindow</span></code> — raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> at Dag parse so the misconfiguration
 surfaces immediately instead of silently holding every downstream run forever. The
 error is a type mismatch: an identity-decoding mapper’s <code class="docutils literal notranslate"><span class="pre">expected_decoded_type</span></code> is
-<code class="docutils literal notranslate"><span class="pre">str</span></code>, but temporal windows such as <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.3.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a> require
+<code class="docutils literal notranslate"><span class="pre">str</span></code>, but temporal windows such as <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.DayWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DayWindow</span></code></a> require
 <code class="docutils literal notranslate"><span class="pre">datetime</span></code>; <code class="docutils literal notranslate"><span class="pre">RollupMapper</span></code> detects the mismatch at construction time and
 raises before the Dag is scheduled.</p>
 <p><code class="docutils literal notranslate"><span class="pre">DayWindow</span></code> always enumerates twenty-four hourly steps. With an upstream mapper
@@ -1379,6 +1413,60 @@ day has only twenty-three real hours (one window member never has a matching eve
 so the run is held indefinitely) and the fall-back day has twenty-five (the repeated
 hour is dropped). Use a UTC-based upstream mapper for any rollup that crosses a DST
 boundary; see the <code class="docutils literal notranslate"><span class="pre">DayWindow</span></code> class docstring for the full discussion.</p>
+</section>
+<section id="wait-policies">
+<h3>Wait policies<a class="headerlink" href="#wait-policies" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p><a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a> accepts an optional <code class="docutils literal notranslate"><span class="pre">wait_policy</span></code> argument
+that decides when the downstream Dag run fires given the expected window vs the
+upstream keys that have actually arrived.</p>
+<ul class="simple">
+<li><p><a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WaitForAll" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WaitForAll</span></code></a> (the default) holds the run until every expected
+upstream key in the window has arrived.</p></li>
+<li><p><a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.MinimumCount" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MinimumCount</span></code></a> <code class="docutils literal notranslate"><span class="pre">(n)</span></code> fires early once at least <code class="docutils literal notranslate"><span class="pre">n</span></code> of the
+expected keys have arrived — useful to tolerate a slow or missing upstream partition
+rather than holding the run indefinitely.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DAG</span><span class="p">,</span>
+    <span class="n">Asset</span><span class="p">,</span>
+    <span class="n">FixedKeyMapper</span><span class="p">,</span>
+    <span class="n">MinimumCount</span><span class="p">,</span>
+    <span class="n">PartitionedAtRuntime</span><span class="p">,</span>
+    <span class="n">PartitionedAssetTimetable</span><span class="p">,</span>
+    <span class="n">RollupMapper</span><span class="p">,</span>
+    <span class="n">SegmentWindow</span><span class="p">,</span>
+    <span class="n">asset</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="nd">@asset</span><span class="p">(</span>
+    <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/multi-region.csv&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
+<span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">multi_region_player_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outlet_events</span><span class="p">):</span>
+    <span class="n">outlet_events</span><span class="p">[</span><span class="bp">self</span><span class="p">]</span><span class="o">.</span><span class="n">add_partitions</span><span class="p">([</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">])</span>
+
+
+<span class="c1"># Consumer: fires once at least two of the three declared region partitions arrive.</span>
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;segment_region_stats_early_rollup&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+        <span class="n">assets</span><span class="o">=</span><span class="n">Asset</span><span class="o">.</span><span class="n">ref</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;multi_region_player_stats&quot;</span><span class="p">),</span>
+        <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">RollupMapper</span><span class="p">(</span>
+            <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">FixedKeyMapper</span><span class="p">(</span><span class="s2">&quot;all_regions&quot;</span><span class="p">),</span>
+            <span class="n">window</span><span class="o">=</span><span class="n">SegmentWindow</span><span class="p">([</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">]),</span>
+            <span class="n">wait_policy</span><span class="o">=</span><span class="n">MinimumCount</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">MinimumCount(-1)</span></code> is the relative spelling of the same threshold — “at most one
+missing” — and is equivalent to <code class="docutils literal notranslate"><span class="pre">MinimumCount(2)</span></code> for a three-member window.
+Pass <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WaitForAll" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WaitForAll</span></code></a> explicitly when you want to document intent
+rather than relying on the default.</p>
 </section>
 <section id="segment-categorical-rollup">
 <span id="id3"></span><h3>Segment (categorical) rollup<a class="headerlink" href="#segment-categorical-rollup" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
@@ -1403,7 +1491,7 @@ semantics (the default).</p>
     <span class="n">DAG</span><span class="p">,</span>
     <span class="n">Asset</span><span class="p">,</span>
     <span class="n">FixedKeyMapper</span><span class="p">,</span>
-    <span class="n">PartitionAtRuntime</span><span class="p">,</span>
+    <span class="n">PartitionedAtRuntime</span><span class="p">,</span>
     <span class="n">PartitionedAssetTimetable</span><span class="p">,</span>
     <span class="n">RollupMapper</span><span class="p">,</span>
     <span class="n">SegmentWindow</span><span class="p">,</span>
@@ -1414,7 +1502,7 @@ semantics (the default).</p>
 
 <span class="nd">@asset</span><span class="p">(</span>
     <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/multi-region.csv&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
 <span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">multi_region_player_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outlet_events</span><span class="p">):</span>
     <span class="c1"># Emit one event per region in a single run.</span>
@@ -1457,14 +1545,14 @@ decide a partition set).</p>
 <p>When the partition key is not known ahead of time (for example, a watermark
 discovered from the source data, a late-arriving file, or a backfill request),
 let the producing task decide it while it runs. Schedule the producer with
-<code class="docutils literal notranslate"><span class="pre">PartitionAtRuntime()</span></code> and record the key(s) on the emitted event with
+<code class="docutils literal notranslate"><span class="pre">PartitionedAtRuntime()</span></code> and record the key(s) on the emitted event with
 <code class="docutils literal notranslate"><span class="pre">outlet_events[self].add_partitions(...)</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionAtRuntime</span><span class="p">,</span> <span class="n">asset</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionedAtRuntime</span><span class="p">,</span> <span class="n">asset</span>
 
 
 <span class="nd">@asset</span><span class="p">(</span>
     <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/live-region.csv&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
 <span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">live_region_player_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outlet_events</span><span class="p">):</span>
     <span class="c1"># The key is only known once the task runs.</span>
@@ -1478,7 +1566,7 @@ partitions in one run. Each key produces its own asset event, and duplicate
 keys collapse to a single event:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@asset</span><span class="p">(</span>
     <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://incoming/player-stats/multi-region.csv&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionAtRuntime</span><span class="p">(),</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAtRuntime</span><span class="p">(),</span>
 <span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">multi_region_player_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">outlet_events</span><span class="p">):</span>
     <span class="n">outlet_events</span><span class="p">[</span><span class="bp">self</span><span class="p">]</span><span class="o">.</span><span class="n">add_partitions</span><span class="p">([</span><span class="s2">&quot;us&quot;</span><span class="p">,</span> <span class="s2">&quot;eu&quot;</span><span class="p">,</span> <span class="s2">&quot;apac&quot;</span><span class="p">])</span>
@@ -1488,6 +1576,311 @@ keys collapse to a single event:</p>
 <code class="docutils literal notranslate"><span class="pre">dag_run.partition_key</span></code> is back-filled to that key. Downstream Dags consume
 these events the same way as timetable-produced partitions, through
 <code class="docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code>.</p>
+</section>
+<section id="fan-out-mappers">
+<h3>Fan-out mappers<a class="headerlink" href="#fan-out-mappers" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.3.0.</span></p>
+</div>
+<p><a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.FanOutMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">FanOutMapper</span></code></a> is the mirror of <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RollupMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code></a>:
+instead of holding many upstream events until one downstream run can fire, a single
+upstream event fans <em>out</em> to one downstream Dag run per window member. It composes an
+<code class="docutils literal notranslate"><span class="pre">upstream_mapper</span></code> (which normalizes the upstream key to the window anchor) with a
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.Window" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Window</span></code></a> that enumerates the downstream period, and an optional
+<code class="docutils literal notranslate"><span class="pre">downstream_mapper</span></code> that converts each window member into a downstream partition key
+string.</p>
+<p>For temporal windows (<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WeekWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WeekWindow</span></code></a>, <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.MonthWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MonthWindow</span></code></a>,
+etc.) a default <code class="docutils literal notranslate"><span class="pre">downstream_mapper</span></code> is applied automatically — for example
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.WeekWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">WeekWindow</span></code></a> defaults to <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.StartOfDayMapper" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">StartOfDayMapper</span></code></a>,
+so each of the seven daily members is encoded as a <code class="docutils literal notranslate"><span class="pre">YYYY-MM-DD</span></code> string. For
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.SegmentWindow" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">SegmentWindow</span></code></a> there is no default-table entry, so an explicit
+<code class="docutils literal notranslate"><span class="pre">downstream_mapper</span></code> is required.</p>
+<p>The following example fans a weekly model artifact out to seven daily inference runs —
+one Dag run per day in the week:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DAG</span><span class="p">,</span>
+    <span class="n">Asset</span><span class="p">,</span>
+    <span class="n">CronPartitionTimetable</span><span class="p">,</span>
+    <span class="n">FanOutMapper</span><span class="p">,</span>
+    <span class="n">PartitionedAssetTimetable</span><span class="p">,</span>
+    <span class="n">StartOfWeekMapper</span><span class="p">,</span>
+    <span class="n">WeekWindow</span><span class="p">,</span>
+    <span class="n">task</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">weekly_model_artifact</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://artifacts/models/weekly.bin&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;weekly_model_artifact&quot;</span><span class="p">)</span>
+
+<span class="c1"># Producer: emits one partitioned event per week (key is the Monday date).</span>
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;train_weekly_model&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">CronPartitionTimetable</span><span class="p">(</span><span class="s2">&quot;0 0 * * 1&quot;</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">):</span>
+
+    <span class="nd">@task</span><span class="p">(</span><span class="n">outlets</span><span class="o">=</span><span class="p">[</span><span class="n">weekly_model_artifact</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">train_model</span><span class="p">():</span>
+        <span class="k">pass</span>
+
+    <span class="n">train_model</span><span class="p">()</span>
+
+
+<span class="c1"># Consumer: one Dag run per day derived from the weekly upstream event.</span>
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;daily_inference&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+        <span class="n">assets</span><span class="o">=</span><span class="n">weekly_model_artifact</span><span class="p">,</span>
+        <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">FanOutMapper</span><span class="p">(</span>
+            <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">StartOfWeekMapper</span><span class="p">(),</span>
+            <span class="n">window</span><span class="o">=</span><span class="n">WeekWindow</span><span class="p">(),</span>
+            <span class="n">max_downstream_keys</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">):</span>
+
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_inference</span><span class="p">(</span><span class="n">dag_run</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># dag_run.partition_key is one daily key, e.g. &quot;2026-03-10&quot;.</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">partition_key</span><span class="p">)</span>
+
+    <span class="n">run_inference</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">max_downstream_keys</span></code> caps how many downstream Dag runs one upstream event may
+create. When exceeded, the runs for that event are <strong>not</strong> queued and a “partition
+fan-out exceeded” audit-log entry is recorded instead. Omitting it falls back to the
+global <code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">partition_mapper_max_downstream_keys</span></code> config (default 1000).
+Set it explicitly to document intent and guard against accidental fan-out explosions.</p>
+</section>
+<section id="window-direction-forward-and-backward">
+<h3>Window direction: FORWARD and BACKWARD<a class="headerlink" href="#window-direction-forward-and-backward" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Every <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.Window" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Window</span></code></a> supports a <code class="docutils literal notranslate"><span class="pre">direction</span></code> parameter that controls
+which period the window enumerates relative to its anchor.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Window.Direction.FORWARD</span></code> (the default) — yields the period <em>starting</em> at the
+upstream key. For a weekly upstream key <code class="docutils literal notranslate"><span class="pre">&quot;2026-03-09&quot;</span></code> (Monday),
+<code class="docutils literal notranslate"><span class="pre">WeekWindow()</span></code> yields the seven days <code class="docutils literal notranslate"><span class="pre">2026-03-09</span></code> through <code class="docutils literal notranslate"><span class="pre">2026-03-15</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Window.Direction.BACKWARD</span></code> — yields the trailing period <em>ending</em> at the key.
+The same <code class="docutils literal notranslate"><span class="pre">&quot;2026-03-09&quot;</span></code> key with <code class="docutils literal notranslate"><span class="pre">WeekWindow(direction=Window.Direction.BACKWARD)</span></code>
+yields the seven days ending on that Monday (<code class="docutils literal notranslate"><span class="pre">2026-03-03</span></code> through <code class="docutils literal notranslate"><span class="pre">2026-03-09</span></code>).</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">FanOutMapper</span><span class="p">,</span> <span class="n">PartitionedAssetTimetable</span><span class="p">,</span> <span class="n">StartOfWeekMapper</span><span class="p">,</span> <span class="n">WeekWindow</span><span class="p">,</span> <span class="n">Window</span>
+
+<span class="n">PartitionedAssetTimetable</span><span class="p">(</span>
+    <span class="n">assets</span><span class="o">=</span><span class="n">weekly_model_artifact</span><span class="p">,</span>
+    <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">FanOutMapper</span><span class="p">(</span>
+        <span class="n">upstream_mapper</span><span class="o">=</span><span class="n">StartOfWeekMapper</span><span class="p">(),</span>
+        <span class="n">window</span><span class="o">=</span><span class="n">WeekWindow</span><span class="p">(</span><span class="n">direction</span><span class="o">=</span><span class="n">Window</span><span class="o">.</span><span class="n">Direction</span><span class="o">.</span><span class="n">BACKWARD</span><span class="p">),</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Direction applies to rollup windows too — <code class="docutils literal notranslate"><span class="pre">RollupMapper</span></code> uses the same window
+classes, so <code class="docutils literal notranslate"><span class="pre">DayWindow(direction=Window.Direction.BACKWARD)</span></code> holds a downstream
+run until the twenty-four hours <em>preceding</em> midnight of the downstream key have
+all arrived.</p>
+</section>
+<section id="custom-partition-mappers-windows-and-timetables-in-plugins">
+<h3>Custom partition mappers, windows, and timetables in plugins<a class="headerlink" href="#custom-partition-mappers-windows-and-timetables-in-plugins" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Custom <code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionMapper</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Window</span></code>, and partition-aware
+<a class="reference internal" href="../_api/airflow/timetables/base/index.html#airflow.timetables.base.Timetable" title="airflow.timetables.base.Timetable"><code class="xref py py-class docutils literal notranslate"><span class="pre">Timetable</span></code></a> classes can be shipped as
+Airflow plugins by listing them in <code class="docutils literal notranslate"><span class="pre">AirflowPlugin.partition_mappers</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.windows</span></code>, and <code class="docutils literal notranslate"><span class="pre">.timetables</span></code> respectively.  Once a plugin is installed,
+these classes become usable in <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.PartitionedAssetTimetable" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code></a>
+and <code class="xref py py-class docutils literal notranslate"><span class="pre">RollupMapper</span></code> without modifying core
+Airflow.</p>
+<p><strong>Custom partition mapper</strong> — strip a namespace prefix so that upstream keys
+like <code class="docutils literal notranslate"><span class="pre">&quot;eu::daily-sales&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;us::daily-sales&quot;</span></code> both collapse to the
+downstream key <code class="docutils literal notranslate"><span class="pre">&quot;daily-sales&quot;</span></code>:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/plugins/custom_partition_mapper.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/plugins/custom_partition_mapper.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">PrefixStripMapper</span><span class="p">(</span><span class="n">PartitionMapper</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A partition mapper that strips a fixed namespace prefix from upstream keys.</span>
+
+<span class="sd">    Upstream systems often qualify partition keys with a region or environment</span>
+<span class="sd">    prefix — for example ``&quot;eu::daily-sales&quot;`` or ``&quot;us::daily-sales&quot;``.  A</span>
+<span class="sd">    downstream asset that aggregates across regions only cares about the base key</span>
+<span class="sd">    (``&quot;daily-sales&quot;``).  ``PrefixStripMapper`` strips the given prefix (including</span>
+<span class="sd">    a configurable separator) so that all upstream namespaces collapse to the</span>
+<span class="sd">    same downstream partition key.</span>
+
+<span class="sd">    If the upstream key does not start with the configured prefix the key is</span>
+<span class="sd">    returned unchanged, which is deliberate: keys that already live in the target</span>
+<span class="sd">    namespace pass through without modification.</span>
+
+<span class="sd">    This class demonstrates registering a custom :class:`PartitionMapper</span>
+<span class="sd">    &lt;airflow.partition_mappers.base.PartitionMapper&gt;` subclass via the</span>
+<span class="sd">    ``AirflowPlugin.partition_mappers`` registry. Any plugin that lists it in</span>
+<span class="sd">    ``partition_mappers = [...]`` makes it available to</span>
+<span class="sd">    :class:`~airflow.sdk.PartitionedAssetTimetable` and</span>
+<span class="sd">    :class:`~airflow.partition_mappers.base.RollupMapper` without modifying core</span>
+<span class="sd">    Airflow.</span>
+
+<span class="sd">    :param prefix: The namespace prefix to strip, e.g. ``&quot;eu&quot;``.</span>
+<span class="sd">    :param separator: The string that separates the prefix from the base key.</span>
+<span class="sd">        Defaults to ``&quot;::&quot;`` to match a common ``&quot;region::key&quot;`` convention.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">separator</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;::&quot;</span><span class="p">,</span>
+        <span class="n">max_downstream_keys</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">max_downstream_keys</span><span class="o">=</span><span class="n">max_downstream_keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;prefix must be a non-empty string.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span> <span class="o">=</span> <span class="n">prefix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">separator</span> <span class="o">=</span> <span class="n">separator</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_downstream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">full_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">separator</span>
+        <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">full_prefix</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">key</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">full_prefix</span><span class="p">)</span> <span class="p">:]</span>
+        <span class="k">return</span> <span class="n">key</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;separator&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">separator</span><span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_downstream_keys</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;max_downstream_keys&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_downstream_keys</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">PartitionMapper</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">prefix</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;prefix&quot;</span><span class="p">],</span>
+            <span class="n">separator</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;separator&quot;</span><span class="p">,</span> <span class="s2">&quot;::&quot;</span><span class="p">),</span>
+            <span class="n">max_downstream_keys</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max_downstream_keys&quot;</span><span class="p">),</span>
+        <span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PrefixStripMapperPlugin</span><span class="p">(</span><span class="n">AirflowPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;prefix_strip_mapper_plugin&quot;</span>
+    <span class="n">partition_mappers</span> <span class="o">=</span> <span class="p">[</span><span class="n">PrefixStripMapper</span><span class="p">]</span>
+
+
+</pre></div>
+</div>
+</div>
+<p><strong>Custom rollup window</strong> — yield only weekday period-starts from a calendar
+month so a downstream asset waits only for business-day upstream partitions:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/plugins/business_day_window.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/plugins/business_day_window.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">BusinessDayWindow</span><span class="p">(</span><span class="n">Window</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A calendar-month rollup window that yields only weekday (Mon–Fri) period-starts.</span>
+
+<span class="sd">    The built-in :class:`~airflow.partition_mappers.window.MonthWindow` yields every</span>
+<span class="sd">    calendar day in the month. ``BusinessDayWindow`` skips Saturdays and Sundays, so</span>
+<span class="sd">    a monthly downstream asset only waits for the business-day upstream partitions —</span>
+<span class="sd">    useful for financial or operational pipelines whose upstream data isn&#39;t produced</span>
+<span class="sd">    on weekends.</span>
+
+<span class="sd">    This class demonstrates registering a custom ``Window`` subclass via the</span>
+<span class="sd">    ``AirflowPlugin.windows`` registry: any plugin that lists it in ``windows = [...]``</span>
+<span class="sd">    makes it available to ``RollupMapper`` without modifying core Airflow.</span>
+
+<span class="sd">    *Assumes FORWARD direction and a day-1 month anchor* — the standard contract for</span>
+<span class="sd">    month-aligned temporal upstream mappers.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">expected_decoded_type</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="n">datetime</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_upstream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">period_start</span><span class="p">:</span> <span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">datetime</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="n">period_start</span><span class="o">.</span><span class="n">day</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;BusinessDayWindow expects a period start on day 1 of the month, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="n">period_start</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">days_in_month</span> <span class="o">=</span> <span class="n">calendar</span><span class="o">.</span><span class="n">monthrange</span><span class="p">(</span><span class="n">period_start</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">period_start</span><span class="o">.</span><span class="n">month</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">day</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">days_in_month</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="n">day</span> <span class="o">:=</span> <span class="n">period_start</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">i</span><span class="p">))</span><span class="o">.</span><span class="n">weekday</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">5</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">BusinessDayWindowPlugin</span><span class="p">(</span><span class="n">AirflowPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;business_day_window_plugin&quot;</span>
+    <span class="n">windows</span> <span class="o">=</span> <span class="p">[</span><span class="n">BusinessDayWindow</span><span class="p">]</span>
+
+
+</pre></div>
+</div>
+</div>
+<p><strong>Custom runtime-partitioned timetable</strong> — a schedulable cron timetable that
+defers the partition key to task runtime, so the producing task can check whether
+the period’s data exists before emitting a partition:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/plugins/custom_partition_timetable.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/plugins/custom_partition_timetable.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">ScheduledRuntimePartitionTimetable</span><span class="p">(</span><span class="n">CronTriggerTimetable</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A schedulable timetable whose partition key is decided at task runtime.</span>
+
+<span class="sd">    Runs fire on the given cron cadence, exactly like an ordinary</span>
+<span class="sd">    :class:`~airflow.timetables.trigger.CronTriggerTimetable`. The partition key,</span>
+<span class="sd">    however, is not derived from the schedule: it is set while the producing task</span>
+<span class="sd">    runs — typically after the task checks whether the period&#39;s source data has</span>
+<span class="sd">    arrived — by calling ``outlet_events[self].add_partitions(...)``.</span>
+
+<span class="sd">    This uses runtime partitioning on a regular cron schedule: the timetable stays</span>
+<span class="sd">    schedulable (``can_be_scheduled`` is ``True``) yet sets</span>
+<span class="sd">    ``partitioned_at_runtime = True`` so the partition key is deferred to task</span>
+<span class="sd">    runtime. It differs from :class:`~airflow.sdk.PartitionedAtRuntime` (which also</span>
+<span class="sd">    defers the key to runtime but never schedules a run on its own) and from</span>
+<span class="sd">    :class:`~airflow.timetables.trigger.CronPartitionTimetable` (which works out the</span>
+<span class="sd">    partition key from the cadence ahead of the run). ``partitioned`` stays</span>
+<span class="sd">    ``False``: no partition key is worked out ahead of the run.</span>
+
+<span class="sd">    Registering it via the ``AirflowPlugin.timetables`` registry makes it usable</span>
+<span class="sd">    by Dag authors without modifying core Airflow.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">partitioned_at_runtime</span> <span class="o">=</span> <span class="kc">True</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ScheduledRuntimePartitionTimetablePlugin</span><span class="p">(</span><span class="n">AirflowPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;scheduled_runtime_partition_timetable_plugin&quot;</span>
+    <span class="n">timetables</span> <span class="o">=</span> <span class="p">[</span><span class="n">ScheduledRuntimePartitionTimetable</span><span class="p">]</span>
+
+
+</pre></div>
+</div>
+</div>
+<p>A producer Dag schedules on the timetable’s cron cadence and decides the
+partition key at runtime — emitting it only when the period’s upstream data is
+present. If the data has not arrived, the task simply does not call
+<code class="docutils literal notranslate"><span class="pre">add_partitions</span></code> (an empty or <code class="docutils literal notranslate"><span class="pre">None</span></code> key is rejected anyway), so no
+partitioned event — and therefore no downstream <code class="docutils literal notranslate"><span class="pre">PartitionedAssetTimetable</span></code>
+run — is produced for that period:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">Asset</span><span class="p">,</span> <span class="n">task</span>
+
+<span class="c1"># ScheduledRuntimePartitionTimetable is provided by the plugin registered above.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">my_plugin.plugins</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScheduledRuntimePartitionTimetable</span>
+
+<span class="n">daily_export</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s2">&quot;file://exports/daily.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;daily_export&quot;</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;export_when_ready&quot;</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="n">ScheduledRuntimePartitionTimetable</span><span class="p">(</span><span class="s2">&quot;0 6 * * *&quot;</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
+    <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">):</span>
+
+    <span class="nd">@task</span><span class="p">(</span><span class="n">outlets</span><span class="o">=</span><span class="p">[</span><span class="n">daily_export</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">export</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">outlet_events</span><span class="p">):</span>
+        <span class="c1"># Fires every day at 06:00 UTC. The partition key is not fixed by the</span>
+        <span class="c1"># schedule — decide it at runtime from the data itself: find which</span>
+        <span class="c1"># day&#39;s source file has actually landed.</span>
+        <span class="n">partition_key</span> <span class="o">=</span> <span class="n">latest_ready_day</span><span class="p">(</span><span class="s2">&quot;s3://raw&quot;</span><span class="p">)</span>  <span class="c1"># your own check; e.g. &quot;2026-06-23&quot; or None</span>
+        <span class="k">if</span> <span class="n">partition_key</span><span class="p">:</span>
+            <span class="n">build_export</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span>
+            <span class="n">outlet_events</span><span class="p">[</span><span class="n">daily_export</span><span class="p">]</span><span class="o">.</span><span class="n">add_partitions</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span>
+        <span class="c1"># If nothing is ready, emit nothing: with no partition key recorded,</span>
+        <span class="c1"># no partitioned event is produced and no downstream</span>
+        <span class="c1"># PartitionedAssetTimetable run is triggered for this period.</span>
+
+    <span class="n">export</span><span class="p">()</span>
+</pre></div>
+</div>
 <p>For complete runnable examples, see
 <code class="docutils literal notranslate"><span class="pre">airflow-core/src/airflow/example_dags/example_asset_partition.py</span></code>.</p>
 </section>
@@ -1593,9 +1986,14 @@ these events the same way as timetable-produced partitions, through
 </ul>
 </li>
 <li><a class="reference internal" href="#asset-partitions">Asset partitions</a><ul>
+<li><a class="reference internal" href="#pre-determined-vs-runtime-partitioning">Pre-determined vs runtime partitioning</a></li>
 <li><a class="reference internal" href="#rollup-mappers">Rollup mappers</a></li>
+<li><a class="reference internal" href="#wait-policies">Wait policies</a></li>
 <li><a class="reference internal" href="#segment-categorical-rollup">Segment (categorical) rollup</a></li>
 <li><a class="reference internal" href="#setting-partition-keys-at-runtime">Setting partition keys at runtime</a></li>
+<li><a class="reference internal" href="#fan-out-mappers">Fan-out mappers</a></li>
+<li><a class="reference internal" href="#window-direction-forward-and-backward">Window direction: FORWARD and BACKWARD</a></li>
+<li><a class="reference internal" href="#custom-partition-mappers-windows-and-timetables-in-plugins">Custom partition mappers, windows, and timetables in plugins</a></li>
 </ul>
 </li>
 </ul>

@@ -441,6 +441,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="#using-asset-state-store-inside-a-watcher-trigger">Using <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> inside a Watcher Trigger</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#some-example-use-cases">Some Example Use cases</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#watermark-pattern">Watermark pattern</a></li>
 </ul>
@@ -597,6 +598,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="#using-asset-state-store-inside-a-watcher-trigger">Using <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> inside a Watcher Trigger</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#some-example-use-cases">Some Example Use cases</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#watermark-pattern">Watermark pattern</a></li>
 </ul>
@@ -842,6 +844,73 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 </div>
 </section>
 </section>
+<section id="using-asset-state-store-inside-a-watcher-trigger">
+<h2>Using <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> inside a Watcher Trigger<a class="headerlink" href="#using-asset-state-store-inside-a-watcher-trigger" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p><a class="reference internal" href="../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger" title="airflow.triggers.base.BaseEventTrigger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseEventTrigger</span></code></a> subclasses (watcher triggers) can read and write asset state store directly from within <code class="docutils literal notranslate"><span class="pre">run()</span></code>. The triggerer injects <code class="docutils literal notranslate"><span class="pre">self.asset_state_store</span></code> before <code class="docutils literal notranslate"><span class="pre">run()</span></code> is called, scoped to the asset the trigger is watching. It is not available during <code class="docutils literal notranslate"><span class="pre">__init__</span></code> or <code class="docutils literal notranslate"><span class="pre">serialize()</span></code>, only access it from within <code class="docutils literal notranslate"><span class="pre">run()</span></code>.</p>
+<p>Unlike task-based access (where the asset is identified by an inlet or outlet declaration), the accessor in a watcher trigger is automatically bound to the watched asset, so no subscripting is needed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncIterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.triggers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEventTrigger</span><span class="p">,</span> <span class="n">TriggerEvent</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PollEventsTrigger</span><span class="p">(</span><span class="n">BaseEventTrigger</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">waiter_delay</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">source</span> <span class="o">=</span> <span class="n">source</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span> <span class="o">=</span> <span class="n">waiter_delay</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__module__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">{</span><span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="s2">&quot;waiter_delay&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">},</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_poll_for_new_record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">last_seen</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="o">...</span>  <span class="c1"># Add logic for polling a certain source</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="n">TriggerEvent</span><span class="p">]:</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">last_seen</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">asset_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;last_seen_id&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">new_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_poll_for_new_record</span><span class="p">(</span>
+                <span class="n">source</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+                <span class="n">last_seen</span><span class="o">=</span><span class="n">last_seen</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">new_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">asset_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;last_seen_id&quot;</span><span class="p">,</span> <span class="n">new_id</span><span class="p">)</span>
+                <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">({</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;success&quot;</span><span class="p">,</span> <span class="s2">&quot;record_id&quot;</span><span class="p">:</span> <span class="n">new_id</span><span class="p">})</span>
+                <span class="k">return</span>
+
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The corresponding <code class="xref py py-class docutils literal notranslate"><span class="pre">AssetWatcher</span></code> wires the trigger to the asset:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Asset</span><span class="p">,</span> <span class="n">AssetWatcher</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">my_dag.triggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">PollEventsTrigger</span>
+
+<span class="n">my_asset</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;orders_api&quot;</span><span class="p">,</span>
+    <span class="n">watchers</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">AssetWatcher</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;orders_api_watcher&quot;</span><span class="p">,</span>
+            <span class="n">trigger</span><span class="o">=</span><span class="n">PollEventsTrigger</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">&quot;orders&quot;</span><span class="p">,</span> <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">],</span>
+<span class="p">)</span>
+
+<span class="o">...</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">self.asset_state_store</span></code> behaves identically to the per-asset accessor described in the task sections above: <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">set</span></code>, <code class="docutils literal notranslate"><span class="pre">delete</span></code>, and <code class="docutils literal notranslate"><span class="pre">clear</span></code> are all available. Values written by the trigger are visible to any task that declares <code class="docutils literal notranslate"><span class="pre">my_asset</span></code> as an inlet or outlet, and vice versa.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">self.asset_state_store</span></code> is only available inside <a class="reference internal" href="../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger" title="airflow.triggers.base.BaseEventTrigger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseEventTrigger</span></code></a> subclasses. Plain <a class="reference internal" href="../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseTrigger" title="airflow.triggers.base.BaseTrigger"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseTrigger</span></code></a> subclasses (used for task deferral) do not have access to asset state store.</p>
+</div>
+</section>
 <section id="some-example-use-cases">
 <h2>Some Example Use cases<a class="headerlink" href="#some-example-use-cases" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <section id="watermark-pattern">
@@ -975,6 +1044,7 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <li><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#using-asset-state-store-inside-a-watcher-trigger">Using <code class="docutils literal notranslate"><span class="pre">asset_state_store</span></code> inside a Watcher Trigger</a></li>
 <li><a class="reference internal" href="#some-example-use-cases">Some Example Use cases</a><ul>
 <li><a class="reference internal" href="#watermark-pattern">Watermark pattern</a></li>
 </ul>
