@@ -658,6 +658,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">base64</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlsafe_b64decode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urljoin</span>
 
@@ -670,6 +671,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">AUTH_MANAGER_FASTAPI_APP_PREFIX</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.managers.base_auth_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseAuthManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.managers.models.resource_details</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagDetails</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 
 <span class="k">try</span><span class="p">:</span>
@@ -704,7 +706,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">ConfigurationDetails</span><span class="p">,</span>
         <span class="n">ConnectionDetails</span><span class="p">,</span>
         <span class="n">DagAccessEntity</span><span class="p">,</span>
-        <span class="n">DagDetails</span><span class="p">,</span>
         <span class="n">PoolDetails</span><span class="p">,</span>
         <span class="n">TeamDetails</span><span class="p">,</span>
         <span class="n">VariableDetails</span><span class="p">,</span>
@@ -720,14 +721,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/keycloak/auth_manager/keycloak_auth_manager/index.html#airflow.providers.keycloak.auth_manager.keycloak_auth_manager.RESOURCE_ID_ATTRIBUTE_NAME">[docs]</a>
 <span class="n">RESOURCE_ID_ATTRIBUTE_NAME</span> <span class="o">=</span> <span class="s2">&quot;resource_id&quot;</span></div>
 
-<div class="viewcode-block" id="KEYCLOAK_RESOURCE_NOT_FOUND_ERROR">
-<a class="viewcode-back" href="../../../../../_api/airflow/providers/keycloak/auth_manager/keycloak_auth_manager/index.html#airflow.providers.keycloak.auth_manager.keycloak_auth_manager.KEYCLOAK_RESOURCE_NOT_FOUND_ERROR">[docs]</a>
-<span class="n">KEYCLOAK_RESOURCE_NOT_FOUND_ERROR</span> <span class="o">=</span> <span class="s2">&quot;resource not found:&quot;</span></div>
-
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_is_missing_keycloak_resource_response</span><span class="p">(</span><span class="n">status_code</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">status_code</span> <span class="o">==</span> <span class="mi">500</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">KEYCLOAK_RESOURCE_NOT_FOUND_ERROR</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
 
 <div class="viewcode-block" id="TEAM_SCOPED_RESOURCES">
@@ -1123,16 +1116,19 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">server_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_SECTION_NAME</span><span class="p">,</span> <span class="n">CONF_SERVER_URL_KEY</span><span class="p">)</span>
 
         <span class="n">context_attributes</span> <span class="o">=</span> <span class="n">prune_dict</span><span class="p">(</span><span class="n">attributes</span> <span class="ow">or</span> <span class="p">{})</span>
+
+        <span class="n">is_team_resource</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span>
+            <span class="n">team_name</span>
+            <span class="ow">and</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">&quot;core&quot;</span><span class="p">,</span> <span class="s2">&quot;multi_team&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">resource_type</span> <span class="ow">in</span> <span class="n">TEAM_SCOPED_RESOURCES</span>
+        <span class="p">)</span>
+
         <span class="k">if</span> <span class="n">resource_id</span><span class="p">:</span>
             <span class="n">context_attributes</span><span class="p">[</span><span class="n">RESOURCE_ID_ATTRIBUTE_NAME</span><span class="p">]</span> <span class="o">=</span> <span class="n">resource_id</span>
         <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;GET&quot;</span><span class="p">:</span>
             <span class="n">method</span> <span class="o">=</span> <span class="s2">&quot;LIST&quot;</span>
 
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="n">team_name</span>
-            <span class="ow">and</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">&quot;core&quot;</span><span class="p">,</span> <span class="s2">&quot;multi_team&quot;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-            <span class="ow">and</span> <span class="n">resource_type</span> <span class="ow">in</span> <span class="n">TEAM_SCOPED_RESOURCES</span>
-        <span class="p">):</span>
+        <span class="k">if</span> <span class="n">is_team_resource</span><span class="p">:</span>
             <span class="n">resource_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">resource_type</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">team_name</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">resource_name</span> <span class="o">=</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">value</span>
@@ -1154,12 +1150,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">resp</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">400</span><span class="p">:</span>
             <span class="n">error</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">is_team_resource</span> <span class="ow">and</span> <span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;invalid_resource&quot;</span><span class="p">:</span>
+                <span class="c1"># filter_authorized_dag_ids will return this error if team resources have not been added to the Keycloak Client.</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Keycloak authorization resource is missing; denying access. Response: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Request not recognized by Keycloak. </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;error&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">. </span><span class="si">{</span><span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;error_description&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="p">)</span>
-        <span class="k">if</span> <span class="n">_is_missing_keycloak_resource_response</span><span class="p">(</span><span class="n">resp</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Keycloak authorization resource is missing; denying access. Response: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">False</span>
         <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unexpected error: </span><span class="si">{</span><span class="n">resp</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="KeycloakAuthManager.filter_authorized_dag_ids">
@@ -1175,10 +1174,29 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">cache_key</span> <span class="o">=</span> <span class="p">(</span><span class="n">user</span><span class="o">.</span><span class="n">get_id</span><span class="p">(),</span> <span class="n">method</span><span class="p">,</span> <span class="n">team_name</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">dag_ids</span><span class="p">))</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">query_keycloak</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-            <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">dag_ids</span><span class="o">=</span><span class="n">dag_ids</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">team_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;team_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">team_name</span>
-            <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">KeycloakAuthManager</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">filter_authorized_dag_ids</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">dag_ids</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="c1"># Cap workers at the HTTP connection pool size: each is_authorized_dag() call</span>
+            <span class="c1"># goes through the shared requests.Session, so extra threads would just block</span>
+            <span class="c1"># waiting for a free connection in urllib3&#39;s pool.</span>
+            <span class="n">max_workers</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">dag_ids</span><span class="p">),</span> <span class="n">conf</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="n">CONF_SECTION_NAME</span><span class="p">,</span> <span class="n">CONF_REQUESTS_POOL_SIZE_KEY</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="n">dag_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]:</span>
+                <span class="n">details_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">dag_id</span><span class="p">}</span>
+                <span class="k">if</span> <span class="n">team_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">details_kwargs</span><span class="p">[</span><span class="s2">&quot;team_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">team_name</span>
+                <span class="k">return</span> <span class="n">dag_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_authorized_dag</span><span class="p">(</span>
+                    <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span>
+                    <span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span>
+                    <span class="n">details</span><span class="o">=</span><span class="n">DagDetails</span><span class="p">(</span><span class="o">**</span><span class="n">details_kwargs</span><span class="p">),</span>
+                <span class="p">)</span>
+
+            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="n">executor</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">check</span><span class="p">,</span> <span class="n">dag_ids</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="p">{</span><span class="n">dag_id</span> <span class="k">for</span> <span class="n">dag_id</span><span class="p">,</span> <span class="n">authorized</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">authorized</span><span class="p">}</span>
 
         <span class="k">return</span> <span class="n">single_flight</span><span class="p">(</span><span class="n">cache_key</span><span class="p">,</span> <span class="n">query_keycloak</span><span class="p">)</span></div>
 
