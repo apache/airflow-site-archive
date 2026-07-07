@@ -1,0 +1,133 @@
+airflow.providers.common.ai.operators.llm_sql
+=============================================
+
+.. py:module:: airflow.providers.common.ai.operators.llm_sql
+
+.. autoapi-nested-parse::
+
+   Operator for generating SQL queries from natural language using LLMs.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.operators.llm_sql.LLMSQLQueryOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: LLMSQLQueryOperator(*, db_conn_id = None, table_names = None, schema_context = None, validate_sql = True, allowed_sql_types = DEFAULT_ALLOWED_TYPES, dialect = None, datasource_config = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.ai.operators.llm.LLMOperator`
+
+
+   Generate SQL queries from natural language using an LLM.
+
+   Inherits from :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`
+   for LLM access and optionally uses a
+   :class:`~airflow.providers.common.sql.hooks.sql.DbApiHook`
+   for schema introspection. The operator generates SQL but does not execute it —
+   the generated SQL is returned as XCom and can be passed to
+   ``SQLExecuteQueryOperator`` or used in downstream tasks.
+
+   When ``system_prompt`` is provided, it is appended to the built-in SQL safety
+   instructions — use it for domain-specific guidance (e.g. "prefer CTEs over
+   subqueries", "always use LEFT JOINs").
+
+   :param prompt: Natural language description of the desired query.
+   :param llm_conn_id: Connection ID for the LLM provider.
+   :param model_id: Model identifier (e.g. ``"openai:gpt-4o"``).
+       Overrides the model stored in the connection's extra field.
+   :param system_prompt: Additional instructions appended to the built-in SQL
+       safety prompt. Use for domain-specific guidance.
+   :param agent_params: Additional keyword arguments passed to the pydantic-ai
+       ``Agent`` constructor (e.g. ``retries``, ``model_settings``).
+   :param db_conn_id: Connection ID for database schema introspection.
+       The connection must resolve to a ``DbApiHook``.
+   :param table_names: Tables to include in the LLM's schema context.
+       Used with ``db_conn_id`` for automatic introspection.
+   :param schema_context: Manual schema context string. When provided,
+       this is used instead of ``db_conn_id`` introspection.
+   :param validate_sql: Whether to validate generated SQL via AST parsing.
+       Default ``True`` (safe by default).
+   :param allowed_sql_types: SQL statement types to allow.
+       Default: ``(Select, Union, Intersect, Except)``.
+   :param dialect: SQL dialect for parsing (``postgres``, ``mysql``, etc.).
+       Auto-detected from the database hook if not set.
+
+   Human-in-the-Loop approval parameters are inherited from
+   :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`
+   (``require_approval``, ``approval_timeout``, ``allow_modifications``).
+   When ``allow_modifications=True`` and the reviewer edits the SQL, the
+   modified query is re-validated against the same safety rules before being
+   returned.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('prompt', 'llm_conn_id', 'model_id', 'system_prompt', 'agent_params', 'db_conn_id',...
+
+
+
+   .. py:attribute:: db_conn_id
+      :value: None
+
+
+
+   .. py:attribute:: table_names
+      :value: None
+
+
+
+   .. py:attribute:: schema_context
+      :value: None
+
+
+
+   .. py:attribute:: validate_sql
+      :value: True
+
+
+
+   .. py:attribute:: allowed_sql_types
+
+
+   .. py:attribute:: dialect
+      :value: None
+
+
+
+   .. py:attribute:: datasource_config
+      :value: None
+
+
+
+   .. py:property:: db_hook
+      :type: airflow.providers.common.sql.hooks.sql.DbApiHook | None
+
+
+      Return DbApiHook for the configured database connection, or None.
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: execute_complete(context, generated_output, event)
+
+      Resume after human review, re-validating if the reviewer modified the SQL.
+
+
+

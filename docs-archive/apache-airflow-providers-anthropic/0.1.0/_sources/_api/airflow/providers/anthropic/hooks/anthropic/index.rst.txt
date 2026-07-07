@@ -1,0 +1,397 @@
+airflow.providers.anthropic.hooks.anthropic
+===========================================
+
+.. py:module:: airflow.providers.anthropic.hooks.anthropic
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.anthropic.hooks.anthropic.logger
+   airflow.providers.anthropic.hooks.anthropic.DEFAULT_MODEL
+   airflow.providers.anthropic.hooks.anthropic.FIRST_PARTY_PLATFORMS
+   airflow.providers.anthropic.hooks.anthropic.AnthropicClient
+   airflow.providers.anthropic.hooks.anthropic.MAX_CONSECUTIVE_POLL_FAILURES
+   airflow.providers.anthropic.hooks.anthropic.OUTCOME_FAILURE_RESULTS
+   airflow.providers.anthropic.hooks.anthropic.TRIGGER_EVENT_STATUSES
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.anthropic.hooks.anthropic.BatchStatus
+   airflow.providers.anthropic.hooks.anthropic.SessionStatus
+   airflow.providers.anthropic.hooks.anthropic.AnthropicHook
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.anthropic.hooks.anthropic.evaluate_session_state
+   airflow.providers.anthropic.hooks.anthropic.validate_execute_complete_event
+   airflow.providers.anthropic.hooks.anthropic.evaluate_batch_counts
+
+
+Module Contents
+---------------
+
+.. py:data:: logger
+
+.. py:data:: DEFAULT_MODEL
+   :value: 'claude-opus-4-8'
+
+
+.. py:data:: FIRST_PARTY_PLATFORMS
+
+.. py:data:: AnthropicClient
+
+.. py:data:: MAX_CONSECUTIVE_POLL_FAILURES
+   :value: 5
+
+
+.. py:class:: BatchStatus
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Top-level ``processing_status`` of an Anthropic Message Batch.
+
+
+   .. py:attribute:: IN_PROGRESS
+      :value: 'in_progress'
+
+
+
+   .. py:attribute:: CANCELING
+      :value: 'canceling'
+
+
+
+   .. py:attribute:: ENDED
+      :value: 'ended'
+
+
+
+   .. py:method:: is_in_progress(status)
+      :classmethod:
+
+
+      Return ``True`` while the batch has not reached the terminal ``ended`` status.
+
+      This is broader than the ``in_progress`` value: a ``canceling`` batch is also
+      non-terminal (cancellation is in flight but the batch has not ended yet), so it
+      returns ``True`` too. Read the name as "not yet terminal", not "equals the
+      ``in_progress`` status".
+
+
+
+.. py:class:: SessionStatus
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Status of a Managed Agents session.
+
+
+   .. py:attribute:: RESCHEDULING
+      :value: 'rescheduling'
+
+
+
+   .. py:attribute:: RUNNING
+      :value: 'running'
+
+
+
+   .. py:attribute:: IDLE
+      :value: 'idle'
+
+
+
+   .. py:attribute:: TERMINATED
+      :value: 'terminated'
+
+
+
+   .. py:method:: is_terminal(status)
+      :classmethod:
+
+
+      Return ``True`` once the session has stopped working.
+
+      ``idle`` means the agent finished its turn (done, for an autonomous run);
+      ``terminated`` is an unrecoverable failure. Both stop the wait.
+
+
+
+.. py:data:: OUTCOME_FAILURE_RESULTS
+
+.. py:function:: evaluate_session_state(session, *, expect_outcome)
+
+   Judge a polled session from its object fields alone.
+
+   Returns ``(done, error_message, needs_event_check)``. ``done=False`` means keep
+   polling. ``needs_event_check=True`` means the session is ``idle`` on a ``message``
+   run and the object can't say *why* — the caller must inspect the event log (see
+   :meth:`AnthropicHook.poll_session_completion`).
+
+   The ``status`` field can't distinguish a genuine ``end_turn`` from ``requires_action``
+   or ``retries_exhausted``, nor a just-created ``idle``. For an outcome run the true
+   verdict is in ``outcome_evaluations`` (judged here, which also defeats the start race).
+
+
+.. py:data:: TRIGGER_EVENT_STATUSES
+
+.. py:function:: validate_execute_complete_event(event = None)
+
+   Validate the event a deferred task resumes with, returning it if well-formed.
+
+   The event crosses the triggerer/worker boundary through the metadata DB, so a
+   resuming task can receive ``None`` or a status its handlers do not recognize
+   (version skew, a custom trigger). Both must fail loudly: the ``execute_complete``
+   handlers raise on ``timeout``/``error`` and treat everything else as success, so
+   an unrecognized status would otherwise silently succeed.
+
+
+.. py:function:: evaluate_batch_counts(*, batch_id, canceled, errored, expired, succeeded, fail_on_partial_error)
+
+   Apply the success/skip/fail policy for a terminal batch's request counts.
+
+   Lives in the hook module so both :class:`AnthropicBatchOperator` and
+   :class:`~airflow.providers.anthropic.sensors.batch.AnthropicBatchSensor` share it
+   without an operator/sensor cross-import. Raises ``AirflowSkipException`` for a
+   fully-cancelled batch, ``AnthropicBatchJobError`` when ``fail_on_partial_error`` and any
+   request failed, otherwise returns (logging a warning for partial failures).
+
+
+.. py:class:: AnthropicHook(conn_id = default_conn_name, *args, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Use the Anthropic SDK to interact with the Claude API.
+
+   The connection's ``password`` is used as the API key and ``host`` as an optional
+   base URL (for gateways/proxies). The ``extra`` field selects the platform client
+   and passes platform-specific configuration:
+
+   - ``platform``: one of ``anthropic`` (default), ``bedrock``, ``vertex``, ``aws``, ``foundry``.
+   - ``model``: default model id used when an operator/hook call omits ``model`` (lets you
+     change the model without editing Dags); falls back to :data:`DEFAULT_MODEL`.
+   - ``aws_region``: region for the ``bedrock`` and ``aws`` platforms.
+   - ``project_id`` / ``region``: project and region for the ``vertex`` platform.
+   - ``resource``: Azure resource name for the ``foundry`` platform.
+   - ``anthropic_client_kwargs``: extra keyword arguments forwarded to the client
+     constructor (e.g. ``timeout``, ``max_retries``, ``default_headers``).
+   - ``workload_identity``: configure `Workload Identity Federation
+     <https://platform.claude.com/docs/en/manage-claude/workload-identity-federation>`__
+     (keyless OIDC auth) with ``identity_token_file``, ``federation_rule_id``,
+     ``organization_id``, ``service_account_id`` and optional ``workspace_id`` / ``scope``.
+
+   When the ``anthropic`` platform has no API Key and no ``workload_identity`` block, the
+   client is built with no static credential so the SDK resolves them from the environment
+   — supporting env-driven Workload Identity Federation and ``ant`` profiles.
+
+   .. seealso:: https://docs.claude.com/en/api/client-sdks
+
+   :param conn_id: :ref:`Anthropic connection id <howto/connection:anthropic>`.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'anthropic_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'anthropic'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Anthropic'
+
+
+
+   .. py:attribute:: conn_id
+      :value: 'anthropic_default'
+
+
+
+   .. py:property:: platform
+      :type: str
+
+
+      Return the configured platform (defaults to ``anthropic``).
+
+
+
+   .. py:property:: default_model
+      :type: str
+
+
+      Default model id — connection ``extra['model']`` if set, else :data:`DEFAULT_MODEL`.
+
+
+
+   .. py:property:: conn
+      :type: AnthropicClient
+
+
+      Return the Anthropic client for the configured platform.
+
+
+
+   .. py:method:: get_conn()
+
+      Build and return the Anthropic client for the configured platform.
+
+
+
+   .. py:method:: test_connection()
+
+      Test the Anthropic connection.
+
+
+
+   .. py:method:: create_message(messages, model = None, max_tokens = 1024, system = None, **kwargs)
+
+      Create a single message response (one-shot ``messages.create``).
+
+      :param messages: The conversation so far, as a list of message dicts.
+      :param model: Model ID to use. Defaults to :attr:`default_model` (the connection's
+          ``extra['model']`` or :data:`DEFAULT_MODEL`).
+      :param max_tokens: Maximum number of tokens to generate.
+      :param system: Optional system prompt.
+
+
+
+   .. py:method:: count_tokens(messages, model = None, system = None, **kwargs)
+
+      Return the number of input tokens the given request would consume.
+
+
+
+   .. py:method:: create_batch(requests)
+
+      Submit a Message Batch.
+
+      :param requests: A list of ``{"custom_id": str, "params": {...}}`` dicts, where
+          ``params`` is a ``messages.create`` payload (``model``, ``max_tokens``,
+          ``messages``, ...).
+
+
+
+   .. py:method:: get_batch(batch_id)
+
+      Retrieve a Message Batch by ID.
+
+
+
+   .. py:method:: cancel_batch(batch_id)
+
+      Request cancellation of a Message Batch.
+
+
+
+   .. py:method:: list_batches(**kwargs)
+
+      Return a (paginated) list of Message Batches.
+
+
+
+   .. py:method:: stream_batch_results(batch_id)
+
+      Return a streaming iterator of per-request results, keyed by ``custom_id``.
+
+      Results stream from the API and arrive in **arbitrary order** — key them by
+      ``result.custom_id``, never by position. Results are available for 29 days
+      after the batch is created. The result set can be very large: iterate and
+      persist to object storage; do not materialize it into XCom.
+
+
+
+   .. py:method:: wait_for_batch(batch_id, wait_seconds = 3, timeout = 24 * 60 * 60)
+
+      Poll a batch synchronously until it reaches the terminal ``ended`` status.
+
+      :param batch_id: The batch to wait for.
+      :param wait_seconds: Seconds to sleep between polls.
+      :param timeout: Maximum seconds to wait before raising :class:`AnthropicBatchTimeout`.
+      :return: The terminal :class:`~anthropic.types.messages.MessageBatch`.
+
+
+
+   .. py:method:: create_agent(name, model = None, **kwargs)
+
+      Create a (reusable, versioned) Managed Agents agent. One-time setup.
+
+      ``model`` defaults to :attr:`default_model` (the connection's ``extra['model']``
+      or :data:`DEFAULT_MODEL`).
+
+
+
+   .. py:method:: create_environment(name, config = None, **kwargs)
+
+      Create a (reusable) environment for agent sessions. One-time setup.
+
+
+
+   .. py:method:: create_session(agent, environment_id, **kwargs)
+
+      Start a session against a pre-created agent + environment.
+
+
+
+   .. py:method:: get_session(session_id)
+
+      Retrieve a session (carries its current ``status``).
+
+
+
+   .. py:method:: send_event(session_id, event)
+
+      Send a single event (e.g. a ``user.message`` or ``user.define_outcome``).
+
+
+
+   .. py:method:: archive_session(session_id)
+
+      Archive a session (frees the server-side container). Best-effort teardown.
+
+
+
+   .. py:method:: poll_session_completion(session_id, *, expect_outcome = False, kickoff_event_id = None)
+
+      Return ``(done, error_message)`` for one poll of a session.
+
+      Combines the session object (status / outcome verdict) with the event log
+      (``stop_reason`` of the latest idle) so a ``message`` run distinguishes genuine
+      ``end_turn`` completion from ``requires_action`` / ``retries_exhausted``.
+
+
+
+   .. py:method:: wait_for_session(session_id, expect_outcome = False, kickoff_event_id = None, poll_interval = 30, timeout = 24 * 60 * 60)
+
+      Poll a session synchronously until it completes.
+
+      :param session_id: The session to wait for.
+      :param expect_outcome: Whether the session is running a ``user.define_outcome`` loop
+          (completion judged from ``outcome_evaluations``).
+      :param kickoff_event_id: ID of the kickoff event, used to correlate the terminal
+          idle event on a ``message`` run (defeats the start race).
+      :param poll_interval: Seconds to sleep between polls.
+      :param timeout: Maximum seconds to wait before raising :class:`AnthropicAgentSessionTimeout`.
+
+
+
