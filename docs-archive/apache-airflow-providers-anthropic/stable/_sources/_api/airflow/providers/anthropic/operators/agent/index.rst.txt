@@ -1,0 +1,165 @@
+airflow.providers.anthropic.operators.agent
+===========================================
+
+.. py:module:: airflow.providers.anthropic.operators.agent
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.anthropic.operators.agent.AnthropicAgentSessionOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: AnthropicAgentSessionOperator(*, agent_id, environment_id, message = None, outcome = None, conn_id = AnthropicHook.default_conn_name, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), poll_interval = 30, timeout = 24 * 60 * 60, vault_ids = None, session_resources = None, session_kwargs = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Run a Managed Agents session against a pre-created agent and environment.
+
+   Anthropic runs the agent loop server-side; the worker creates a session, sends the
+   initial instruction, and waits for the session to reach a terminal status. In
+   deferrable mode it releases the worker slot while a trigger polls the session status.
+
+   Provide exactly one of ``message`` (a single user turn) or ``outcome`` (a
+   ``user.define_outcome`` rubric that the agent iterates against until satisfied).
+
+   .. important::
+       This operator is for **autonomous** agents — configure the agent without
+       client-side custom tools or an ``always_ask`` permission policy.
+
+       Completion is detected accurately for both modes. A ``message`` run reads the
+       terminal ``session.status_idle`` event's ``stop_reason`` (correlated against the
+       kickoff event to avoid a start-race false positive): ``end_turn`` succeeds, while
+       ``requires_action`` (the agent is blocked on input) and ``retries_exhausted``
+       raise an error rather than silently passing. An ``outcome`` run is judged from the
+       session's ``outcome_evaluations`` verdict (``satisfied`` vs.
+       ``failed``/``max_iterations_reached``/``interrupted``).
+
+       Agents and environments are created once (see
+       :meth:`~airflow.providers.anthropic.hooks.anthropic.AnthropicHook.create_agent`),
+       not per task run.
+
+   Outputs the agent writes to ``/mnt/session/outputs/`` are retrieved afterwards via the
+   Files API (``scope_id=<session_id>``); the operator returns the **session ID only**.
+
+   .. seealso::
+       For more information, take a look at the guide:
+       :ref:`howto/operator:AnthropicAgentSessionOperator`
+
+   :param agent_id: ID of a pre-created agent.
+   :param environment_id: ID of a pre-created environment.
+   :param message: A single user message to start the session. Mutually exclusive with ``outcome``.
+   :param outcome: A ``user.define_outcome`` payload (``description``, ``rubric``,
+       optional ``max_iterations``). Mutually exclusive with ``message``.
+   :param conn_id: The Anthropic connection ID to use.
+   :param deferrable: Run the operator in deferrable mode.
+   :param poll_interval: Seconds between session status checks (both paths).
+   :param timeout: Seconds to wait for a terminal status. Defaults to 24 hours. In
+       deferrable mode the trigger enforces this and tears the session down on timeout;
+       set ``execution_timeout`` only for a shorter hard cap (which preempts that
+       graceful teardown).
+   :param vault_ids: Vault IDs providing MCP/credential access to the session.
+   :param session_resources: Session resources (files, GitHub repos, memory stores). Named
+       ``session_resources`` to avoid colliding with the reserved ``BaseOperator.resources``;
+       forwarded to ``sessions.create`` as ``resources``.
+   :param session_kwargs: Extra keyword arguments forwarded to ``sessions.create``.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('agent_id', 'environment_id', 'message', 'outcome')
+
+
+
+   .. py:attribute:: agent_id
+
+
+   .. py:attribute:: environment_id
+
+
+   .. py:attribute:: message
+      :value: None
+
+
+
+   .. py:attribute:: outcome
+      :value: None
+
+
+
+   .. py:attribute:: conn_id
+      :value: 'anthropic_default'
+
+
+
+   .. py:attribute:: deferrable
+
+
+   .. py:attribute:: poll_interval
+      :value: 30
+
+
+
+   .. py:attribute:: timeout
+      :value: 86400
+
+
+
+   .. py:attribute:: vault_ids
+      :value: None
+
+
+
+   .. py:attribute:: session_resources
+      :value: None
+
+
+
+   .. py:attribute:: session_kwargs
+
+
+   .. py:attribute:: session_id
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:property:: hook
+      :type: airflow.providers.anthropic.hooks.anthropic.AnthropicHook
+
+
+      Return an instance of the AnthropicHook.
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: execute_complete(context, event = None)
+
+
+   .. py:method:: on_kill()
+
+      Archive the session if the (non-deferred) task is killed.
+
+      Only fires while the worker process is alive, i.e. the synchronous path
+      (``deferrable=False``). On Airflow 3.3+ a killed deferred task is archived by the
+      trigger's ``on_kill``. On older Airflow the session of a killed deferred task is not
+      archived automatically; archive it manually via the hook.
+
+
+

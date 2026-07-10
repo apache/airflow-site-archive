@@ -1,0 +1,174 @@
+airflow.providers.common.ai.utils.sql_validation
+================================================
+
+.. py:module:: airflow.providers.common.ai.utils.sql_validation
+
+.. autoapi-nested-parse::
+
+   SQL safety validation for LLM-generated queries.
+
+   Uses an allowlist approach: only explicitly permitted statement types pass.
+   This is safer than a denylist because new/unexpected statement types
+   (INSERT, UPDATE, MERGE, TRUNCATE, COPY, etc.) are blocked by default.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.DEFAULT_ALLOWED_TYPES
+   airflow.providers.common.ai.utils.sql_validation.READ_ONLY_METADATA_TYPES
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.SQLSafetyError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.TableScan
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_validation.resolve_sqlglot_dialect
+   airflow.providers.common.ai.utils.sql_validation.parse_sql
+   airflow.providers.common.ai.utils.sql_validation.collect_table_references
+   airflow.providers.common.ai.utils.sql_validation.validate_sql
+
+
+Module Contents
+---------------
+
+.. py:function:: resolve_sqlglot_dialect(dialect_name)
+
+   Normalize a SQLAlchemy dialect name to a sqlglot dialect.
+
+   Returns ``None`` (dialect-agnostic parsing) for empty, non-string, or
+   unknown inputs, so a bad dialect value never breaks SQL validation.
+
+   :param dialect_name: A SQLAlchemy ``dialect_name`` (e.g. ``"postgresql"``).
+   :return: The matching sqlglot dialect (e.g. ``"postgres"``), or ``None``.
+
+
+.. py:data:: DEFAULT_ALLOWED_TYPES
+   :type:  tuple[type[sqlglot.exp.Expr], Ellipsis]
+
+.. py:data:: READ_ONLY_METADATA_TYPES
+   :type:  tuple[type[sqlglot.exp.Expr], Ellipsis]
+
+.. py:exception:: SQLSafetyError
+
+   Bases: :py:obj:`Exception`
+
+
+   Generated SQL failed safety validation.
+
+
+.. py:function:: parse_sql(sql, *, dialect = None, allow_multiple_statements = False)
+
+   Parse SQL into statements, enforcing the empty- and multi-statement guards only.
+
+   Shared by :func:`validate_sql` (which then applies statement-type checks) and by
+   callers that need the parsed AST for their own analysis -- e.g. table-reference
+   extraction for ``allowed_tables`` enforcement -- without the read-only allow-list.
+
+   :param sql: SQL string to parse.
+   :param dialect: SQL dialect for parsing (``postgres``, ``mysql``, etc.).
+   :param allow_multiple_statements: Whether to allow multiple semicolon-separated
+       statements. Default ``False`` -- multi-statement input can hide a dangerous
+       operation after a benign one.
+   :return: List of parsed sqlglot Expression objects (never empty).
+   :raises SQLSafetyError: If the SQL is empty, cannot be parsed, or contains multiple
+       statements when not permitted.
+
+
+.. py:class:: TableScan
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   Result of :func:`collect_table_references`.
+
+
+   .. py:attribute:: tables
+      :type:  list[tuple[str, str, str]]
+
+
+   .. py:attribute:: unverifiable_sources
+      :type:  list[str]
+
+
+.. py:function:: collect_table_references(statements)
+
+   Walk parsed statements and report every real table they reach, scope-correctly.
+
+   This is the AST half of ``allowed_tables`` enforcement: it returns the concrete
+   base tables a query reaches (including those nested in subqueries, CTEs, JOINs, set
+   operations, ``DESCRIBE``, and DML) as ``(catalog, schema, table)`` so the caller can
+   check each against its allow-list, plus a list of constructs that cannot be checked
+   and must therefore be rejected while an allow-list is active.
+
+   Handled carefully (each was a confirmed bypass before it was closed):
+
+   - **CTE references are excluded by lexical scope, not by name.** A table is treated
+     as a CTE only when a ``WITH`` *enclosing that reference* defines the name (see
+     :func:`_is_in_scope_cte`); a same-named CTE in a sibling/inner query no longer
+     hides a real top-level table. A DML *target* is always a real table (you cannot
+     write to a CTE, so a same-named CTE does not shadow it), but DML *sources* follow
+     normal CTE scoping -- a CTE used as an INSERT/UPDATE source is not flagged.
+   - **Catalog-qualified references are reported with their catalog**, so the caller
+     rejects ``otherdb.public.orders`` instead of matching it to ``public.orders``.
+   - **Unverifiable constructs are listed, not silently dropped:** nameless
+     table-valued functions (``dblink``), ``TABLE('name')`` row sources
+     (``exp.TableFromRows``), ``SHOW``, dynamic SQL (``EXEC``/``Command``), the
+     ``TABLE <name>`` shorthand (which sqlglot parses incorrectly, leaking the
+     ``TABLE`` keyword as a column), a **quoted identifier** (case-sensitive on the engine but
+     matched case-insensitively here, so ``"Orders"`` could otherwise reach a table
+     distinct from the allow-listed ``orders``), and **any inline comment** --
+     comments are where parser-vs-engine differentials hide (MySQL executable
+     ``/*! ... */``, ``--`` not followed by whitespace, ``#``).
+
+   :param statements: Parsed sqlglot statements (from :func:`parse_sql`).
+   :return: A :class:`TableScan` of real table references and unverifiable constructs.
+
+
+.. py:function:: validate_sql(sql, *, allowed_types = None, dialect = None, allow_multiple_statements = False, allow_read_only_metadata = False)
+
+   Parse SQL and verify all statements are in the allowed types list.
+
+   By default, only a single SELECT-family statement is allowed. Multi-statement
+   SQL (separated by semicolons) is rejected unless ``allow_multiple_statements=True``,
+   because multi-statement inputs can hide dangerous operations after a benign SELECT.
+
+   Returns parsed statements on success, raises :class:`SQLSafetyError` on violation.
+
+   :param sql: SQL string to validate.
+   :param allowed_types: Tuple of sqlglot expression types to permit.
+       Defaults to ``(Select, Union, Intersect, Except)``. When supplied, the
+       caller takes full control of the allow-list and ``allow_read_only_metadata``
+       is ignored.
+   :param dialect: SQL dialect for parsing (``postgres``, ``mysql``, etc.).
+   :param allow_multiple_statements: Whether to allow multiple semicolon-separated
+       statements. Default ``False``.
+   :param allow_read_only_metadata: Also permit read-only metadata statements
+       (``DESCRIBE``/``SHOW``) on top of the default read-only allow-list. Ignored
+       when ``allowed_types`` is supplied. Note ``SHOW`` only parses to a metadata
+       statement when a ``dialect`` that supports it is given. Default ``False``.
+   :return: List of parsed sqlglot Expression objects.
+   :raises SQLSafetyError: If the SQL is empty, contains disallowed statement types,
+       or has multiple statements when not permitted.
+
+
