@@ -845,6 +845,42 @@ the connection metadata is structured as follows:</p>
 in the Airflow connection metadata (such as <code class="docutils literal notranslate"><span class="pre">schema</span></code>, <code class="docutils literal notranslate"><span class="pre">role</span></code>, <code class="docutils literal notranslate"><span class="pre">database</span></code> and so forth).</p>
 </div>
 </section>
+<section id="durable-execution">
+<h2>Durable execution<a class="headerlink" href="#durable-execution" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">SnowflakeSqlApiOperator</span></code> submits one or more SQL statements and then polls their statement
+handles to completion on the worker. By default the operator runs in a <em>durable</em> mode that makes
+this crash-safe: the statement handles are persisted to <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/task-state-store.html" title="(in apache-airflow v3.4.0)"><span class="xref std std-doc">task state store</span></a> before polling begins, so if the worker crashes
+or is preempted and the task is retried, the operator reconnects to the statements that are
+already executing in Snowflake instead of resubmitting the SQL.</p>
+<p>On retry the operator checks the prior statements’ state:</p>
+<ul class="simple">
+<li><p>if any handle is still running, the operator reconnects and continues polling – handles that
+already finished are not re-run, only the ones still in progress are waited on</p></li>
+<li><p>if every handle already succeeded, the operator returns immediately without resubmitting</p></li>
+<li><p>if any handle failed, or a handle has expired past Snowflake’s retention window, the operator
+submits the SQL fresh</p></li>
+</ul>
+<p>Because Snowflake’s SQL API has no way to retry or repair a single failed statement within a
+multi-statement request, a genuine failure always resubmits the whole request batch, matching the
+operator’s all-or-nothing submission semantics.</p>
+<p>Durable execution requires Airflow 3.3 or newer, since it relies on the task state store. On
+earlier Airflow versions the flag is a no-op and the operator always submits fresh SQL on retry,
+exactly as before. If the task state store is unavailable at runtime, the operator logs that crash
+recovery is disabled and behaves the same way.</p>
+<p>To opt out and always submit fresh SQL on retry, set <code class="docutils literal notranslate"><span class="pre">durable=False</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">api_operator</span> <span class="o">=</span> <span class="n">SnowflakeSqlApiOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;snowflake_sql_api&quot;</span><span class="p">,</span>
+    <span class="n">snowflake_conn_id</span><span class="o">=</span><span class="s2">&quot;snowflake_default&quot;</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="s2">&quot;select * from table&quot;</span><span class="p">,</span>
+    <span class="n">statement_count</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">durable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Durable execution applies to the synchronous path. When <code class="docutils literal notranslate"><span class="pre">deferrable=True</span></code> is set, the Triggerer
+already tracks the statement handles across the wait, so deferrable mode takes precedence and
+<code class="docutils literal notranslate"><span class="pre">durable</span></code> has no effect.</p>
+</section>
 </section>
 
 
@@ -931,6 +967,7 @@ in the Airflow connection metadata (such as <code class="docutils literal notran
 </li>
 <li><a class="reference internal" href="#snowflakesqlapioperator">SnowflakeSqlApiOperator</a><ul>
 <li><a class="reference internal" href="#id1">Using the Operator</a></li>
+<li><a class="reference internal" href="#durable-execution">Durable execution</a></li>
 </ul>
 </li>
 </ul>

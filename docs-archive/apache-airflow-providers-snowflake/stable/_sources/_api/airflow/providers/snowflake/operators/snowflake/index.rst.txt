@@ -9,6 +9,7 @@ Classes
 
 .. autoapisummary::
 
+   airflow.providers.snowflake.operators.snowflake.ResumableJobMixin
    airflow.providers.snowflake.operators.snowflake.SnowflakeCheckOperator
    airflow.providers.snowflake.operators.snowflake.SnowflakeValueCheckOperator
    airflow.providers.snowflake.operators.snowflake.SnowflakeIntervalCheckOperator
@@ -17,6 +18,25 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:class:: ResumableJobMixin(*, durable = True, **kwargs)
+
+   Airflow <3.3 stub, task_state_store unavailable, always submits fresh.
+
+
+   .. py:attribute:: external_id_key
+      :type:  str
+      :value: 'snowflake_query_ids'
+
+
+
+   .. py:attribute:: durable
+      :value: True
+
+
+
+   .. py:method:: execute_resumable(context)
+
 
 .. py:class:: SnowflakeCheckOperator(*, sql, snowflake_conn_id = 'snowflake_default', parameters = None, warehouse = None, database = None, role = None, schema = None, authenticator = None, session_parameters = None, **kwargs)
 
@@ -225,7 +245,7 @@ Module Contents
 
 .. py:class:: SnowflakeSqlApiOperator(*, snowflake_conn_id = 'snowflake_default', warehouse = None, database = None, role = None, schema = None, authenticator = None, session_parameters = None, poll_interval = 5, statement_count = 0, token_life_time = LIFETIME, token_renewal_delta = RENEWAL_DELTA, bindings = None, timeout = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), snowflake_api_retry_args = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator`
+   Bases: :py:obj:`airflow.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator`
 
 
    Implemented Snowflake SQL API Operator to support multiple SQL statements sequentially.
@@ -299,12 +319,21 @@ Module Contents
            To set the timeout to the maximum value (604800 seconds), set timeout to 0.
    :param deferrable: Run operator in the deferrable mode.
    :param snowflake_api_retry_args: An optional dictionary with arguments passed to ``tenacity.Retrying`` & ``tenacity.AsyncRetrying`` classes.
+   :param durable: When ``True`` (the default), the submitted statement handles are persisted to
+       task state before polling begins. A worker crash on retry reconnects to the existing
+       statements instead of resubmitting the SQL. Set to ``False`` to always submit fresh on
+       retry. Requires Airflow 3.3+; ignored silently on earlier versions.
 
 
    .. py:attribute:: LIFETIME
 
 
    .. py:attribute:: RENEWAL_DELTA
+
+
+   .. py:attribute:: external_id_key
+      :value: 'snowflake_query_ids'
+
 
 
    .. py:attribute:: template_fields
@@ -375,6 +404,48 @@ Module Contents
    .. py:method:: poll_on_queries()
 
       Poll on requested queries.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the SQL for execution and return the resulting statement handles.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Aggregate the status of every handle into a single verdict for the mixin.
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
 
 
 

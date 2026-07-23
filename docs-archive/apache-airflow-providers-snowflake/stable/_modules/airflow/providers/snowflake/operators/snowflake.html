@@ -681,6 +681,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">SupportsAbs</span><span class="p">,</span> <span class="n">cast</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.operators.sql</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">SQLCheckOperator</span><span class="p">,</span>
@@ -691,7 +693,40 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.snowflake.hooks.snowflake_sql_api</span><span class="w"> </span><span class="kn">import</span> <span class="n">SnowflakeSqlApiHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.snowflake.triggers.snowflake_trigger</span><span class="w"> </span><span class="kn">import</span> <span class="n">SnowflakeSqlApiTrigger</span>
 
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResumableJobMixin</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+
+<div class="viewcode-block" id="ResumableJobMixin">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.ResumableJobMixin">[docs]</a>
+    <span class="k">class</span><span class="w"> </span><span class="nc">ResumableJobMixin</span><span class="p">:</span>  <span class="c1"># type: ignore[no-redef]</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Airflow &lt;3.3 stub, task_state_store unavailable, always submits fresh.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ResumableJobMixin.external_id_key">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.ResumableJobMixin.external_id_key">[docs]</a>
+        <span class="n">external_id_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;snowflake_query_ids&quot;</span></div>
+
+
+        <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">durable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<div class="viewcode-block" id="ResumableJobMixin.durable">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.ResumableJobMixin.durable">[docs]</a>
+            <span class="bp">self</span><span class="o">.</span><span class="n">durable</span> <span class="o">=</span> <span class="n">durable</span></div>
+
+
+<div class="viewcode-block" id="ResumableJobMixin.execute_resumable">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.ResumableJobMixin.execute_resumable">[docs]</a>
+        <span class="k">def</span><span class="w"> </span><span class="nf">execute_resumable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+            <span class="n">external_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit_job</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">poll_until_complete</span><span class="p">(</span><span class="n">external_id</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_job_result</span><span class="p">(</span><span class="n">external_id</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span></div>
+</div>
+
+
+
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">JsonValue</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
@@ -995,7 +1030,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="SnowflakeSqlApiOperator">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">SnowflakeSqlApiOperator</span><span class="p">(</span><span class="n">SQLExecuteQueryOperator</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SnowflakeSqlApiOperator</span><span class="p">(</span><span class="n">ResumableJobMixin</span><span class="p">,</span> <span class="n">SQLExecuteQueryOperator</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Implemented Snowflake SQL API Operator to support multiple SQL statements sequentially.</span>
 
@@ -1068,6 +1103,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">            To set the timeout to the maximum value (604800 seconds), set timeout to 0.</span>
 <span class="sd">    :param deferrable: Run operator in the deferrable mode.</span>
 <span class="sd">    :param snowflake_api_retry_args: An optional dictionary with arguments passed to ``tenacity.Retrying`` &amp; ``tenacity.AsyncRetrying`` classes.</span>
+<span class="sd">    :param durable: When ``True`` (the default), the submitted statement handles are persisted to</span>
+<span class="sd">        task state before polling begins. A worker crash on retry reconnects to the existing</span>
+<span class="sd">        statements instead of resubmitting the SQL. Set to ``False`` to always submit fresh on</span>
+<span class="sd">        retry. Requires Airflow 3.3+; ignored silently on earlier versions.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="SnowflakeSqlApiOperator.LIFETIME">
@@ -1077,6 +1116,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="SnowflakeSqlApiOperator.RENEWAL_DELTA">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.RENEWAL_DELTA">[docs]</a>
     <span class="n">RENEWAL_DELTA</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">54</span><span class="p">)</span>  <span class="c1"># Tokens will be renewed after 54 minutes</span></div>
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.external_id_key">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.external_id_key">[docs]</a>
+    <span class="n">external_id_key</span> <span class="o">=</span> <span class="s2">&quot;snowflake_query_ids&quot;</span></div>
 
 
 <div class="viewcode-block" id="SnowflakeSqlApiOperator.template_fields">
@@ -1186,6 +1229,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="sd">        By deferring the SnowflakeSqlApiTrigger class passed along with query ids.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_resumable</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span> <span class="n">statement_count</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">statement_count</span><span class="p">,</span> <span class="n">bindings</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bindings</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span>
@@ -1210,27 +1256,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> completed successfully.&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="p">)</span>
             <span class="k">return</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
-                <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execution_timeout</span><span class="p">,</span>
-                <span class="n">trigger</span><span class="o">=</span><span class="n">SnowflakeSqlApiTrigger</span><span class="p">(</span>
-                    <span class="n">poll_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">,</span>
-                    <span class="n">query_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">,</span>
-                    <span class="n">snowflake_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">snowflake_conn_id</span><span class="p">,</span>
-                    <span class="n">token_life_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">token_life_time</span><span class="p">,</span>
-                    <span class="n">token_renewal_delta</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">token_renewal_delta</span><span class="p">,</span>
-                <span class="p">),</span>
-                <span class="n">method_name</span><span class="o">=</span><span class="s2">&quot;execute_complete&quot;</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-                <span class="n">statement_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll_on_queries</span><span class="p">()</span>
-                <span class="k">if</span> <span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;error&quot;</span><span class="p">]:</span>
-                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;error&quot;</span><span class="p">]))</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;running&quot;</span><span class="p">]:</span>
-                    <span class="k">break</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">check_query_output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execution_timeout</span><span class="p">,</span>
+            <span class="n">trigger</span><span class="o">=</span><span class="n">SnowflakeSqlApiTrigger</span><span class="p">(</span>
+                <span class="n">poll_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">,</span>
+                <span class="n">query_ids</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">,</span>
+                <span class="n">snowflake_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">snowflake_conn_id</span><span class="p">,</span>
+                <span class="n">token_life_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">token_life_time</span><span class="p">,</span>
+                <span class="n">token_renewal_delta</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">token_renewal_delta</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">method_name</span><span class="o">=</span><span class="s2">&quot;execute_complete&quot;</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SnowflakeSqlApiOperator.poll_on_queries">
@@ -1267,6 +1303,91 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">statement_error_status</span><span class="p">,</span>
             <span class="s2">&quot;running&quot;</span><span class="p">:</span> <span class="n">statement_running_status</span><span class="p">,</span>
         <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.submit_job">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.submit_job">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">submit_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JsonValue</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Submit the SQL for execution and return the resulting statement handles.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span> <span class="n">statement_count</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">statement_count</span><span class="p">,</span> <span class="n">bindings</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bindings</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;List of query ids </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;JsonValue&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.get_job_status">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.get_job_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Aggregate the status of every handle into a single verdict for the mixin.&quot;&quot;&quot;</span>
+        <span class="n">statuses</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">query_id</span> <span class="ow">in</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;list[str]&quot;</span><span class="p">,</span> <span class="n">external_id</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">statuses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">get_sql_api_query_status</span><span class="p">(</span><span class="n">query_id</span><span class="p">)[</span><span class="s2">&quot;status&quot;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">HTTPError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">404</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="s2">&quot;not_found&quot;</span>
+                <span class="k">raise</span>
+        <span class="k">if</span> <span class="s2">&quot;error&quot;</span> <span class="ow">in</span> <span class="n">statuses</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;error&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;running&quot;</span> <span class="ow">in</span> <span class="n">statuses</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;running&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;success&quot;</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.is_job_active">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.is_job_active">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_job_active</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;running&quot;</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.is_job_succeeded">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.is_job_succeeded">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_job_succeeded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;success&quot;</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.poll_until_complete">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.poll_until_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">poll_until_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;list[str]&quot;</span><span class="p">,</span> <span class="n">external_id</span><span class="p">)</span>
+        <span class="c1"># On reconnect, execute_query (the only thing that normally populates this) never ran</span>
+        <span class="c1"># on this hook instance -- sync it so OpenLineage&#39;s get_openlineage_database_specific_lineage,</span>
+        <span class="c1"># which reads hook.query_ids (not the operator&#39;s), doesn&#39;t silently produce no lineage.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span>
+        <span class="c1"># Push before polling, not after, so the handles are recorded even if a statement</span>
+        <span class="c1"># errors below.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span> <span class="ow">and</span> <span class="n">context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;ti&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;query_ids&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">statement_status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll_on_queries</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;error&quot;</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;error&quot;</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">statement_status</span><span class="p">[</span><span class="s2">&quot;running&quot;</span><span class="p">]:</span>
+                <span class="k">break</span>
+        <span class="c1"># On reconnect, the mixin calls poll_until_complete alone -- get_job_result is never</span>
+        <span class="c1"># invoked in that case -- so the output must be fetched here too, not left to</span>
+        <span class="c1"># get_job_result. Fresh submit calls both; the flag stops get_job_result from</span>
+        <span class="c1"># fetching (and pushing xcoms) a second time.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">check_query_output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_poll_until_complete_ran</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="SnowflakeSqlApiOperator.get_job_result">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/snowflake/operators/snowflake/index.html#airflow.providers.snowflake.operators.snowflake.SnowflakeSqlApiOperator.get_job_result">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_job_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">&quot;list[str]&quot;</span><span class="p">,</span> <span class="n">external_id</span><span class="p">)</span>
+        <span class="c1"># Same reconnect-hook gap as poll_until_complete -- see the comment there. This path</span>
+        <span class="c1"># hits it too, since the already-succeeded case never calls poll_until_complete either.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">query_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_poll_until_complete_ran&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">return</span>
+        <span class="c1"># The already-succeeded retry path skips submit_job and poll_until_complete entirely,</span>
+        <span class="c1"># so push the query_ids xcom and fetch output here for parity with the normal path.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span> <span class="ow">and</span> <span class="n">context</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;ti&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;query_ids&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="o">.</span><span class="n">check_query_output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">query_ids</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SnowflakeSqlApiOperator.execute_complete">
@@ -1789,6 +1910,25 @@ let darkTheme = isDarkTheme();
 let modal = null;
 let modalContent = null;
 let previousScrollOffset = [window.scrollX, window.scrollY];
+let _lazyObserver = null;
+let _renderQueue = Promise.resolve();
+
+// Apply d3 zoom to each SVG. Idempotent: an SVG already wrapped is skipped,
+// so this is safe to call both for the initial batch and for diagrams that
+// render lazily once they become visible.
+const addZoomToSvgs = (svgs) => {
+    svgs.each(function() {
+        if (this.getAttribute('data-zoom-applied') === 'true') return;
+        var svg = d3.select(this);
+        svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+        var inner = svg.select("g");
+        var zoom = d3.zoom().on("zoom", function(event) {
+            inner.attr("transform", event.transform);
+        });
+        svg.call(zoom);
+        this.setAttribute('data-zoom-applied', 'true');
+    });
+};
 
 const runMermaid = async (rerun) => {
     console.log("Running mermaid diagrams, rerun =", rerun);
@@ -1796,7 +1936,15 @@ const runMermaid = async (rerun) => {
     let all_mermaids = document.querySelectorAll(".mermaid");
 
     if (rerun) {
+        // Disconnect any previous lazy rendering observer
+        if (_lazyObserver) {
+            _lazyObserver.disconnect();
+            _lazyObserver = null;
+        }
+
         all_mermaids.forEach((el) => {
+            el.removeAttribute('data-mermaid-deferred');
+            el.removeAttribute('data-mermaid-render-failed');
             if(!el.hasAttribute("data-original-code")) {
                 // store original code
                 // console.log(`Storing original code for first run: `, el.innerHTML);
@@ -1813,35 +1961,89 @@ const runMermaid = async (rerun) => {
                 el.setAttribute('data-original-code', el.innerHTML);
             }
         });
-        await mermaid.run();
+
+        // Separate visible and hidden elements. Mermaid's layout engine measures
+        // text dimensions via the DOM, which fails for elements hidden by a parent
+        // (e.g., Reveal.js non-active slides, sphinx-design unopened tabs),
+        // producing broken SVGs. Render visible elements now, defer hidden ones.
+        const visible = [];
+        const hidden = [];
+        all_mermaids.forEach((el) => {
+            // offsetParent is null for display:none ancestors.
+            // getClientRects().length > 0 catches position:fixed elements
+            // (which also have null offsetParent but are still visible).
+            if (el.offsetParent !== null || el.getClientRects().length > 0) {
+                visible.push(el);
+            } else {
+                hidden.push(el);
+                el.setAttribute('data-mermaid-deferred', 'true');
+            }
+        });
+
+        if (visible.length > 0) {
+            try {
+                await mermaid.run({ nodes: visible });
+            } catch (e) {
+                console.error("Mermaid rendering failed:", e);
+            }
+        }
+
+        // Lazily render hidden elements when they become visible.
+        // Uses a promise chain (_renderQueue) to serialize rendering,
+        // since IntersectionObserver may report multiple entries at once
+        // and mermaid.run() is not safe to call concurrently.
+        if (hidden.length > 0) {
+            if (typeof IntersectionObserver === 'undefined') {
+                console.warn("IntersectionObserver not available; hidden mermaid diagrams will not render.");
+            } else {
+                _renderQueue = Promise.resolve();
+                _lazyObserver = new IntersectionObserver((entries) => {
+                    for (const entry of entries) {
+                        if (entry.isIntersecting && entry.target.getAttribute("data-processed") !== "true") {
+                            _lazyObserver.unobserve(entry.target);
+                            const el = entry.target;
+                            _renderQueue = _renderQueue.then(async () => {
+                                try {
+                                    await mermaid.run({ nodes: [el] });
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    // Apply zoom to the now-rendered diagram, matching
+                                    // the decoration visible diagrams receive.
+                                    if ("False" === "True") {
+                                        addZoomToSvgs(d3.selectAll(""));
+                                    }
+                                } catch (e) {
+                                    console.error("Mermaid deferred rendering failed:", e);
+                                    el.removeAttribute('data-mermaid-deferred');
+                                    el.setAttribute('data-mermaid-render-failed', 'true');
+                                }
+                            });
+                        }
+                    }
+                });
+                hidden.forEach((el) => _lazyObserver.observe(el));
+            }
+        }
     }
 
     all_mermaids = document.querySelectorAll(".mermaid");
-    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+    // Exclude deferred (hidden) and render-failed elements from completion checks
+    const mermaids_active = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])");
+    const mermaids_processed = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])[data-processed='true']");
 
     if ("False" === "True") {
-        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        const mermaids_to_add_zoom = -1 === -1 ? mermaids_active.length : -1;
         if(mermaids_to_add_zoom > 0) {
             var svgs = d3.selectAll("");
-            if(all_mermaids.length !== mermaids_processed.length) {
+            // Wait until every active (visible) diagram has rendered. Deferred
+            // diagrams are excluded, so a fixed d3_node_count that counts a
+            // hidden diagram no longer loops forever waiting for its SVG.
+            if(mermaids_active.length !== mermaids_processed.length) {
                 setTimeout(() => runMermaid(false), 200);
                 return;
-            } else if(svgs.size() !== mermaids_to_add_zoom) {
-                setTimeout(() => runMermaid(false), 200);
-                return;
-            } else {
-                svgs.each(function() {
-                    var svg = d3.select(this);
-                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
-                    var inner = svg.select("g");
-                    var zoom = d3.zoom().on("zoom", function(event) {
-                        inner.attr("transform", event.transform);
-                    });
-                    svg.call(zoom);
-                });
             }
+            addZoomToSvgs(svgs);
         }
-    } else if(all_mermaids.length !== mermaids_processed.length) {
+    } else if(mermaids_active.length !== mermaids_processed.length) {
         // Wait for mermaid to process all diagrams
         setTimeout(() => runMermaid(false), 200);
         return;
