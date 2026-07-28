@@ -1,0 +1,293 @@
+airflow.providers.apache.spark.operators.spark_submit
+=====================================================
+
+.. py:module:: airflow.providers.apache.spark.operators.spark_submit
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.apache.spark.operators.spark_submit.kube_client
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.apache.spark.operators.spark_submit.ResumableJobMixin
+   airflow.providers.apache.spark.operators.spark_submit.SparkSubmitOperator
+
+
+Module Contents
+---------------
+
+.. py:data:: kube_client
+   :value: None
+
+
+.. py:class:: ResumableJobMixin(*, durable = True, **kwargs)
+
+   Airflow 2 stub — no task_state_store, always submits fresh.
+
+
+   .. py:attribute:: external_id_key
+      :type:  str
+      :value: 'remote_job_id'
+
+
+
+   .. py:attribute:: durable
+      :value: True
+
+
+
+   .. py:method:: execute_resumable(context)
+
+
+.. py:class:: SparkSubmitOperator(*, application = '', conf = None, conn_id = 'spark_default', files = None, py_files = None, archives = None, driver_class_path = None, jars = None, java_class = None, packages = None, exclude_packages = None, repositories = None, total_executor_cores = None, executor_cores = None, executor_memory = None, driver_memory = None, keytab = None, principal = None, proxy_user = None, name = 'arrow-spark', num_executors = None, status_poll_interval = 1, application_args = None, env_vars = None, verbose = False, spark_binary = None, properties_file = None, yarn_queue = None, deploy_mode = None, use_krb5ccache = False, post_submit_commands = None, track_driver_via_k8s_api = False, yarn_track_via_rm_api = False, yarn_rm_auth = None, openlineage_inject_parent_job_info = conf.getboolean('openlineage', 'spark_inject_parent_job_info', fallback=False), openlineage_inject_transport_info = conf.getboolean('openlineage', 'spark_inject_transport_info', fallback=False), reconnect_on_retry = None, **kwargs)
+
+   Bases: :py:obj:`airflow.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Wrap the spark-submit binary to kick off a spark-submit job; requires "spark-submit" binary in the PATH.
+
+   .. seealso::
+       For more information on how to use this operator, take a look at the guide:
+       :ref:`howto/operator:SparkSubmitOperator`
+
+   :param application: The application that submitted as a job, either jar or py file. (templated)
+   :param conf: Arbitrary Spark configuration properties (templated)
+   :param conn_id: The :ref:`spark connection id <howto/connection:spark>` as configured
+       in Airflow administration. When an invalid connection_id is supplied, it will default to yarn.
+   :param files: Upload additional files to the executor running the job, separated by a
+                 comma. Files will be placed in the working directory of each executor.
+                 For example, serialized objects. (templated)
+   :param py_files: Additional python files used by the job, can be .zip, .egg or .py. (templated)
+   :param jars: Submit additional jars to upload and place them in driver and executor classpaths. (templated)
+   :param driver_class_path: Additional, driver-specific, classpath settings. (templated)
+   :param java_class: the main class of the Java application
+   :param packages: Comma-separated list of maven coordinates of jars to include on the
+                    driver and executor classpaths. (templated)
+   :param exclude_packages: Comma-separated list of maven coordinates of jars to exclude
+                            while resolving the dependencies provided in 'packages' (templated)
+   :param repositories: Comma-separated list of additional remote repositories to search
+                        for the maven coordinates given with 'packages'
+   :param total_executor_cores: (Standalone & Mesos only) Total cores for all executors
+                                (Default: all the available cores on the worker)
+   :param executor_cores: (Standalone & YARN only) Number of cores per executor (Default: 2)
+   :param executor_memory: Memory per executor (e.g. 1000M, 2G) (Default: 1G)
+   :param driver_memory: Memory allocated to the driver (e.g. 1000M, 2G) (Default: 1G)
+   :param keytab: Full path to the file that contains the keytab (templated)
+                       (will overwrite any keytab defined in the connection's extra JSON)
+   :param principal: The name of the kerberos principal used for keytab (templated)
+                       (will overwrite any principal defined in the connection's extra JSON)
+   :param proxy_user: User to impersonate when submitting the application (templated)
+   :param name: Name of the job (default airflow-spark). (templated)
+   :param num_executors: Number of executors to launch
+   :param status_poll_interval: Seconds to wait between polls of driver status in cluster
+       mode. Used both by the Spark standalone driver-status tracker and (when
+       ``yarn_track_via_rm_api=True``) by the YARN ResourceManager REST API
+       polling loop. The YARN ResourceManager REST API polling loop uses at
+       least 10 seconds to avoid flooding the ResourceManager on long-running
+       jobs (Default: 1).
+   :param application_args: Arguments for the application being submitted (templated)
+   :param env_vars: Environment variables for spark-submit. It supports yarn and k8s mode too. (templated)
+   :param verbose: Whether to pass the verbose flag to spark-submit process for debugging
+   :param spark_binary: The command to use for spark submit.
+                        Some distros may use spark2-submit or spark3-submit.
+                        (will overwrite any spark_binary defined in the connection's extra JSON)
+   :param properties_file: Path to a file from which to load extra properties. If not
+                             specified, this will look for conf/spark-defaults.conf.
+   :param yarn_queue: The name of the YARN queue to which the application is submitted.
+                       (will overwrite any yarn queue defined in the connection's extra JSON)
+   :param deploy_mode: Whether to deploy your driver on the worker nodes (cluster) or locally as a client.
+                       (will overwrite any deployment mode defined in the connection's extra JSON)
+   :param use_krb5ccache: if True, configure spark to use ticket cache instead of relying
+                          on keytab for Kerberos login
+   :param post_submit_commands: Optional list of shell commands to run after the Spark job finishes.
+       Useful for cleaning up sidecars such as Istio. Failures produce a warning but do not fail the task.
+   :param track_driver_via_k8s_api: If True (when master is Kubernetes and ``deploy_mode``
+       is ``cluster``), release the ``spark-submit`` JVM once the driver pod has been
+       created, then poll the Kubernetes API for the pod phase until the application
+       reaches a terminal state. The polling interval is controlled by
+       ``status_poll_interval`` with a 20-second minimum. This frees the worker from
+       holding the long-lived submit JVM. Defaults to ``False``.
+   :param yarn_track_via_rm_api: If True (when master is YARN and ``deploy_mode``
+       is ``cluster``), release the ``spark-submit`` JVM once the application has
+       been submitted to YARN, then poll the YARN ResourceManager REST API
+       (``GET /ws/v1/cluster/apps/{appId}``) until the application reaches a
+       final state. The polling interval is controlled by ``status_poll_interval``
+       with a 10-second minimum. This frees the worker from holding the
+       long-lived submit JVM. Requires the Spark connection's ``extra``
+       JSON to set ``yarn_resourcemanager_webapp_address`` (e.g. ``http://rm:8088``).
+       Cluster-side driver logs should be used after the switch to polling.
+       Defaults to ``False``.
+   :param yarn_rm_auth: Optional ``requests.auth.AuthBase`` instance used for every
+       call to the YARN ResourceManager REST API (status polling and kill). When
+       omitted, Kerberos-enabled Spark connections with both ``keytab`` and
+       ``principal`` configured use ``requests-kerberos`` automatically.
+       Defaults to ``None`` (no auth for non-Kerberos connections).
+   :param durable: When ``True`` (the default), the external job ID is persisted to task state
+       store before polling begins so that a worker crash and retry reconnects to the existing job
+       instead of submitting a fresh one. Set to ``False`` to always submit a new job on retry.
+
+
+   .. py:attribute:: external_id_key
+      :value: 'spark_job_id'
+
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('application', 'conf', 'files', 'py_files', 'jars', 'driver_class_path', 'packages',...
+
+
+
+   .. py:attribute:: application
+      :value: ''
+
+
+
+   .. py:attribute:: conf
+      :value: None
+
+
+
+   .. py:attribute:: files
+      :value: None
+
+
+
+   .. py:attribute:: py_files
+      :value: None
+
+
+
+   .. py:attribute:: driver_class_path
+      :value: None
+
+
+
+   .. py:attribute:: jars
+      :value: None
+
+
+
+   .. py:attribute:: packages
+      :value: None
+
+
+
+   .. py:attribute:: exclude_packages
+      :value: None
+
+
+
+   .. py:attribute:: keytab
+      :value: None
+
+
+
+   .. py:attribute:: principal
+      :value: None
+
+
+
+   .. py:attribute:: proxy_user
+      :value: None
+
+
+
+   .. py:attribute:: name
+      :value: 'arrow-spark'
+
+
+
+   .. py:attribute:: application_args
+      :value: None
+
+
+
+   .. py:attribute:: env_vars
+      :value: None
+
+
+
+   .. py:attribute:: properties_file
+      :value: None
+
+
+
+   .. py:attribute:: post_submit_commands
+      :value: None
+
+
+
+   .. py:method:: execute(context)
+
+      Call the SparkSubmitHook to run the provided spark job.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
+
+
+
+   .. py:method:: on_kill()
+
+      Override this method to clean up subprocesses when a task instance gets killed.
+
+      Any use of the threading, subprocess or multiprocessing module within an
+      operator needs to be cleaned up, or it will leave ghost processes behind.
+
+
+

@@ -1,0 +1,206 @@
+airflow.providers.ssh.operators.ssh_remote_job
+==============================================
+
+.. py:module:: airflow.providers.ssh.operators.ssh_remote_job
+
+.. autoapi-nested-parse::
+
+   SSH Remote Job Operator for deferrable remote command execution.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.ssh.operators.ssh_remote_job.SSHRemoteJobOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: SSHRemoteJobOperator(*, ssh_conn_id, command, remote_host = None, environment = None, remote_base_dir = None, poll_interval = 5, log_chunk_size = 65536, timeout = None, cleanup = 'never', remote_os = 'auto', skip_on_exit_code = None, conn_timeout = None, banner_timeout = 30.0, conn_retry_attempts = 5, cleanup_retries = 3, command_timeout = 30.0, max_reconnect_attempts = 5, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Execute a command on a remote host via SSH with deferrable monitoring.
+
+   This operator submits a job to run detached on the remote host, then
+   uses a trigger to asynchronously monitor the job status and stream logs.
+   This approach is resilient to network interruptions as the remote job
+   continues running independently of the SSH connection.
+
+   The remote job is wrapped to:
+   - Run detached from the SSH session (via nohup on POSIX, Start-Process on Windows)
+   - Redirect stdout/stderr to a log file
+   - Write the exit code to a file on completion
+
+   :param ssh_conn_id: SSH connection ID from Airflow Connections
+   :param command: Command to execute on the remote host (templated)
+   :param remote_host: Override the host from the connection (templated)
+   :param environment: Environment variables to set for the command (templated)
+   :param remote_base_dir: Base directory for job artifacts (templated).
+       Defaults to /tmp/airflow-ssh-jobs on POSIX, C:\\Windows\\Temp\\airflow-ssh-jobs on Windows
+   :param poll_interval: Seconds between status polls (default: 5)
+   :param log_chunk_size: Max bytes to read per poll (default: 65536)
+   :param timeout: Hard timeout in seconds for the entire operation
+   :param cleanup: When to clean up remote job directory:
+       'never', 'on_success', or 'always' (default: 'never')
+   :param remote_os: Remote operating system: 'auto', 'posix', or 'windows' (default: 'auto')
+   :param skip_on_exit_code: Exit codes that should skip the task instead of failing
+   :param conn_timeout: SSH connection timeout in seconds
+   :param banner_timeout: Timeout waiting for SSH banner in seconds
+   :param conn_retry_attempts: How many times to attempt the initial SSH connection for
+       submission/cleanup before failing (default 5). Helps when many mapped tasks hit the
+       same host at once and ``sshd`` transiently refuses connections (``MaxStartups``).
+   :param cleanup_retries: How many times to attempt remote directory cleanup before
+       giving up and leaving the directory in place (default 3). Prevents a transient SSH
+       failure during cleanup from orphaning the job directory on the remote host.
+   :param command_timeout: Per-command timeout in seconds for the trigger's status/log polls
+       (default 30.0).
+   :param max_reconnect_attempts: Consecutive connection failures the trigger tolerates (with
+       backoff) before failing the task while monitoring the remote job (default 5).
+
+   .. note::
+       A large ``expand()`` fan-out opens many SSH connections against one host. The remote
+       ``sshd`` throttles concurrent unauthenticated connections via ``MaxStartups`` (default
+       ``10:30:100``); when exceeded it drops connections, surfacing as
+       ``paramiko ... Error reading SSH protocol banner``. For high fan-out, raise ``MaxStartups``
+       on the server. The directory ``/tmp/airflow-ssh-jobs`` (POSIX) is only cleaned when
+       ``cleanup`` is set and the job reaches completion, so also consider a server-side TTL
+       reaper (for example ``systemd-tmpfiles``) for jobs that are killed or time out.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('command', 'environment', 'remote_host', 'remote_base_dir')
+
+
+
+   .. py:attribute:: template_ext
+      :type:  collections.abc.Sequence[str]
+      :value: ('.sh', '.bash', '.ps1')
+
+
+
+   .. py:attribute:: template_fields_renderers
+
+
+   .. py:attribute:: ui_color
+      :value: '#e4f0e8'
+
+
+
+   .. py:attribute:: ssh_conn_id
+
+
+   .. py:attribute:: command
+
+
+   .. py:attribute:: remote_host
+      :value: None
+
+
+
+   .. py:attribute:: environment
+      :value: None
+
+
+
+   .. py:attribute:: remote_base_dir
+      :value: None
+
+
+
+   .. py:attribute:: poll_interval
+      :value: 5
+
+
+
+   .. py:attribute:: log_chunk_size
+      :value: 65536
+
+
+
+   .. py:attribute:: timeout
+      :value: None
+
+
+
+   .. py:attribute:: cleanup
+      :value: 'never'
+
+
+
+   .. py:attribute:: remote_os
+      :value: 'auto'
+
+
+
+   .. py:attribute:: conn_timeout
+      :value: None
+
+
+
+   .. py:attribute:: banner_timeout
+      :value: 30.0
+
+
+
+   .. py:attribute:: conn_retry_attempts
+      :value: 5
+
+
+
+   .. py:attribute:: cleanup_retries
+
+
+   .. py:attribute:: command_timeout
+      :value: 30.0
+
+
+
+   .. py:attribute:: max_reconnect_attempts
+      :value: 5
+
+
+
+   .. py:attribute:: skip_on_exit_code
+
+
+   .. py:property:: ssh_hook
+      :type: airflow.providers.ssh.hooks.ssh.SSHHook
+
+
+      Create the SSH hook for command submission.
+
+
+
+   .. py:method:: execute(context)
+
+      Submit the remote job and defer to the trigger for monitoring.
+
+      :param context: Airflow task context
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+      Handle trigger events and re-defer if job is still running.
+
+      :param context: Airflow task context
+      :param event: Event data from the trigger
+
+
+
+   .. py:method:: on_kill()
+
+      Attempt to kill the remote process when the task is killed.
+
+      Since the operator is recreated after deferral, instance variables may not
+      be set. We retrieve job information from XCom if needed.
+
+
+
