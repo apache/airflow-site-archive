@@ -1,0 +1,122 @@
+airflow.providers.common.ai.skills
+==================================
+
+.. py:module:: airflow.providers.common.ai.skills
+
+.. autoapi-nested-parse::
+
+   Framework-agnostic `Agent Skills <https://agentskills.io>`__ sources for Airflow.
+
+   This module resolves skill *sources* -- a local directory or a ``GitSkills``
+   descriptor -- into local ``SKILL.md`` directories, cloning Git repositories with
+   a token taken from an Airflow connection. The output is a list of directory
+   paths, the interchange format every Agent Skills implementation consumes
+   (pydantic-ai-skills, LangChain DeepAgents, Strands), so the same Airflow
+   credential handling works across frameworks.
+
+   For pydantic-ai use the :class:`~airflow.providers.common.ai.toolsets.skills.AgentSkillsToolset`
+   binding. For other frameworks, resolve the directories yourself::
+
+       from airflow.providers.common.ai.skills import GitSkills, resolve_skills
+
+       with resolve_skills(["./skills", GitSkills(repo_url="https://...", conn_id="github")]) as dirs:
+           # LangChain DeepAgents
+           agent = create_deep_agent(model=..., skills=dirs)
+           # ...or Strands
+           agent = Agent(plugins=[AgentSkills(skills=dirs)])
+
+   Resolution (connection lookup, clone) happens when ``resolve_skills`` is entered,
+   so run it inside the task, not at module import / DAG-parse time. The context
+   manager removes any cloned directories on exit.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.skills.SkillSource
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.skills.GitSkills
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.skills.resolve_skills
+
+
+Module Contents
+---------------
+
+.. py:class:: GitSkills
+
+   Agent Skills cloned from a Git repository when resolved.
+
+   :param repo_url: HTTPS or SSH URL of the repository to clone.
+   :param conn_id: Airflow ``git`` connection used for credentials, resolved
+       through the Git provider's ``GitHook`` (HTTPS token in the connection
+       password, or an SSH key in the connection's extra). **Set this for private
+       repositories.** Plain ``http://`` is rejected when ``conn_id`` is set so a
+       credential is never sent in cleartext, and a ``repo_url`` with embedded
+       credentials is rejected (use ``conn_id`` instead). When ``conn_id`` is
+       ``None`` the clone is unauthenticated; as with any ``git clone``, the
+       worker's own git configuration (credential helpers, SSH agent) may still
+       apply, so run workers without ambient git credentials if you need strict
+       isolation.
+   :param path: Sub-path inside the repository that holds the skill directories
+       (e.g. ``"skills"``). Defaults to the repository root.
+   :param branch: Branch, tag, or ref to check out. Defaults to the
+       repository's default branch.
+
+   .. warning::
+
+       Skill bundles can contain scripts an agent may run on the worker. Because
+       the repository is fetched at run time, anyone who can modify it can
+       introduce code that runs in your environment, outside DAG review. Point
+       ``repo_url`` at a trusted repository and pin ``branch`` to a trusted ref.
+
+
+   .. py:attribute:: repo_url
+      :type:  str
+
+
+   .. py:attribute:: conn_id
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: path
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: branch
+      :type:  str | None
+      :value: None
+
+
+
+.. py:data:: SkillSource
+
+.. py:function:: resolve_skills(sources)
+
+   Resolve skill *sources* to local ``SKILL.md`` directories.
+
+   Yields a list of directory paths suitable for any Agent Skills loader
+   (pydantic-ai-skills, LangChain DeepAgents ``skills=``, Strands
+   ``AgentSkills(skills=...)``). Cloned repositories are removed on exit, so use
+   the returned directories inside the ``with`` block.
+
+

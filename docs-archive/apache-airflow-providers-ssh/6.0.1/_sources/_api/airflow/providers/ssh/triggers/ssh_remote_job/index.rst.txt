@@ -1,0 +1,119 @@
+airflow.providers.ssh.triggers.ssh_remote_job
+=============================================
+
+.. py:module:: airflow.providers.ssh.triggers.ssh_remote_job
+
+.. autoapi-nested-parse::
+
+   SSH Remote Job Trigger for deferrable execution.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.ssh.triggers.ssh_remote_job.SSHRemoteJobTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: SSHRemoteJobTrigger(ssh_conn_id, remote_host, job_id, job_dir, log_file, exit_code_file, remote_os, poll_interval = 5, log_chunk_size = 65536, log_offset = 0, command_timeout = 30.0, max_reconnect_attempts = 5)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Trigger that monitors a remote SSH job and streams logs.
+
+   This trigger polls the remote host to check job completion status
+   and reads log output incrementally.
+
+   A single SSH connection is opened and reused for the whole poll loop instead
+   of reconnecting for every command. Opening a fresh TCP/SSH connection per poll
+   multiplies the connection rate against the remote ``sshd`` (which throttles
+   concurrent unauthenticated connections via ``MaxStartups``), so reuse keeps the
+   load flat when many tasks target the same host. If the connection drops, the
+   trigger transparently reconnects with backoff up to ``max_reconnect_attempts``.
+
+   :param ssh_conn_id: SSH connection ID from Airflow Connections
+   :param remote_host: Optional override for the remote host
+   :param job_id: Unique identifier for the remote job
+   :param job_dir: Remote directory containing job artifacts
+   :param log_file: Path to the log file on the remote host
+   :param exit_code_file: Path to the exit code file on the remote host
+   :param remote_os: Operating system of the remote host ('posix' or 'windows')
+   :param poll_interval: Seconds between polling attempts
+   :param log_chunk_size: Maximum bytes to read per poll
+   :param log_offset: Current byte offset in the log file
+   :param command_timeout: Per-command timeout in seconds
+   :param max_reconnect_attempts: Consecutive connection failures tolerated before the
+       trigger gives up and emits an error event
+
+
+   .. py:attribute:: ssh_conn_id
+
+
+   .. py:attribute:: remote_host
+
+
+   .. py:attribute:: job_id
+
+
+   .. py:attribute:: job_dir
+
+
+   .. py:attribute:: log_file
+
+
+   .. py:attribute:: exit_code_file
+
+
+   .. py:attribute:: remote_os
+
+
+   .. py:attribute:: poll_interval
+      :value: 5
+
+
+
+   .. py:attribute:: log_chunk_size
+      :value: 65536
+
+
+
+   .. py:attribute:: log_offset
+      :value: 0
+
+
+
+   .. py:attribute:: command_timeout
+      :value: 30.0
+
+
+
+   .. py:attribute:: max_reconnect_attempts
+      :value: 5
+
+
+
+   .. py:method:: serialize()
+
+      Serialize the trigger for storage.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Poll the remote job status and yield a completion event.
+
+      One connection is held for the whole loop. On a connection-level failure the
+      connection is dropped and re-established (with exponential backoff) up to
+      ``max_reconnect_attempts`` consecutive times; any other error, or exhausting the
+      reconnect budget, ends the trigger with an error event.
+
+
+
