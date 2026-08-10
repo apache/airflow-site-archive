@@ -2,12 +2,13 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from functools import cached_property
 from multiprocessing import Pool
 from pathlib import Path
 from threading import Thread
 from time import sleep
-from typing import Callable, Any
+from typing import Any
 
 import boto3
 import urllib3
@@ -46,8 +47,7 @@ class CommonTransferUtils:
     def prefix(self) -> str:
         try:
             pref = urllib3.util.parse_url(self.bucket).path
-            if pref.startswith('/'):
-                pref = pref[1:]
+            pref = pref.removeprefix('/')
             return pref
         except Exception as e:
             console.print(f"[red] Error: {e}[/]")
@@ -85,15 +85,9 @@ class CommonTransferUtils:
             thread = Thread(target=track_progress, args=(source, Path(output_file.name),))
             thread.start()
             delete= ["--delete"] if not skip_delete else []
-            if source.startswith("s3://"):
+            if source.startswith("s3://") or Path(source).is_dir():
                 subprocess.run(
                     ["aws", "s3", "sync", *delete, "--no-progress", source, destination],
-                    stdout=output_file,
-                    text=True, check=True
-                )
-            elif Path(source).is_dir():
-                subprocess.run(
-                    ["aws", "s3", "sync", *delete,  "--no-progress", source, destination],
                     stdout=output_file,
                     text=True, check=True
                 )
@@ -188,7 +182,7 @@ def invalidate_cloudflare_cache(destination_location: str):
                 "Quantity": 1,
                 "Items": ["/*"],
             },
-            "CallerReference": str(int(os.environ.get("GITHUB_RUN_ID", 0))),
+            "CallerReference": str(int(os.environ.get("GITHUB_RUN_ID", "0"))),
         },
     )
     console.print(
