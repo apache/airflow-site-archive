@@ -30,9 +30,12 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
-
-from transfer_utils import CommonTransferUtils, convert_short_name_to_full_package_name, \
-    sort_priority_packages, invalidate_cloudflare_cache
+from transfer_utils import (
+    CommonTransferUtils,
+    convert_short_name_to_full_package_name,
+    invalidate_cloudflare_cache,
+    sort_priority_packages,
+)
 
 console = Console(width=200, color_system="standard")
 

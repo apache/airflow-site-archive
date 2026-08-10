@@ -22,15 +22,18 @@
 #   "rich>=14.0.0",
 # ]
 # ///
-import os
-from pathlib import Path
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from rich.console import Console
-
-from transfer_utils import CommonTransferUtils, convert_short_name_to_full_package_name, sort_priority_packages, \
-    sort_priority_tuples
+from transfer_utils import (
+    CommonTransferUtils,
+    convert_short_name_to_full_package_name,
+    sort_priority_packages,
+    sort_priority_tuples,
+)
 
 console = Console(width=200, color_system="standard")
 
