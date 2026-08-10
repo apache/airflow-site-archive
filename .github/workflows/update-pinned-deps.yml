@@ -1,0 +1,131 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+---
+name: Update pinned dependencies
+# Replaces Dependabot for GitHub Actions and pre-commit hooks. Dependabot clones
+# the whole repository before its file fetcher runs, and at 800k+ files / 47+ GB
+# that never finishes inside a Dependabot job - so updates simply stopped
+# landing. This workflow only needs the configuration files, which a sparse
+# blobless checkout gets in seconds.
+on:  # yamllint disable-line rule:truthy
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays, 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      cooldown-days:
+        description: "Ignore releases published more recently than this many days"
+        default: "7"
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: update-pinned-deps
+  cancel-in-progress: false
+jobs:
+  update:
+    name: "Update pins on ${{ matrix.branch }}"
+    runs-on: ubuntu-latest
+    if: github.repository == 'apache/airflow-site-archive'
+    permissions:
+      contents: write  # push the update branch
+      pull-requests: write  # open the update pull request
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, staging]
+    env:
+      TARGET_BRANCH: ${{ matrix.branch }}
+      UPDATE_BRANCH: update-pinned-deps-${{ matrix.branch }}
+      COOLDOWN_DAYS: ${{ inputs.cooldown-days || '7' }}
+    steps:
+      - name: "Checkout ${{ matrix.branch }} configuration"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        # Only the configuration is needed - never check out docs-archive here.
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            .github
+          persist-credentials: false
+
+      - name: "Checkout ${{ github.sha }} for scripts"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        # The updater always comes from the ref this workflow runs from, so it
+        # does not have to exist on the branch being updated yet.
+        with:
+          ref: ${{ github.sha }}
+          path: ./tooling
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            scripts
+          persist-credentials: false
+
+      - name: "Install uv"
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: "Resolve the latest versions outside the cooldown window"
+        id: update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          uv run --no-project ./tooling/scripts/update_pinned_deps.py \
+            --repo-root . \
+            --cooldown-days "${COOLDOWN_DAYS}" \
+            --summary-file "${RUNNER_TEMP}/summary.md"
+
+      - name: "Lint the updated configuration"
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          uv tool install pre-commit --with pre-commit-uv
+          # Pull requests opened with GITHUB_TOKEN do not trigger other
+          # workflows, so the checks that would run on the pull request are run
+          # here instead - on the changed files only, because `--all-files`
+          # would walk all 800k+ files in the index.
+          git diff --name-only -z | xargs -0 pre-commit run --color always --files
+
+      - name: "Open the update pull request"
+        if: steps.update.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${UPDATE_BRANCH}"
+          git commit -a -m "Update pinned GitHub Actions and pre-commit hooks"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${UPDATE_BRANCH}"
+          if [[ -n "$(gh pr list --head "${UPDATE_BRANCH}" --base "${TARGET_BRANCH}" \
+                        --state open --json number --jq '.[].number')" ]]; then
+            echo "Pull request already open - the force push updated it"
+            exit 0
+          fi
+          {
+            echo "Automated update of the SHA-pinned GitHub Actions and pre-commit hooks,"
+            echo "honouring a ${COOLDOWN_DAYS}-day cooldown on new releases."
+            echo
+            cat "${RUNNER_TEMP}/summary.md"
+            echo
+            echo "Opened by [\`update-pinned-deps.yml\`](.github/workflows/update-pinned-deps.yml)."
+            echo "Pre-commit ran on the changed files in that workflow run, because pull"
+            echo "requests opened with \`GITHUB_TOKEN\` do not trigger \`Basic checks\`."
+          } > "${RUNNER_TEMP}/pr-body.md"
+          gh pr create --base "${TARGET_BRANCH}" --head "${UPDATE_BRANCH}" \
+            --title "Update pinned GitHub Actions and pre-commit hooks (${TARGET_BRANCH})" \
+            --body-file "${RUNNER_TEMP}/pr-body.md"
