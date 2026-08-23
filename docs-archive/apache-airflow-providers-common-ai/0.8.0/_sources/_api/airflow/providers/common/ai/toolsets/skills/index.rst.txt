@@ -1,0 +1,156 @@
+airflow.providers.common.ai.toolsets.skills
+===========================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.skills
+
+.. autoapi-nested-parse::
+
+   A pydantic-ai toolset that loads `Agent Skills <https://agentskills.io>`__.
+
+   ``AgentSkillsToolset`` is a normal pydantic-ai ``AbstractToolset``: it can be
+   passed to :class:`~airflow.providers.common.ai.operators.agent.AgentOperator`
+   via ``toolsets=`` or used directly with a ``pydantic_ai.Agent`` anywhere the
+   Airflow connection backend is reachable (i.e. inside a worker/task runtime).
+
+   Skill sources are resolved lazily when the agent enters the toolset (run time,
+   on the worker), never at DAG-parse time, so a Git token resolved from an Airflow
+   connection is never baked into the serialized DAG. Cloned repositories are
+   removed when the toolset context exits.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.skills.AbstractToolset
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.skills.AgentSkillsToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: AbstractToolset
+
+.. py:class:: AgentSkillsToolset(sources, *, exclude_tools = None, exclude_resources = None)
+
+   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`
+
+
+   A pydantic-ai toolset that loads Agent Skills, with Git credentials from Airflow connections.
+
+   Sources are local directory paths and/or
+   :class:`~airflow.providers.common.ai.skills.GitSkills`.
+
+   :param sources: Skill sources -- local directory paths and/or ``GitSkills``.
+   :param exclude_tools: Optional set of skill tool names to hide from the agent
+       (e.g. ``{"run_skill_script"}`` to disable on-worker script execution).
+   :param exclude_resources: Optional glob patterns to exclude from resource
+       discovery, added on top of the built-in defaults (``__pycache__``,
+       ``*.pyc``, ``*.pyo``, ``.DS_Store``, ``.git``). A skill exposes every
+       readable text file it contains as a resource; these patterns keep matched
+       files out of the resource list and the ``read_skill_resource`` tool
+       (e.g. ``["*.env", "secrets/*"]``). Patterns match the full skill-relative
+       path or any single path component. This hides files from resource
+       discovery only -- it does not stop a skill's ``run_skill_script`` from
+       reading them off disk, so pair it with ``exclude_tools={"run_skill_script"}``
+       when the files are genuinely sensitive. Requires ``pydantic-ai-skills>=1.2.0``.
+
+   Requires the ``skills`` extra: ``pip install "apache-airflow-providers-common-ai[skills]"``.
+
+
+   .. py:property:: id
+      :type: str | None
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+
+
+   .. py:method:: for_run(ctx)
+      :async:
+
+
+      Return the toolset to use for this agent run.
+
+      Called once per run, before `__aenter__`. Override this to return a fresh instance
+      for per-run state isolation. Default: return `self` (shared across runs).
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+      Enter the toolset context.
+
+      This is where you can set up network connections in a concrete implementation.
+
+
+
+   .. py:method:: __aexit__(*args)
+      :async:
+
+
+      Exit the toolset context.
+
+      This is where you can tear down network connections in a concrete implementation.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: call_tool(name, tool_args, ctx, tool)
+      :async:
+
+
+      Call a tool with the given arguments.
+
+      Args:
+          name: The name of the tool to call.
+          tool_args: The arguments to pass to the tool.
+          ctx: The run context.
+          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+
+
+
+   .. py:method:: get_instructions(ctx)
+      :async:
+
+
+      Return instructions for how to use this toolset's tools.
+
+      Override this method to provide instructions that help the agent understand
+      how to use the tools in this toolset effectively.
+
+      Simple implementations can return a plain `str`; advanced implementations can return
+      [`InstructionPart`][pydantic_ai.messages.InstructionPart] objects to indicate whether
+      each instruction block is static or dynamic for caching purposes.
+
+      Args:
+          ctx: The run context for this agent run.
+
+      Returns:
+          Instruction string, `InstructionPart`, list of either, or `None`.
+          Plain `str` values are treated as dynamic instructions by default.
+
+
+

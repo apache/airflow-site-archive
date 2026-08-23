@@ -676,6 +676,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
@@ -686,6 +687,50 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+
+<span class="c1"># The table, the partition columns, and the metastore columns projected in the Presto</span>
+<span class="c1"># stats SELECT are interpolated as identifiers, which cannot be bound as SQL parameters.</span>
+<span class="c1"># Plain word identifiers are emitted unchanged, and identifiers the caller already</span>
+<span class="c1"># double-quoted correctly are passed through as-is (so a pre-quoted name such as</span>
+<span class="c1"># ``&quot;weird-col&quot;`` is not re-escaped into ``&quot;&quot;&quot;weird-col&quot;&quot;&quot;``); anything else is</span>
+<span class="c1"># double-quoted with embedded quotes doubled (how Presto/Trino escape identifiers).</span>
+<span class="c1"># Kept local rather than reusing common.sql&#39;s ``Dialect.escape_word``, which needs a</span>
+<span class="c1"># live connection and does not double embedded quotes.</span>
+<span class="n">_PLAIN_IDENT_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[A-Za-z_][A-Za-z0-9_]*&quot;</span><span class="p">)</span>
+<span class="c1"># A fully and correctly double-quoted identifier: opening and closing quotes with every</span>
+<span class="c1"># embedded quote doubled (e.g. ``&quot;a&quot;&quot;b&quot;``). Used to detect identifiers the caller has</span>
+<span class="c1"># already escaped so they are left untouched instead of being double-escaped.</span>
+<span class="n">_QUOTED_IDENT_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;&quot;(?:[^&quot;]|&quot;&quot;)*&quot;&#39;</span><span class="p">)</span>
+<span class="c1"># One component of a qualified ``&lt;catalog&gt;.&lt;schema&gt;.&lt;table&gt;`` name: either a quoted</span>
+<span class="c1"># identifier (which may itself contain dots) or a run of characters up to the next</span>
+<span class="c1"># separating dot. Matching in that order means only the dots *outside* a quoted</span>
+<span class="c1"># identifier separate components, so ``&quot;my.table&quot;`` stays a single identifier.</span>
+<span class="n">_QUALIFIED_NAME_PART_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;&quot;(?:[^&quot;]|&quot;&quot;)*&quot;|[^.]+&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_quote_presto_identifier</span><span class="p">(</span><span class="n">identifier</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Quote a Presto/Trino identifier.</span>
+
+<span class="sd">    Plain word identifiers and identifiers the caller already double-quoted</span>
+<span class="sd">    correctly are returned unchanged; anything else is wrapped in double quotes</span>
+<span class="sd">    with embedded quotes doubled.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">_PLAIN_IDENT_RE</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">identifier</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_QUOTED_IDENT_RE</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">identifier</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">identifier</span>
+    <span class="k">return</span> <span class="s1">&#39;&quot;&#39;</span> <span class="o">+</span> <span class="n">identifier</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">,</span> <span class="s1">&#39;&quot;&quot;&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&quot;&#39;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_quote_presto_table</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Quote a possibly qualified Presto/Trino table name.</span>
+
+<span class="sd">    The name is split into components on the dots that separate catalog, schema and</span>
+<span class="sd">    table, and each component is quoted with :func:`_quote_presto_identifier`. Dots</span>
+<span class="sd">    inside a quoted identifier are part of the name rather than separators, so</span>
+<span class="sd">    ``db.&quot;odd.name&quot;`` keeps its two components instead of being split into three.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_quote_presto_identifier</span><span class="p">(</span><span class="n">part</span><span class="p">)</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">_QUALIFIED_NAME_PART_RE</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">table</span><span class="p">))</span>
 
 
 <div class="viewcode-block" id="HiveStatsCollectionOperator">
@@ -794,18 +839,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get default expressions.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">excluded_columns</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{}</span>
-        <span class="n">exp</span> <span class="o">=</span> <span class="p">{(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;non_null&quot;</span><span class="p">):</span> <span class="sa">f</span><span class="s2">&quot;COUNT(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">}</span>
+        <span class="c1"># Quote only the interpolated identifier in the SQL value; the dict key keeps the</span>
+        <span class="c1"># bare column name, which is what gets stored in the ``hive_stats.col`` column.</span>
+        <span class="n">quoted_col</span> <span class="o">=</span> <span class="n">_quote_presto_identifier</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+        <span class="n">exp</span> <span class="o">=</span> <span class="p">{(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;non_null&quot;</span><span class="p">):</span> <span class="sa">f</span><span class="s2">&quot;COUNT(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">}</span>
         <span class="k">if</span> <span class="n">col_type</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;double&quot;</span><span class="p">,</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="s2">&quot;bigint&quot;</span><span class="p">,</span> <span class="s2">&quot;float&quot;</span><span class="p">}:</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;sum&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MIN(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MAX(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;avg&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;AVG(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;sum&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MIN(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MAX(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;avg&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;AVG(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span>
         <span class="k">elif</span> <span class="n">col_type</span> <span class="o">==</span> <span class="s2">&quot;boolean&quot;</span><span class="p">:</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CASE WHEN </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> THEN 1 ELSE 0 END)&quot;</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;false&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CASE WHEN NOT </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> THEN 1 ELSE 0 END)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CASE WHEN </span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2"> THEN 1 ELSE 0 END)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;false&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CASE WHEN NOT </span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2"> THEN 1 ELSE 0 END)&quot;</span>
         <span class="k">elif</span> <span class="n">col_type</span> <span class="o">==</span> <span class="s2">&quot;string&quot;</span><span class="p">:</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;len&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CAST(LENGTH(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">) AS BIGINT))&quot;</span>
-            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;approx_distinct&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;APPROX_DISTINCT(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;len&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SUM(CAST(LENGTH(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">) AS BIGINT))&quot;</span>
+            <span class="n">exp</span><span class="p">[(</span><span class="n">col</span><span class="p">,</span> <span class="s2">&quot;approx_distinct&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;APPROX_DISTINCT(</span><span class="si">{</span><span class="n">quoted_col</span><span class="si">}</span><span class="s2">)&quot;</span>
 
         <span class="k">return</span> <span class="n">exp</span></div>
 
@@ -827,15 +875,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">assign_exprs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_default_exprs</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="n">col_type</span><span class="p">)</span>
             <span class="n">exprs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">assign_exprs</span><span class="p">)</span>
         <span class="n">exprs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extra_exprs</span><span class="p">)</span>
-        <span class="n">exprs_str</span> <span class="o">=</span> <span class="s2">&quot;,</span><span class="se">\n</span><span class="s2">        &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">__</span><span class="si">{</span><span class="n">k</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">exprs</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
-
-        <span class="n">where_clause_</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2"> = &#39;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">&#39;&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">partition</span><span class="o">.</span><span class="n">items</span><span class="p">()]</span>
-        <span class="n">where_clause</span> <span class="o">=</span> <span class="s2">&quot; AND</span><span class="se">\n</span><span class="s2">        &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_clause_</span><span class="p">)</span>
-        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT </span><span class="si">{</span><span class="n">exprs_str</span><span class="si">}</span><span class="s2"> FROM </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">where_clause</span><span class="si">}</span><span class="s2">;&quot;</span>
+        <span class="n">exprs_str</span> <span class="o">=</span> <span class="s2">&quot;,</span><span class="se">\n</span><span class="s2">        &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">_quote_presto_identifier</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1">__</span><span class="si">{</span><span class="n">k</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">exprs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">)</span>
 
         <span class="n">presto</span> <span class="o">=</span> <span class="n">PrestoHook</span><span class="p">(</span><span class="n">presto_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">presto_conn_id</span><span class="p">)</span>
+        <span class="c1"># Build the WHERE clause against the hook&#39;s declared parameter placeholder</span>
+        <span class="c1"># (PrestoHook defaults to `?`; a connection may override it via the `placeholder` extra).</span>
+        <span class="n">placeholder</span> <span class="o">=</span> <span class="n">presto</span><span class="o">.</span><span class="n">placeholder</span>
+        <span class="n">where_clause_</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_quote_presto_identifier</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">placeholder</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">partition</span><span class="o">.</span><span class="n">keys</span><span class="p">()]</span>
+        <span class="n">where_clause</span> <span class="o">=</span> <span class="s2">&quot; AND</span><span class="se">\n</span><span class="s2">        &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">where_clause_</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT </span><span class="si">{</span><span class="n">exprs_str</span><span class="si">}</span><span class="s2"> FROM </span><span class="si">{</span><span class="n">_quote_presto_table</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">where_clause</span><span class="si">}</span><span class="s2">;&quot;</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Executing SQL check: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">sql</span><span class="p">)</span>
-        <span class="n">row</span> <span class="o">=</span> <span class="n">presto</span><span class="o">.</span><span class="n">get_first</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">presto</span><span class="o">.</span><span class="n">get_first</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">partition</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Record: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">row</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">row</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">&quot;The query returned None&quot;</span><span class="p">)</span>
@@ -844,23 +897,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleting rows from previous runs if they exist&quot;</span><span class="p">)</span>
         <span class="n">mysql</span> <span class="o">=</span> <span class="n">MySqlHook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mysql_conn_id</span><span class="p">)</span>
-        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
 <span class="s2">        SELECT 1 FROM hive_stats</span>
 <span class="s2">        WHERE</span>
-<span class="s2">            table_name=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2">&#39; AND</span>
-<span class="s2">            partition_repr=&#39;</span><span class="si">{</span><span class="n">part_json</span><span class="si">}</span><span class="s2">&#39; AND</span>
-<span class="s2">            dttm=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dttm</span><span class="si">}</span><span class="s2">&#39;</span>
+<span class="s2">            table_name = </span><span class="si">%s</span><span class="s2"> AND</span>
+<span class="s2">            partition_repr = </span><span class="si">%s</span><span class="s2"> AND</span>
+<span class="s2">            dttm = </span><span class="si">%s</span>
 <span class="s2">        LIMIT 1;</span>
 <span class="s2">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">mysql</span><span class="o">.</span><span class="n">get_records</span><span class="p">(</span><span class="n">sql</span><span class="p">):</span>
-            <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">mysql</span><span class="o">.</span><span class="n">get_records</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="n">part_json</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dttm</span><span class="p">)):</span>
+            <span class="n">sql</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
 <span class="s2">            DELETE FROM hive_stats</span>
 <span class="s2">            WHERE</span>
-<span class="s2">                table_name=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2">&#39; AND</span>
-<span class="s2">                partition_repr=&#39;</span><span class="si">{</span><span class="n">part_json</span><span class="si">}</span><span class="s2">&#39; AND</span>
-<span class="s2">                dttm=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dttm</span><span class="si">}</span><span class="s2">&#39;;</span>
+<span class="s2">                table_name = </span><span class="si">%s</span><span class="s2"> AND</span>
+<span class="s2">                partition_repr = </span><span class="si">%s</span><span class="s2"> AND</span>
+<span class="s2">                dttm = </span><span class="si">%s</span><span class="s2">;</span>
 <span class="s2">            &quot;&quot;&quot;</span>
-            <span class="n">mysql</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+            <span class="n">mysql</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">parameters</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="n">part_json</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dttm</span><span class="p">))</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Pivoting and loading cells into the Airflow db&quot;</span><span class="p">)</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>

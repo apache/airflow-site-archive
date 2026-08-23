@@ -1,0 +1,126 @@
+airflow.providers.apache.iceberg.triggers.iceberg
+=================================================
+
+.. py:module:: airflow.providers.apache.iceberg.triggers.iceberg
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.apache.iceberg.triggers.iceberg.DEFAULT_BRANCH
+   airflow.providers.apache.iceberg.triggers.iceberg.WATERMARK_KEY
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.apache.iceberg.triggers.iceberg.IcebergTableSnapshotTrigger
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_BRANCH
+   :value: 'main'
+
+
+.. py:data:: WATERMARK_KEY
+   :value: 'snapshot_id'
+
+
+.. py:class:: IcebergTableSnapshotTrigger(*, table, iceberg_conn_id = IcebergHook.default_conn_name, branch = DEFAULT_BRANCH, poll_interval = 60, last_seen_snapshot_id = None, **kwargs)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseEventTrigger`
+
+
+   Fire an event whenever an Iceberg table gains a new snapshot.
+
+   Polls the branch head through the catalog and emits an event when it points at a
+   snapshot the trigger has not reported yet, which makes a table commit usable as a
+   scheduling signal::
+
+       from airflow.sdk import Asset, AssetWatcher
+
+       orders = Asset(
+           "orders",
+           watchers=[
+               AssetWatcher(
+                   name="orders_commits",
+                   trigger=IcebergTableSnapshotTrigger(table="sales.orders"),
+               )
+           ],
+       )
+
+
+       @dag(schedule=[orders])
+       def downstream(): ...
+
+   The event carries ``table``, ``branch``, ``snapshot_id`` and ``previous_snapshot_id``, so a
+   task can scan the delta rather than the whole table. ``previous_snapshot_id`` is ``None`` on
+   the first event, which is also what a restart looks like where no watermark is kept, so a
+   task that must not run twice for one snapshot keys on ``snapshot_id``.
+
+   :param table: Fully-qualified table name, ``namespace.table``. Nested namespaces are
+       written as ``a.b.table``.
+   :param iceberg_conn_id: Connection holding the catalog URI and credentials.
+   :param branch: Branch or tag to watch. Defaults to ``main``.
+   :param poll_interval: Seconds between polls.
+   :param last_seen_snapshot_id: Snapshot already reported. Leave unset to treat the
+       current head as the first event.
+
+
+   .. py:attribute:: table
+
+
+   .. py:attribute:: iceberg_conn_id
+      :value: 'iceberg_default'
+
+
+
+   .. py:attribute:: branch
+      :value: 'main'
+
+
+
+   .. py:attribute:: poll_interval
+      :value: 60
+
+
+
+   .. py:attribute:: last_seen_snapshot_id
+      :value: None
+
+
+
+   .. py:method:: serialize()
+
+      Return the information needed to reconstruct this Trigger.
+
+      :return: Tuple of (class path, keyword arguments needed to re-instantiate).
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the trigger in an asynchronous context.
+
+      The trigger should yield an Event whenever it wants to fire off
+      an event, and return None if it is finished. Single-event triggers
+      should thus yield and then immediately return.
+
+      If it yields, it is likely that it will be resumed very quickly,
+      but it may not be (e.g. if the workload is being moved to another
+      triggerer process, or a multi-event trigger was being used for a
+      single-event task defer).
+
+      In either case, Trigger classes should assume they will be persisted,
+      and then rely on cleanup() being called when they are no longer needed.
+
+
+

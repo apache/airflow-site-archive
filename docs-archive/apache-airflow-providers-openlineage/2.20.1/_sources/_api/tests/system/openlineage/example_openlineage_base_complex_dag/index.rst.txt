@@ -1,0 +1,424 @@
+tests.system.openlineage.example_openlineage_base_complex_dag
+=============================================================
+
+.. py:module:: tests.system.openlineage.example_openlineage_base_complex_dag
+
+.. autoapi-nested-parse::
+
+   Complex DAG without schedule, with multiple operators, task groups, dependencies etc.
+
+   It checks:
+       - required keys
+       - field formats and types
+       - number of task events (one start, one complete)
+       - if EmptyOperator will emit OL events with callback or outlet
+       - if EmptyOperator without modification will not emit OL events
+       - if CustomOperator without Extractor will emit OL events
+       - task groups serialization without dependencies
+       - additional task configuration attrs (owner, max_active_tis_per_dag etc.)
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_base_complex_dag.DAG_ID
+   tests.system.openlineage.example_openlineage_base_complex_dag.task_0
+   tests.system.openlineage.example_openlineage_base_complex_dag.test_run
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_base_complex_dag.SomeCustomOperator
+   tests.system.openlineage.example_openlineage_base_complex_dag.CustomMappedOperator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_base_complex_dag.do_nothing
+
+
+Module Contents
+---------------
+
+.. py:function:: do_nothing()
+
+.. py:class:: SomeCustomOperator(**kwargs)
+
+   Bases: :py:obj:`airflow.providers.standard.operators.bash.BashOperator`
+
+
+   Execute a Bash script, command or set of commands.
+
+   .. seealso::
+       For more information on how to use this operator, take a look at the guide:
+       :ref:`howto/operator:BashOperator`
+
+   If BaseOperator.do_xcom_push is True, the last line written to stdout
+   will also be pushed to an XCom when the bash command completes
+
+   :param bash_command: The command, set of commands or reference to a
+       Bash script (must be '.sh' or '.bash') to be executed. (templated)
+   :param env: If env is not None, it must be a dict that defines the
+       environment variables for the new process; these are used instead
+       of inheriting the current process environment, which is the default
+       behavior. (templated)
+   :param append_env: If False(default) uses the environment variables passed in env params
+       and does not inherit the current process environment. If True, inherits the environment variables
+       from current passes and then environment variable passed by the user will either update the existing
+       inherited environment variables or the new variables gets appended to it
+   :param output_encoding: Output encoding of Bash command
+   :param skip_on_exit_code: If task exits with this exit code, leave the task
+       in ``skipped`` state (default: 99). If set to ``None``, any non-zero
+       exit code will be treated as a failure.
+   :param cwd: Working directory to execute the command in (templated).
+       If None (default), the command is run in a temporary directory.
+       To use current DAG folder as the working directory,
+       you might set template ``{{ task.dag.folder }}``.
+       When bash_command is a '.sh' or '.bash' file, Airflow must have write
+       access to the working directory. The script will be rendered (Jinja
+       template) into a new temporary file in this directory.
+   :param output_processor: Function to further process the output of the bash script
+       (default is lambda output: output).
+
+   Airflow will evaluate the exit code of the Bash command. In general, a non-zero exit code will result in
+   task failure and zero will result in task success.
+   Exit code ``99`` (or another set in ``skip_on_exit_code``)
+   will throw an :class:`airflow.exceptions.AirflowSkipException`, which will leave the task in ``skipped``
+   state. You can have all non-zero exit codes be treated as a failure by setting ``skip_on_exit_code=None``.
+
+   .. list-table::
+      :widths: 25 25
+      :header-rows: 1
+
+      * - Exit code
+        - Behavior
+      * - 0
+        - success
+      * - `skip_on_exit_code` (default: 99)
+        - raise :class:`airflow.exceptions.AirflowSkipException`
+      * - otherwise
+        - raise :class:`airflow.exceptions.AirflowException`
+
+   .. note::
+
+       Airflow will not recognize a non-zero exit code unless the whole shell exit with a non-zero exit
+       code.  This can be an issue if the non-zero exit arises from a sub-command.  The easiest way of
+       addressing this is to prefix the command with ``set -e;``
+
+       .. code-block:: python
+
+           bash_command = "set -e; python3 script.py '{{ data_interval_end }}'"
+
+   .. note::
+
+       To simply execute a ``.sh`` or ``.bash`` script (without any Jinja template), add a space after the
+       script name ``bash_command`` argument -- for example ``bash_command="my_script.sh "``. This
+       is because Airflow tries to load this file and process it as a Jinja template when
+       it ends with ``.sh`` or ``.bash``.
+
+       If you have Jinja template in your script, do not put any blank space. And add the script's directory
+       in the DAG's ``template_searchpath``. If you specify a ``cwd``, Airflow must have write access to
+       this directory. The script will be rendered (Jinja template) into a new temporary file in this directory.
+
+   .. warning::
+
+       Care should be taken with "user" input or when using Jinja templates in the
+       ``bash_command``, as this bash operator does not perform any escaping or
+       sanitization of the command.
+
+       This applies mostly to using "dag_run" conf, as that can be submitted via
+       users in the Web UI. Most of the default template variables are not at
+       risk.
+
+   For example, do **not** do this:
+
+   .. code-block:: python
+
+       bash_task = BashOperator(
+           task_id="bash_task",
+           bash_command='echo "Here is the message: \'{{ dag_run.conf["message"] if dag_run else "" }}\'"',
+       )
+
+   Instead, you should pass this via the ``env`` kwarg and use double-quotes
+   inside the bash_command, as below:
+
+   .. code-block:: python
+
+       bash_task = BashOperator(
+           task_id="bash_task",
+           bash_command="echo \"here is the message: '$message'\"",
+           env={"message": '{{ dag_run.conf["message"] if dag_run else "" }}'},
+       )
+
+   .. versionadded:: 2.10.0
+      The `output_processor` parameter.
+
+
+
+   .. py:attribute:: deferrable
+      :value: True
+
+
+
+   .. py:attribute:: external_dag_id
+      :value: 'external_dag_id'
+
+
+
+   .. py:attribute:: external_task_id
+      :value: 'external_task_id'
+
+
+
+.. py:class:: CustomMappedOperator(value, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Abstract base class for all operators.
+
+   Since operators create objects that become nodes in the Dag, BaseOperator
+   contains many recursive methods for Dag crawling behavior. To derive from
+   this class, you are expected to override the constructor and the 'execute'
+   method.
+
+   Operators derived from this class should perform or trigger certain tasks
+   synchronously (wait for completion). Example of operators could be an
+   operator that runs a Pig job (PigOperator), a sensor operator that
+   waits for a partition to land in Hive (HiveSensorOperator), or one that
+   moves data from Hive to MySQL (Hive2MySqlOperator). Instances of these
+   operators (tasks) target specific operations, running specific scripts,
+   functions or data transfers.
+
+   This class is abstract and shouldn't be instantiated. Instantiating a
+   class derived from this one results in the creation of a task object,
+   which ultimately becomes a node in Dag objects. Task dependencies should
+   be set by using the set_upstream and/or set_downstream methods.
+
+   :param task_id: a unique, meaningful id for the task
+   :param owner: the owner of the task. Using a meaningful description
+       (e.g. user/person/team/role name) to clarify ownership is recommended.
+   :param email: the 'to' email address(es) used in email alerts. This can be a
+       single email or multiple ones. Multiple addresses can be specified as a
+       comma or semicolon separated string or by passing a list of strings. (deprecated)
+   :param email_on_retry: Indicates whether email alerts should be sent when a
+       task is retried (deprecated)
+   :param email_on_failure: Indicates whether email alerts should be sent when
+       a task failed (deprecated)
+   :param retries: the number of retries that should be performed before
+       failing the task
+   :param retry_delay: delay between retries, can be set as ``timedelta`` or
+       ``float`` seconds, which will be converted into ``timedelta``,
+       the default is ``timedelta(seconds=300)``.
+   :param retry_exponential_backoff: multiplier for exponential backoff between retries.
+       Set to 0 to disable (constant delay). Set to 2.0 for standard exponential backoff
+       (delay doubles with each retry). For example, with retry_delay=4min and
+       retry_exponential_backoff=5, retries occur after 4min, 20min, 100min, etc.
+   :param max_retry_delay: maximum delay interval between retries, can be set as
+       ``timedelta`` or ``float`` seconds, which will be converted into ``timedelta``.
+   :param start_date: The ``start_date`` for the task, determines
+       the ``logical_date`` for the first task instance. The best practice
+       is to have the start_date rounded
+       to your Dag's ``schedule_interval``. Daily jobs have their start_date
+       some day at 00:00:00, hourly jobs have their start_date at 00:00
+       of a specific hour. Note that Airflow simply looks at the latest
+       ``logical_date`` and adds the ``schedule_interval`` to determine
+       the next ``logical_date``. It is also very important
+       to note that different tasks' dependencies
+       need to line up in time. If task A depends on task B and their
+       start_date are offset in a way that their logical_date don't line
+       up, A's dependencies will never be met. If you are looking to delay
+       a task, for example running a daily task at 2AM, look into the
+       ``TimeSensor`` and ``TimeDeltaSensor``. We advise against using
+       dynamic ``start_date`` and recommend using fixed ones. Read the
+       FAQ entry about start_date for more information.
+   :param end_date: if specified, the scheduler won't go beyond this date
+   :param depends_on_past: when set to true, task instances will run
+       sequentially and only if the previous instance has succeeded or has been skipped.
+       The task instance for the start_date is allowed to run.
+   :param wait_for_past_depends_before_skipping: when set to true, if the task instance
+       should be marked as skipped, and depends_on_past is true, the ti will stay on None state
+       waiting the task of the previous run
+   :param wait_for_downstream: when set to true, an instance of task
+       X will wait for tasks immediately downstream of the previous instance
+       of task X to finish successfully or be skipped before it runs. This is useful if the
+       different instances of a task X alter the same asset, and this asset
+       is used by tasks downstream of task X. Note that depends_on_past
+       is forced to True wherever wait_for_downstream is used. Also note that
+       only tasks *immediately* downstream of the previous task instance are waited
+       for; the statuses of any tasks further downstream are ignored.
+   :param dag: a reference to the dag the task is attached to (if any)
+   :param priority_weight: priority weight of this task against other task.
+       This allows the executor to trigger higher priority tasks before
+       others when things get backed up. Set priority_weight as a higher
+       number for more important tasks.
+       As not all database engines support 64-bit integers, values are capped with 32-bit.
+       Valid range is from -2,147,483,648 to 2,147,483,647.
+   :param weight_rule: weighting method used for the effective total
+       priority weight of the task. Options are:
+       ``{ downstream | upstream | absolute }`` default is ``downstream``
+       When set to ``downstream`` the effective weight of the task is the
+       aggregate sum of all downstream descendants. As a result, upstream
+       tasks will have higher weight and will be scheduled more aggressively
+       when using positive weight values. This is useful when you have
+       multiple dag run instances and desire to have all upstream tasks to
+       complete for all runs before each dag can continue processing
+       downstream tasks. When set to ``upstream`` the effective weight is the
+       aggregate sum of all upstream ancestors. This is the opposite where
+       downstream tasks have higher weight and will be scheduled more
+       aggressively when using positive weight values. This is useful when you
+       have multiple dag run instances and prefer to have each dag complete
+       before starting upstream tasks of other dags.  When set to
+       ``absolute``, the effective weight is the exact ``priority_weight``
+       specified without additional weighting. You may want to do this when
+       you know exactly what priority weight each task should have.
+       Additionally, when set to ``absolute``, there is bonus effect of
+       significantly speeding up the task creation process as for very large
+       Dags. Options can be set as string or using the constants defined in
+       the static class ``airflow.utils.WeightRule``.
+       Irrespective of the weight rule, resulting priority values are capped with 32-bit.
+       |experimental|
+       Since 2.9.0, Airflow allows to define custom priority weight strategy,
+       by creating a subclass of
+       ``airflow.task.priority_strategy.PriorityWeightStrategy`` and registering
+       in a plugin, then providing the class path or the class instance via
+       ``weight_rule`` parameter. The custom priority weight strategy will be
+       used to calculate the effective total priority weight of the task instance.
+   :param queue: which queue to target when running this job. Not
+       all executors implement queue management, the CeleryExecutor
+       does support targeting specific queues.
+   :param pool: the slot pool this task should run in, slot pools are a
+       way to limit concurrency for certain tasks
+   :param pool_slots: the number of pool slots this task should use (>= 1)
+       Values less than 1 are not allowed.
+   :param sla: DEPRECATED - The SLA feature is removed in Airflow 3.0, to be replaced with a
+       new implementation in Airflow >=3.1.
+   :param execution_timeout: max time allowed for the execution of
+       this task instance, if it goes beyond it will raise and fail.
+   :param on_failure_callback: a function or list of functions to be called when a task instance
+       of this task fails. a context dictionary is passed as a single
+       parameter to this function. Context contains references to related
+       objects to the task instance and is documented under the macros
+       section of the API.
+   :param on_execute_callback: much like the ``on_failure_callback`` except
+       that it is executed right before the task is executed.
+   :param on_retry_callback: much like the ``on_failure_callback`` except
+       that it is executed when retries occur.
+   :param on_success_callback: much like the ``on_failure_callback`` except
+       that it is executed when the task succeeds.
+   :param on_skipped_callback: much like the ``on_failure_callback`` except
+       that it is executed when skipped occur; this callback will be called only if AirflowSkipException get raised.
+       Explicitly it is NOT called if a task is not started to be executed because of a preceding branching
+       decision in the Dag or a trigger rule which causes execution to skip so that the task execution
+       is never scheduled.
+   :param pre_execute: a function to be called immediately before task
+       execution, receiving a context dictionary; raising an exception will
+       prevent the task from being executed.
+   :param post_execute: a function to be called immediately after task
+       execution, receiving a context dictionary and task result; raising an
+       exception will prevent the task from succeeding.
+   :param trigger_rule: defines the rule by which dependencies are applied
+       for the task to get triggered. Options are:
+       ``{ all_success | all_failed | all_done | all_skipped | one_success | one_done |
+       one_failed | none_failed | none_failed_min_one_success | none_skipped | always}``
+       default is ``all_success``. Options can be set as string or
+       using the constants defined in the static class
+       ``airflow.utils.TriggerRule``
+   :param resources: A map of resource parameter names (the argument names of the
+       Resources constructor) to their values.
+   :param run_as_user: unix username to impersonate while running the task
+   :param max_active_tis_per_dag: When set, a task will be able to limit the concurrent
+       runs across logical_dates.
+   :param max_active_tis_per_dagrun: When set, a task will be able to limit the concurrent
+       task instances per Dag run.
+   :param executor: Which executor to target when running this task. NOT YET SUPPORTED
+   :param executor_config: Additional task-level configuration parameters that are
+       interpreted by a specific executor. Parameters are namespaced by the name of
+       executor.
+
+       **Example**: to run this task in a specific docker container through
+       the KubernetesExecutor ::
+
+           MyOperator(..., executor_config={"KubernetesExecutor": {"image": "myCustomDockerImage"}})
+
+   :param do_xcom_push: if True, an XCom is pushed containing the Operator's
+       result
+   :param multiple_outputs: if True and do_xcom_push is True, pushes multiple XComs, one for each
+       key in the returned dictionary result. If False and do_xcom_push is True, pushes a single XCom.
+   :param task_group: The TaskGroup to which the task should belong. This is typically provided when not
+       using a TaskGroup as a context manager.
+   :param doc: Add documentation or notes to your Task objects that is visible in
+       Task Instance details View in the Webserver
+   :param doc_md: Add documentation (in Markdown format) or notes to your Task objects
+       that is visible in Task Instance details View in the Webserver
+   :param doc_rst: Add documentation (in RST format) or notes to your Task objects
+       that is visible in Task Instance details View in the Webserver
+   :param doc_json: Add documentation (in JSON format) or notes to your Task objects
+       that is visible in Task Instance details View in the Webserver
+   :param doc_yaml: Add documentation (in YAML format) or notes to your Task objects
+       that is visible in Task Instance details View in the Webserver
+   :param task_display_name: The display name of the task which appears on the UI.
+   :param logger_name: Name of the logger used by the Operator to emit logs.
+       If set to `None` (default), the logger name will fall back to
+       `airflow.task.operators.{class.__module__}.{class.__name__}` (e.g. HttpOperator will have
+       *airflow.task.operators.airflow.providers.http.operators.http.HttpOperator* as logger).
+   :param allow_nested_operators: if True, when an operator is executed within another one a warning message
+       will be logged. If False, then an exception will be raised if the operator is badly used (e.g. nested
+       within another one). In future releases of Airflow this parameter will be removed and an exception
+       will always be thrown when operators are nested within each other (default is True).
+
+       **Example**: example of a bad operator mixin usage::
+
+           @task(provide_context=True)
+           def say_hello_world(**context):
+               hello_world_task = BashOperator(
+                   task_id="hello_world_task",
+                   bash_command="python -c \"print('Hello, world!')\"",
+                   dag=dag,
+               )
+               hello_world_task.execute(context)
+   :param render_template_as_native_obj: If True, uses a Jinja ``NativeEnvironment``
+       to render templates as native Python types. If False, a Jinja
+       ``Environment`` is used to render templates as string values.
+       If None (default), inherits from the DAG setting.
+   :param start_from_trigger: If True, the operator starts execution directly in the triggerer,
+       skipping the initial worker execution phase. In this mode, templated fields are rendered
+       inside the triggerer instead of the worker. This avoids an extra round trip to a worker,
+       but may increase load on the triggerer, since the DAG must be serialized in order to
+       render templated fields. Use with care for DAGs with many tasks or heavy templating.
+   :param start_trigger_args: Used together with ``start_from_trigger`` to explicitly specify
+       which operator fields should be passed to the trigger. This helps limit the amount of
+       data serialized and sent to the triggerer.
+
+
+   .. py:attribute:: value
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+.. py:data:: DAG_ID
+   :value: 'openlineage_base_complex_dag'
+
+
+.. py:data:: task_0
+
+.. py:data:: test_run
+

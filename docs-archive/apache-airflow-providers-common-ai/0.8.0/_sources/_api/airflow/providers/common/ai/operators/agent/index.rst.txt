@@ -1,0 +1,275 @@
+airflow.providers.common.ai.operators.agent
+===========================================
+
+.. py:module:: airflow.providers.common.ai.operators.agent
+
+.. autoapi-nested-parse::
+
+   Operator for running pydantic-ai agents with tools and multi-turn reasoning.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.operators.agent.HITLReviewLink
+   airflow.providers.common.ai.operators.agent.AgentOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: HITLReviewLink
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperatorLink`
+
+
+   Link that opens the live chat window for a running feedback session.
+
+   The URL is constructed directly from the task instance key so that the
+   link is available immediately — even while the task is still running —
+   without waiting for an XCom value to be committed.
+
+
+   .. py:attribute:: name
+      :value: 'HITL Review'
+
+
+      Name of the link. This will be the button name on the task UI.
+
+
+
+   .. py:method:: get_link(operator, *, ti_key)
+
+      Link to external system.
+
+      :param operator: The Airflow operator object this link is associated to.
+      :param ti_key: TaskInstance ID to return link for.
+      :return: link to external system
+
+
+
+.. py:class:: AgentOperator(*, prompt, llm_conn_id, model_id = None, system_prompt = '', output_type = str, toolsets = None, enable_tool_logging = True, agent_params = None, usage_limits = None, durable = False, code_mode = False, message_history = None, enable_hitl_review = False, max_hitl_iterations = 5, hitl_timeout = None, hitl_poll_interval = 10.0, serialize_output = False, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin`
+
+
+   Run a pydantic-ai Agent with tools and multi-turn reasoning.
+
+   Provide ``llm_conn_id`` and optional ``toolsets`` to let the operator build
+   and run the agent. The agent reasons about the prompt, calls tools in a
+   multi-turn loop, and returns a final answer.
+
+   :param prompt: The prompt to send to the agent.
+   :param llm_conn_id: Connection ID for the LLM provider.
+   :param model_id: Model identifier (e.g. ``"openai:gpt-5"``).
+       Overrides the model stored in the connection's extra field.
+   :param system_prompt: System-level instructions for the agent.
+   :param output_type: Expected output type. Default ``str``. Set to a Pydantic
+       ``BaseModel`` subclass for structured output; the model instance is
+       returned to XCom unchanged so downstream tasks can type-hint it
+       directly. The class must be defined at module scope -- nested classes
+       cannot be deserialized from XCom.
+   :param toolsets: List of pydantic-ai toolsets the agent can use
+       (e.g. ``SQLToolset``, ``HookToolset``).
+   :param enable_tool_logging: When ``True`` (default), wraps each toolset in a
+       ``LoggingToolset`` that logs tool calls with timing at INFO level and
+       arguments at DEBUG level. Set to ``False`` to disable.
+   :param agent_params: Additional keyword arguments passed to the pydantic-ai
+       ``Agent`` constructor (e.g. ``retries``, ``model_settings``).
+   :param usage_limits: Optional pydantic-ai
+       :class:`~pydantic_ai.usage.UsageLimits` enforced on every agent run
+       (initial run, durable replay, and HITL regeneration). Pass
+       ``UsageLimits(request_limit=..., total_tokens_limit=..., tool_calls_limit=..., ...)``
+       to fail the task when the agent exceeds the configured token, request,
+       or tool budget. ``None`` (default) means no enforcement.
+   :param durable: When ``True``, enables step-level caching of model
+       responses and tool results for durable execution.  On retry, cached
+       steps are replayed instead of re-executing.  Each cached step is
+       verified against the current request before replay: if the prompt,
+       model, settings, tools, or message history changed since the failed
+       attempt, the affected steps re-run live (with a warning) instead of
+       replaying stale results.  Default ``False``.
+       On Airflow >= 3.3 the cache is kept in the AIP-103 task state store, so
+       no extra configuration is needed. On older cores it is persisted to
+       ObjectStorage and requires ``[common.ai] durable_cache_path`` to be set.
+       Tools are durably cached when provided via ``toolsets=`` or via a
+       concrete pydantic-ai ``Toolset`` capability. Tools reaching the agent
+       through any *other* capability -- ``MCP``, ``PrefixTools``,
+       ``CombinedCapability``, a ``Toolset`` backed by a callable factory, or
+       capabilities loaded from a ``spec_file`` -- are not cached and re-run on
+       retry; put tools you need replayed in ``toolsets=``. Provider-native
+       capabilities such as ``WebSearch`` and ``Thinking`` execute inside the
+       model call and are covered by model-response caching.
+   :param code_mode: When ``True``, wraps the agent's tools in a single
+       ``run_code`` tool powered by the Monty sandbox (pydantic-ai-harness
+       ``CodeMode``). Instead of one model round-trip per tool call, the model
+       writes Python that calls the tools as functions, with loops and
+       ``asyncio.gather``, in one turn. The generated code runs in Monty's
+       deny-by-default sandbox; the tools it calls still run in the worker, so
+       ``code_mode`` does not widen what the tools can reach -- it only changes
+       how the model invokes them. Requires the ``code-mode`` extra
+       (``pip install "apache-airflow-providers-common-ai[code-mode]"``).
+       Cannot be combined with ``durable=True`` (durable replay assumes a
+       stable per-step call order that code mode does not guarantee).
+       Default ``False``.
+   :param message_history: Prior conversation to seed the run with, for
+       multi-turn sessions that span task runs. Accepts a ``list`` of
+       pydantic-ai ``ModelMessage`` objects, or their JSON form as ``str`` /
+       ``bytes`` -- e.g.
+       ``"{{ ti.xcom_pull(task_ids='ask', key='message_history', default='[]') }}"``
+       (pass ``default='[]'`` so the first run, with no XCom yet, starts a fresh
+       session instead of failing to parse the string ``"None"``). ``None``
+       (default) is a single-turn run -- no behavior change. When set (an empty
+       ``[]`` / ``""`` starts a fresh session), the full transcript after the run
+       -- ``result.all_messages()`` -- is pushed to XCom under the key
+       ``message_history`` so the next run can resume. Persisting that transcript
+       under a session key (e.g. in object storage) is the DAG's responsibility.
+       The transcript is cumulative and grows each turn; for long sessions use an
+       object-storage XCom backend or trim old turns. Not supported together with
+       ``enable_hitl_review`` (raises) -- the post-review transcript is not yet
+       recoverable.
+
+   **HITL Review parameters** (requires the ``hitl_review`` plugin):
+
+   :param enable_hitl_review: When ``True``, the operator enters an
+       iterative review loop after the first generation.  A human reviewer
+       can approve, reject, or request changes via the plugin's REST API
+       at ``/hitl-review`` or through the **HITL Review** extra link
+       on the task instance.  Default ``False``.
+   :param max_hitl_iterations: Maximum outputs shown to the reviewer (1 =
+       initial output). When the reviewer requests changes at
+       iteration >= this limit, the task fails with ``HITLMaxIterationsError``
+       without calling the LLM. E.g. 5 allows changes at iterations 1–4.
+       Default ``5``.
+   :param hitl_timeout: Maximum wall-clock time to wait for
+       all review rounds combined.  ``None`` means no timeout (the
+       operator blocks until a terminal action).
+   :param hitl_poll_interval: Seconds between XCom polls
+       while waiting for a human response.  Default ``10``.
+   :param serialize_output: If ``True`` and ``output_type`` is a Pydantic
+       ``BaseModel`` subclass, the model instance is dumped to a ``dict`` via
+       ``model_dump()`` before being pushed to XCom. Default ``False`` --
+       the Pydantic instance flows through XCom unchanged. Set to ``True``
+       when a downstream consumer needs the dict shape.
+
+
+   .. py:attribute:: deserialization_allowed_class_fields
+      :type:  ClassVar[tuple[str, Ellipsis]]
+      :value: ('output_type',)
+
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('prompt', 'llm_conn_id', 'model_id', 'system_prompt', 'agent_params', 'message_history')
+
+
+
+   .. py:attribute:: operator_extra_links
+
+
+   .. py:attribute:: prompt
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: model_id
+      :value: None
+
+
+
+   .. py:attribute:: system_prompt
+      :value: ''
+
+
+
+   .. py:attribute:: output_type
+
+
+   .. py:attribute:: serialize_output
+      :value: False
+
+
+
+   .. py:attribute:: toolsets
+      :value: None
+
+
+
+   .. py:attribute:: enable_tool_logging
+      :value: True
+
+
+
+   .. py:attribute:: agent_params
+
+
+   .. py:attribute:: usage_limits
+      :value: None
+
+
+
+   .. py:attribute:: message_history
+      :value: None
+
+
+
+   .. py:attribute:: durable
+      :value: False
+
+
+
+   .. py:attribute:: code_mode
+      :value: False
+
+
+
+   .. py:attribute:: enable_hitl_review
+      :value: False
+
+
+
+   .. py:attribute:: max_hitl_iterations
+      :value: 5
+
+
+
+   .. py:attribute:: hitl_timeout
+      :value: None
+
+
+
+   .. py:attribute:: hitl_poll_interval
+      :value: 10.0
+
+
+
+   .. py:property:: llm_hook
+      :type: airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook
+
+
+      Return PydanticAIHook for the configured LLM connection.
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: regenerate_with_feedback(*, feedback, message_history)
+
+      Re-run the agent with *feedback* appended to the conversation history.
+
+
+

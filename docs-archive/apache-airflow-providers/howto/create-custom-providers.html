@@ -703,7 +703,7 @@ provider provides. See <a class="reference external" href="/docs/apache-airflow/
 to add.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">sensors</span></code> - this field should contain the list of all the sensor class names that the
 provider provides. See <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/sensors.html" title="(in apache-airflow v3.4.0)"><span>Sensors</span></a> for description of the sensors.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">task-decorators</span></code> - this field should contain the list of dictionaries of name/path where the decorators
+<li><p><code class="docutils literal notranslate"><span class="pre">task-decorators</span></code> - this field should contain the list of dictionaries of name/class-name where the decorators
 are available. See <a class="reference external" href="/docs/apache-airflow/stable/howto/create-custom-decorator.html" title="(in apache-airflow v3.4.0)"><span>Creating Custom &#64;task Decorators</span></a> for description of how to add
 custom decorators.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">transfers</span></code> - this field should contain the list of all the transfer operator class names that the
@@ -1148,6 +1148,13 @@ in the schema:</p></li>
                 <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
             <span class="p">}</span>
         <span class="p">},</span>
+        <span class="s2">&quot;email-backends&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;array&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Email backend function names&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
+            <span class="p">}</span>
+        <span class="p">},</span>
         <span class="s2">&quot;logging&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;array&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Logging Task Handlers class names&quot;</span><span class="p">,</span>
@@ -1256,11 +1263,16 @@ in the schema:</p></li>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;array&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Apply custom decorators to the TaskFlow API. Can be accessed by users via &#39;@task.&lt;name&gt;&#39;&quot;</span><span class="p">,</span>
             <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
-                <span class="p">},</span>
-                <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Name the decorator is exposed under, following &#39;@task.&#39;&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;class-name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Class name that implements the decorator&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
+                    <span class="p">}</span>
                 <span class="p">}</span>
             <span class="p">}</span>
         <span class="p">},</span>
@@ -1268,27 +1280,22 @@ in the schema:</p></li>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;array&quot;</span><span class="p">,</span>
             <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Plugins provided by the provider&quot;</span><span class="p">,</span>
             <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Name of the plugin&quot;</span>
-                <span class="p">},</span>
-                <span class="s2">&quot;plugin-class&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Class to instantiate the plugin&quot;</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Name of the plugin&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;plugin-class&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Class to instantiate the plugin&quot;</span>
+                    <span class="p">}</span>
                 <span class="p">}</span>
             <span class="p">}</span>
         <span class="p">},</span>
         <span class="s2">&quot;queues&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;array&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Message Queues exposed by the provider&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
-                <span class="p">},</span>
-                <span class="s2">&quot;message-queue-class&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
-                <span class="p">}</span>
-            <span class="p">}</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Message queue provider class names&quot;</span>
         <span class="p">}</span>
     <span class="p">},</span>
     <span class="s2">&quot;definitions&quot;</span><span class="p">:</span> <span class="p">{</span>
