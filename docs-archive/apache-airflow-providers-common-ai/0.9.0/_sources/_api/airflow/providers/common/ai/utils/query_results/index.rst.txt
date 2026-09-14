@@ -1,0 +1,69 @@
+airflow.providers.common.ai.utils.query_results
+===============================================
+
+.. py:module:: airflow.providers.common.ai.utils.query_results
+
+.. autoapi-nested-parse::
+
+   Bounded, columnar payloads for the ``query`` tool of the SQL toolsets.
+
+   A tool result stays in the model's message history for the rest of the run, so its
+   cost is re-paid on every subsequent request. Two things here keep that bounded:
+
+   * **Columnar shape.** ``{"columns": [...], "rows": [[...], ...]}`` names each column
+     once instead of repeating it in a dict per row. On a table with thousands of
+     columns the repeated names, not the values, are the bulk of the payload.
+   * **A byte budget.** ``max_rows`` caps rows, which says nothing about size -- a
+     single row of a 3000-column table dwarfs a thousand rows of a narrow one. The
+     budget here is what actually bounds context, and when it bites the payload says
+     so, in terms the agent can act on (narrow the projection).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.query_results.DEFAULT_MAX_RESULT_BYTES
+   airflow.providers.common.ai.utils.query_results.QUERY_TOOL_DESCRIPTION
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.query_results.build_query_result
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_MAX_RESULT_BYTES
+   :value: 65536
+
+
+.. py:data:: QUERY_TOOL_DESCRIPTION
+   :value: 'Execute a SQL query. Returns JSON of the form {"columns": [name, ...], "rows": [[value, ...],...
+
+
+.. py:function:: build_query_result(columns, rows, *, max_rows, max_result_bytes, more_rows_available, total_rows = None)
+
+   Render query rows as a bounded, columnar JSON tool result.
+
+   :param columns: Column names, in the order the values appear in each row.
+   :param rows: Rows already capped to ``max_rows``; only the byte budget is
+       applied here.
+   :param max_rows: The row cap that produced *rows*, reported back to the agent
+       so it knows which limit it hit.
+   :param max_result_bytes: Budget for the serialized column names plus rows.
+       The surrounding envelope (the ``truncated``/``hint`` keys) adds a small
+       fixed amount on top.
+   :param more_rows_available: Whether the query matched more rows than *rows*
+       holds.
+   :param total_rows: Total rows the driver reported for the query, when it
+       reports one at all. ``None`` is common and is not an error -- SQLite and
+       several warehouse drivers do not populate it for ``SELECT``.
+
+

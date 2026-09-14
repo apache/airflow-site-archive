@@ -1,0 +1,129 @@
+airflow.providers.common.ai.mixins.hitl_review
+==============================================
+
+.. py:module:: airflow.providers.common.ai.mixins.hitl_review
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.hitl_review.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol
+   airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: HITLReviewProtocol
+
+   Bases: :py:obj:`Protocol`
+
+
+   Attributes that the host operator must provide.
+
+
+   .. py:attribute:: enable_hitl_review
+      :type:  bool
+
+
+   .. py:attribute:: max_hitl_iterations
+      :type:  int
+
+
+   .. py:attribute:: hitl_timeout
+      :type:  datetime.timedelta | None
+
+
+   .. py:attribute:: hitl_poll_interval
+      :type:  float
+
+
+   .. py:attribute:: prompt
+      :type:  str
+
+
+   .. py:attribute:: task_id
+      :type:  str
+
+
+   .. py:attribute:: log
+      :type:  Any
+
+
+.. py:class:: HITLReviewMixin
+
+   Mixin that drives an iterative HITL review loop inside ``execute()``.
+
+   After the operator generates its first output, the mixin:
+
+   1. Pushes session metadata and the first agent output to XCom.
+   2. Polls the human action XCom (``airflow_hitl_review_human_action``) at ``hitl_poll_interval`` seconds.
+   3. When a human sets action to ``changes_requested`` (via the plugin API),
+      calls :meth:`regenerate_with_feedback` and pushes the new agent output.
+   4. When a human sets action to ``approved``, returns the output.
+   5. When a human sets action to ``rejected``, raises a `HITLRejectException`
+
+   The loop stops after ``hitl_timeout`` or ``max_hitl_iterations``.
+
+   **Max iterations:** ``iteration`` counts outputs shown to the reviewer
+   (1 = initial, 2 = first regeneration, etc.). When the reviewer requests
+   changes at ``iteration >= max_hitl_iterations``, the mixin raises
+   ``HITLMaxIterationsError`` without calling the LLM. With
+   ``max_hitl_iterations=5``, the reviewer can request changes at most 4
+   times (iterations 1–4); the fifth output is the last chance to approve or
+   reject.
+
+   All agent outputs and human feedback are persisted as iteration-keyed
+   XCom entries (``airflow_hitl_review_agent_output_1``, ``airflow_hitl_review_human_feedback_1``, etc.)
+   for full auditability.
+
+   Operators using this mixin must set:
+
+   - ``enable_hitl_review`` (``bool``)
+   - ``hitl_timeout`` (``timedelta | None``)
+   - ``hitl_poll_interval`` (``float``, seconds)
+   - ``prompt`` (``str``)
+
+   And must implement: meth:`regenerate_with_feedback`.
+
+
+   .. py:method:: run_hitl_review(context, output, *, message_history = None)
+
+      Execute the full HITL review loop.
+
+      :param context: Airflow task context.
+      :param output: Initial LLM output (str or BaseModel).
+      :param message_history: Provider-specific conversation state (e.g.
+          pydantic-ai ``list[ModelMessage]``).  Passed to
+          :meth:`regenerate_with_feedback` on each iteration.
+      :returns: The final approved output as a string.
+      :raises HITLMaxIterationsError: When max iterations reached without approval.
+      :raises HITLRejectException: When the reviewer rejects the output.
+      :raises HITLTimeoutError: When hitl_timeout elapses with no response.
+
+
+
+   .. py:method:: regenerate_with_feedback(*, feedback, message_history)
+      :abstractmethod:
+
+
+      Re-run the LLM with reviewer feedback.
+
+      :param feedback: The reviewer's feedback text.
+      :param message_history: Provider-specific conversation state.
+      :returns: ``(new_output_string, updated_message_history)``.
+
+
+

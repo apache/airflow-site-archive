@@ -1,0 +1,254 @@
+airflow.providers.common.ai.sandbox.base
+========================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.base
+
+.. autoapi-nested-parse::
+
+   Vendor-neutral contract for running agent commands and file operations in an isolated sandbox.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.base.SandboxError
+   airflow.providers.common.ai.sandbox.base.SandboxTerminalError
+   airflow.providers.common.ai.sandbox.base.SandboxFileTooLargeError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.base.SandboxSpec
+   airflow.providers.common.ai.sandbox.base.SandboxExecResult
+   airflow.providers.common.ai.sandbox.base.SandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:exception:: SandboxError
+
+   Bases: :py:obj:`Exception`
+
+
+   A sandbox operation failed in a way the agent may be able to work around.
+
+   The toolset turns this into a ``ModelRetry`` so the model can adjust and try
+   again within the run (a bad path, a command the image cannot run).
+
+
+.. py:exception:: SandboxTerminalError
+
+   Bases: :py:obj:`SandboxError`
+
+
+   The sandbox is unusable and retrying the same call cannot succeed.
+
+   Credentials were rejected, the daemon is unreachable, the sandbox is gone.
+   The toolset lets this propagate and fail the task, so Airflow's own retry
+   handles it rather than the model burning its retry budget.
+
+
+.. py:exception:: SandboxFileTooLargeError(path, size_bytes, max_bytes)
+
+   Bases: :py:obj:`SandboxError`
+
+
+   A file is larger than the caller's read budget, so it was not transferred.
+
+
+   .. py:attribute:: path
+
+
+   .. py:attribute:: size_bytes
+
+
+   .. py:attribute:: max_bytes
+
+
+.. py:class:: SandboxSpec
+
+   What a single sandbox should be provisioned with.
+
+   Passed to :meth:`SandboxBackend.create`. Every field is optional and a
+   backend may not be able to honor all of them; a backend that cannot enforce
+   a field it was given must raise rather than silently ignore it, so a DAG
+   author never believes a restriction is in force when it is not.
+
+   :param env: Environment variables to set inside the sandbox. Airflow never
+       populates this itself -- the DAG author decides what, if anything, the
+       sandbox is given. Anything placed here is visible to model-generated
+       code, so scope it to what that code legitimately needs.
+   :param block_network: Deny all outbound network access. Defaults to ``True``:
+       an isolated sandbox that cannot phone home is the safe starting point,
+       and egress is opened deliberately.
+   :param allow_egress_to: Hostnames the sandbox may reach when
+       ``block_network`` is ``True``. An empty or unset value with
+       ``block_network=True`` means no egress at all.
+
+
+   .. py:attribute:: env
+      :type:  collections.abc.Mapping[str, str] | None
+      :value: None
+
+
+
+   .. py:attribute:: block_network
+      :type:  bool
+      :value: True
+
+
+
+   .. py:attribute:: allow_egress_to
+      :type:  collections.abc.Sequence[str] | None
+      :value: None
+
+
+
+.. py:class:: SandboxExecResult
+
+   Outcome of one command executed inside a sandbox.
+
+   ``timed_out`` means the command hit the budget, so ``exit_code`` carries no
+   meaning. ``stdout_truncated`` / ``stderr_truncated`` mean the backend
+   dropped bytes while reading that stream, before any model-facing formatting.
+   ``sandbox_terminated`` means the backend destroyed the sandbox to stop the
+   command, so the toolset must provision a fresh one before the next call.
+
+
+   .. py:attribute:: exit_code
+      :type:  int
+
+
+   .. py:attribute:: stdout
+      :type:  str
+
+
+   .. py:attribute:: stderr
+      :type:  str
+
+
+   .. py:attribute:: timed_out
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: stdout_truncated
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: stderr_truncated
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: sandbox_terminated
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: SandboxBackend
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   Contract for running commands and file operations in an isolated sandbox.
+
+   The lifecycle is create -> (any number of operations) -> destroy, driven by
+   :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`.
+   The four operation methods are named after the four tools the toolset
+   exposes, so the mapping from a model-facing tool to the backend call behind
+   it is literal; ``create`` and ``destroy`` are lifecycle and have no tool.
+
+   Implementations must be cheap to construct, because constructors run at
+   Dag-parse time: resolve credentials and open connections lazily, on first
+   use. ``destroy`` must be idempotent -- destroying an already-gone sandbox is
+   not an error. All methods are synchronous; the toolset offloads them to a
+   thread, so a call may block for as long as its timeout allows.
+
+   Raise :class:`SandboxError` for a failure the model could work around, and
+   :class:`SandboxTerminalError` for one it cannot.
+
+
+   .. py:attribute:: name
+      :type:  ClassVar[str]
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+      :abstractmethod:
+
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+      :abstractmethod:
+
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: read_file(sandbox, path, *, max_bytes)
+
+      Read a file from the sandbox.
+
+      Raise :class:`SandboxFileTooLargeError` instead of transferring a file
+      larger than ``max_bytes``.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Write ``content`` to ``path`` in the sandbox, creating parent directories.
+
+      The payload rides in the command itself, so this default is bounded by
+      the guest's command-line length. A backend that can stream stdin or
+      upload directly should override.
+
+
+
+   .. py:method:: list_directory(sandbox, path)
+
+      Return ``(name, is_dir)`` for each entry in a sandbox directory.
+
+
+
+   .. py:method:: destroy(sandbox)
+      :abstractmethod:
+
+
+      Tear down the sandbox. Must be idempotent.
+
+
+

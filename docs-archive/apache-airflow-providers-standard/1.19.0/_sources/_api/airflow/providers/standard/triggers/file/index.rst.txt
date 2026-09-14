@@ -1,0 +1,191 @@
+airflow.providers.standard.triggers.file
+========================================
+
+.. py:module:: airflow.providers.standard.triggers.file
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.standard.triggers.file.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.standard.triggers.file.FileTrigger
+   airflow.providers.standard.triggers.file.FileDeleteTrigger
+   airflow.providers.standard.triggers.file.DirectoryFileDeleteTrigger
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: FileTrigger(filepath, recursive = False, poke_interval = 5.0, **kwargs)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   A trigger that fires exactly once after it finds the requested file or folder.
+
+   :param filepath: File or folder name (relative to the base path set within the connection), can
+       be a glob.
+   :param recursive: when set to ``True``, enables recursive directory matching behavior of
+       ``**`` in glob filepath parameter. Defaults to ``False``.
+   :param poke_interval: Time that the job should wait in between each try
+
+
+   .. py:attribute:: filepath
+
+
+   .. py:attribute:: recursive
+      :value: False
+
+
+
+   .. py:attribute:: poke_interval
+      :value: 5.0
+
+
+
+   .. py:method:: serialize()
+
+      Serialize FileTrigger arguments and classpath.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Loop until the relevant files are found.
+
+
+
+.. py:class:: FileDeleteTrigger(filepath, poke_interval = 5.0, **kwargs)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseEventTrigger`
+
+
+   A trigger that fires exactly once after it finds the requested file and then delete the file.
+
+   The difference between ``FileTrigger`` and ``FileDeleteTrigger`` is ``FileDeleteTrigger`` can only find a
+   specific file.
+
+   :param filepath: File (relative to the base path set within the connection).
+   :param poke_interval: Time that the job should wait in between each try
+
+
+   .. py:attribute:: filepath
+
+
+   .. py:attribute:: poke_interval
+      :value: 5.0
+
+
+
+   .. py:method:: serialize()
+
+      Serialize FileDeleteTrigger arguments and classpath.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Loop until the relevant file is found.
+
+
+
+.. py:class:: DirectoryFileDeleteTrigger(*, directory, filename, poke_interval = 5.0)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseEventTrigger`
+
+
+   Fire once when ``filename`` appears in ``directory``, then delete it.
+
+   Functionally equivalent to ``FileDeleteTrigger`` for a single file, but
+   sibling triggers that point at the same ``directory`` and ``poke_interval``
+   share a single underlying directory scan in the triggerer; each instance
+   only fires for its own ``filename``. This is useful when many assets are
+   driven by per-flag-file events landing in a shared inbox directory.
+
+   :param directory: Directory to scan.
+   :param filename: File name (without directory) whose appearance fires this
+       trigger. The matched file is deleted before the event is yielded.
+   :param poke_interval: Time to wait between scans.
+
+
+   .. py:attribute:: directory
+
+
+   .. py:attribute:: filename
+
+
+   .. py:attribute:: poke_interval
+      :value: 5.0
+
+
+
+   .. py:method:: serialize()
+
+      Serialize DirectoryFileDeleteTrigger arguments and classpath.
+
+
+
+   .. py:method:: shared_stream_key()
+
+      All triggers on the same directory + cadence share one scan.
+
+
+
+   .. py:method:: open_shared_stream(kwargs)
+      :classmethod:
+
+      :async:
+
+
+      Drive one directory-listing loop and broadcast each snapshot.
+
+      Missing directories yield an empty snapshot so subscribers keep
+      polling for the file to appear. Configuration-class failures
+      (``PermissionError``, ``NotADirectoryError``, ``IsADirectoryError``)
+      propagate — these are almost always permanent (wrong mount, wrong
+      mode, path points at a file), so silently retrying just hides the
+      misconfiguration from the operator; surfacing them as a
+      ``_PollFailure`` makes the trigger visibly fail in the UI, where it
+      can be diagnosed and restarted after the operator corrects the
+      config. Other ``OSError`` subclasses (transient I/O blips, NFS
+      hiccups, etc.) are logged at warning and the snapshot is skipped for
+      this cadence, since those may self-heal.
+
+
+
+   .. py:method:: filter_shared_stream(shared_stream)
+      :async:
+
+
+      Fire once for this instance's own filename and delete the file.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Standalone fallback when the shared-stream manager is unavailable.
+
+      Mirrors the shared path so the trigger remains usable in unit tests
+      and on Airflow versions without the manager wired in. It does not
+      deduplicate I/O — that requires the triggerer to drive the shared
+      stream.
+
+
+

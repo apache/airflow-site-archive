@@ -1,0 +1,164 @@
+airflow.providers.common.ai.toolsets.sandbox
+============================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.sandbox
+
+.. autoapi-nested-parse::
+
+   Toolset giving an agent shell and file access inside an isolated sandbox, off the worker.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sandbox.log
+   airflow.providers.common.ai.toolsets.sandbox.RUN_COMMAND
+   airflow.providers.common.ai.toolsets.sandbox.READ_FILE
+   airflow.providers.common.ai.toolsets.sandbox.WRITE_FILE
+   airflow.providers.common.ai.toolsets.sandbox.LIST_DIRECTORY
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sandbox.SandboxToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: RUN_COMMAND
+   :value: 'run_command'
+
+
+.. py:data:: READ_FILE
+   :value: 'read_file'
+
+
+.. py:data:: WRITE_FILE
+   :value: 'write_file'
+
+
+.. py:data:: LIST_DIRECTORY
+   :value: 'list_directory'
+
+
+.. py:class:: SandboxToolset(backend, *, spec = None, default_command_timeout = 60.0, max_command_timeout = 300.0, max_output_lines = 2000, max_output_bytes = 50 * 1024, max_read_bytes = 5 * 1024 * 1024, tool_prefix = '')
+
+   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`\ [\ :py:obj:`Any`\ ]
+
+
+   Give an agent shell and file access inside a disposable sandbox, off the Airflow worker.
+
+   Exposes four tools -- ``run_command``, ``read_file``, ``write_file`` and
+   ``list_directory`` -- against a sandbox provisioned by the given
+   :class:`~airflow.providers.common.ai.sandbox.SandboxBackend`. The same four
+   names and shapes are what pydantic-ai's own sandbox capabilities use, so a
+   model that has seen one already knows this one.
+
+   **What the boundary covers.** Only what these tools do runs in the sandbox.
+   The agent loop, the LLM calls, and every other toolset on the same agent
+   still run in the Airflow worker process with its credentials. This contains
+   model-written code; it does not contain the agent. See the toolsets
+   documentation for the full picture of which boundary protects what.
+
+   The sandbox is created lazily on the first tool call, shared by every call
+   within one agent run, and destroyed when that run ends. A run that never
+   calls a tool never provisions one. Files persist between calls in a run;
+   each ``run_command`` is a fresh shell, so shell variables do not.
+
+   A non-zero exit or a timeout is normal tool output -- the model reads it and
+   corrects itself. A recoverable sandbox failure becomes a bounded retry. Only
+   a terminal failure (credentials rejected, daemon unreachable) fails the task,
+   so Airflow's own retry handles it.
+
+   :param backend: Backend that provisions and drives the sandbox.
+   :param spec: What to provision the sandbox with -- environment variables and
+       network policy. Defaults to no environment and no egress.
+   :param default_command_timeout: Seconds allowed for a ``run_command`` call
+       when the model does not ask for one. Default ``60``.
+   :param max_command_timeout: Hard ceiling in seconds for any single command,
+       including a model-supplied ``timeout_seconds``. Default ``300``.
+   :param max_output_lines: Maximum lines retained per output stream or file
+       read. Default ``2000``.
+   :param max_output_bytes: Maximum bytes retained per output stream or file
+       read. Default 50 KiB. Whichever cap is reached first wins.
+   :param max_read_bytes: Largest file ``read_file`` will transfer. Default
+       5 MiB; larger files are refused with a hint to slice them in the shell.
+   :param tool_prefix: Prefix for the four tool names, e.g. ``"local"`` gives
+       ``local_run_command``. Set this when one agent has more than one
+       ``SandboxToolset``, since duplicate tool names are rejected.
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+
+
+   .. py:method:: for_run(ctx)
+      :async:
+
+
+      Return the toolset to use for this agent run.
+
+      Called once per run, before `__aenter__`. Override this to return a fresh instance
+      for per-run state isolation. Default: return `self` (shared across runs).
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+      Enter the toolset context.
+
+      This is where you can set up network connections in a concrete implementation.
+
+
+
+   .. py:method:: __aexit__(*args)
+      :async:
+
+
+      Exit the toolset context.
+
+      This is where you can tear down network connections in a concrete implementation.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: call_tool(name, tool_args, ctx, tool)
+      :async:
+
+
+      Call a tool with the given arguments.
+
+      Args:
+          name: The name of the tool to call.
+          tool_args: The arguments to pass to the tool.
+          ctx: The run context.
+          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+
+
+

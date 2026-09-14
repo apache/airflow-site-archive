@@ -1,0 +1,124 @@
+airflow.providers.common.ai.operators.llamaindex_embedding
+==========================================================
+
+.. py:module:: airflow.providers.common.ai.operators.llamaindex_embedding
+
+.. autoapi-nested-parse::
+
+   Operator for document chunking and embedding via LlamaIndex.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.operators.llamaindex_embedding.LlamaIndexEmbeddingOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: LlamaIndexEmbeddingOperator(*, documents, embed_model = None, llm_conn_id = None, embed_conn_id = None, chunk_size = 512, chunk_overlap = 50, persist_dir = None, persist_conn_id = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Chunk documents and produce embedding vectors using LlamaIndex.
+
+   Bridges document loading (e.g.
+   :class:`~airflow.providers.common.ai.operators.document_loader.DocumentLoaderOperator`
+   output) and vector storage (pgvector, Pinecone, Weaviate, ...). Input is
+   ``list[dict]`` with ``text`` and ``metadata`` keys; output includes the
+   embedding vectors ready for downstream storage ingest.
+
+   The operator calls the embedding model **directly** (and passes it to
+   ``VectorStoreIndex(..., embed_model=...)`` when persisting) -- it does
+   not mutate LlamaIndex's global ``Settings`` singleton, so concurrent
+   tasks in the same worker don't race on shared state.
+
+   :param documents: List of dicts with ``text`` and ``metadata`` keys,
+       typically from ``DocumentLoaderOperator`` or a ``@task``. Templated,
+       so binding via ``my_loader.output`` (XCom direct) resolves to the
+       native ``list[dict]`` before ``execute`` runs.
+   :param embed_model: Either:
+
+       * a string model name (e.g. ``"text-embedding-3-small"``) -- the
+         operator constructs an :class:`~.LlamaIndexHook`-backed
+         ``OpenAIEmbedding`` from ``llm_conn_id`` / ``embed_conn_id``, or
+       * a pre-built ``BaseEmbedding`` instance -- bypass the hook
+         entirely for non-OpenAI vendors (e.g.
+         ``CohereEmbedding(...)``, ``BedrockEmbedding(...)``).
+
+       Templated, so it works with both literal strings and ``@task``
+       output that builds a custom embedder.
+
+   :param llm_conn_id: Airflow connection ID for the embedding API. Falls
+       back to :attr:`LlamaIndexHook.default_conn_name` when ``None``.
+   :param embed_conn_id: Optional separate Airflow connection ID for the
+       embedding provider. Falls back to ``llm_conn_id`` when ``None``.
+   :param chunk_size: Chunk size for the sentence splitter.
+   :param chunk_overlap: Overlap between chunks.
+   :param persist_dir: Optional path to persist the index. Accepts local
+       paths and storage URIs (``s3://``, ``gs://``, ...) resolved via
+       :class:`~airflow.sdk.ObjectStoragePath`.
+   :param persist_conn_id: Airflow connection ID for cloud-storage
+       credentials when ``persist_dir`` is a URI.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('documents', 'embed_model', 'llm_conn_id', 'embed_conn_id', 'persist_dir', 'persist_conn_id')
+
+
+
+   .. py:attribute:: documents
+
+
+   .. py:attribute:: embed_model
+      :value: None
+
+
+
+   .. py:attribute:: llm_conn_id
+      :value: None
+
+
+
+   .. py:attribute:: embed_conn_id
+      :value: None
+
+
+
+   .. py:attribute:: chunk_size
+      :value: 512
+
+
+
+   .. py:attribute:: chunk_overlap
+      :value: 50
+
+
+
+   .. py:attribute:: persist_dir
+      :value: None
+
+
+
+   .. py:attribute:: persist_conn_id
+      :value: None
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
