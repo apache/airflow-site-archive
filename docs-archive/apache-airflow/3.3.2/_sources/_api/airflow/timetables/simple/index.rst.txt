@@ -1,0 +1,383 @@
+airflow.timetables.simple
+=========================
+
+.. py:module:: airflow.timetables.simple
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.timetables.simple.BaseAsset
+   airflow.timetables.simple.log
+   airflow.timetables.simple.DEFAULT_PARTITION_MAPPER
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.timetables.simple.NullTimetable
+   airflow.timetables.simple.OnceTimetable
+   airflow.timetables.simple.ContinuousTimetable
+   airflow.timetables.simple.PartitionedAtRuntime
+   airflow.timetables.simple.PartitionedAssetTimetable
+
+
+Module Contents
+---------------
+
+.. py:type:: BaseAsset
+   :canonical: SerializedAssetBase
+
+
+.. py:data:: log
+
+.. py:class:: NullTimetable
+
+   Bases: :py:obj:`_TrivialTimetable`
+
+
+   Timetable that never schedules anything.
+
+   This corresponds to ``schedule=None``.
+
+
+   .. py:attribute:: can_be_scheduled
+      :value: False
+
+
+      Whether this timetable can actually schedule runs in an automated manner.
+
+      This defaults to and should generally be *True* (including non periodic
+      execution types like *@once* and data triggered tables), but
+      ``NullTimetable`` sets this to *False*.
+
+
+
+   .. py:attribute:: partitioned_at_runtime
+      :value: False
+
+
+      Whether this timetable defers partition selection to task runtime.
+
+      *True* for :class:`~airflow.timetables.simple.PartitionedAtRuntime`;
+      downstream code can branch on this flag instead of using ``isinstance``.
+
+
+
+   .. py:attribute:: description
+      :type:  str
+      :value: 'Never, external triggers only'
+
+
+      Human-readable description of the timetable.
+
+      For example, this can produce something like ``'At 21:30, only on Friday'``
+      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+   .. py:method:: next_dagrun_info(*, last_automated_data_interval, restriction)
+
+      Provide information to schedule the next DagRun.
+
+      The default implementation raises ``NotImplementedError``.
+
+      :param last_automated_data_interval: The data interval of the associated
+          DAG's last scheduled or backfilled run (manual runs not considered).
+          This is only ``None`` when the Dag is being scheduled for the first
+          time, which happens when the Dag processor first parses the Dag --
+          before any Dag run exists.
+      :param restriction: Restriction to apply when scheduling the DAG run.
+          See documentation of :class:`TimeRestriction` for details.
+
+      :return: Information on when the next DagRun can be scheduled. None
+          means a DagRun will not happen. This does not mean no more runs
+          will be scheduled even again for this DAG; the timetable can return
+          a DagRunInfo object when asked at another time.
+
+
+
+.. py:class:: OnceTimetable
+
+   Bases: :py:obj:`_TrivialTimetable`
+
+
+   Timetable that schedules the execution once as soon as possible.
+
+   This corresponds to ``schedule="@once"``.
+
+
+   .. py:attribute:: description
+      :type:  str
+      :value: 'Once, as soon as possible'
+
+
+      Human-readable description of the timetable.
+
+      For example, this can produce something like ``'At 21:30, only on Friday'``
+      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+   .. py:method:: next_dagrun_info(*, last_automated_data_interval, restriction)
+
+      Provide information to schedule the next DagRun.
+
+      The default implementation raises ``NotImplementedError``.
+
+      :param last_automated_data_interval: The data interval of the associated
+          DAG's last scheduled or backfilled run (manual runs not considered).
+          This is only ``None`` when the Dag is being scheduled for the first
+          time, which happens when the Dag processor first parses the Dag --
+          before any Dag run exists.
+      :param restriction: Restriction to apply when scheduling the DAG run.
+          See documentation of :class:`TimeRestriction` for details.
+
+      :return: Information on when the next DagRun can be scheduled. None
+          means a DagRun will not happen. This does not mean no more runs
+          will be scheduled even again for this DAG; the timetable can return
+          a DagRunInfo object when asked at another time.
+
+
+
+.. py:class:: ContinuousTimetable
+
+   Bases: :py:obj:`_TrivialTimetable`
+
+
+   Timetable that schedules continually, while still respecting start_date and end_date.
+
+   This corresponds to ``schedule="@continuous"``.
+
+
+   .. py:attribute:: description
+      :type:  str
+      :value: 'As frequently as possible, but only one run at a time.'
+
+
+      Human-readable description of the timetable.
+
+      For example, this can produce something like ``'At 21:30, only on Friday'``
+      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
+
+
+
+   .. py:attribute:: active_runs_limit
+      :value: 1
+
+
+      Maximum active runs that can be active at one time for a DAG.
+
+      This is called during DAG initialization, and the return value is used as
+      the DAG's default ``max_active_runs``. This should generally return *None*,
+      but there are good reasons to limit DAG run parallelism in some cases, such
+      as for :class:`~airflow.timetable.simple.ContinuousTimetable`.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+   .. py:method:: next_dagrun_info(*, last_automated_data_interval, restriction)
+
+      Provide information to schedule the next DagRun.
+
+      The default implementation raises ``NotImplementedError``.
+
+      :param last_automated_data_interval: The data interval of the associated
+          DAG's last scheduled or backfilled run (manual runs not considered).
+          This is only ``None`` when the Dag is being scheduled for the first
+          time, which happens when the Dag processor first parses the Dag --
+          before any Dag run exists.
+      :param restriction: Restriction to apply when scheduling the DAG run.
+          See documentation of :class:`TimeRestriction` for details.
+
+      :return: Information on when the next DagRun can be scheduled. None
+          means a DagRun will not happen. This does not mean no more runs
+          will be scheduled even again for this DAG; the timetable can return
+          a DagRunInfo object when asked at another time.
+
+
+
+.. py:class:: PartitionedAtRuntime
+
+   Bases: :py:obj:`NullTimetable`
+
+
+   Timetable that never schedules anything; partition keys are set at runtime.
+
+   This corresponds to ``schedule=PartitionedAtRuntime()``.
+
+   A run's ``partition_key`` (run-level provenance) must be supplied at trigger
+   time — for example via the REST API's ``partition_key`` field. Partition keys
+   discovered at task runtime populate the emitted :class:`~airflow.sdk.AssetEvent`
+   records but do **not** back-fill ``DagRun.partition_key`` after the run has
+   been created.
+
+
+   .. py:attribute:: description
+      :type:  str
+      :value: 'Never, partition key(s) set at runtime'
+
+
+      Human-readable description of the timetable.
+
+      For example, this can produce something like ``'At 21:30, only on Friday'``
+      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
+
+
+
+   .. py:attribute:: partitioned_at_runtime
+      :value: True
+
+
+      Whether this timetable defers partition selection to task runtime.
+
+      *True* for :class:`~airflow.timetables.simple.PartitionedAtRuntime`;
+      downstream code can branch on this flag instead of using ``isinstance``.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+.. py:data:: DEFAULT_PARTITION_MAPPER
+
+.. py:class:: PartitionedAssetTimetable(*, assets, partition_mapper_config = None, default_partition_mapper = DEFAULT_PARTITION_MAPPER)
+
+   Bases: :py:obj:`AssetTriggeredTimetable`
+
+
+   Asset-driven timetable that listens for partitioned assets.
+
+
+   .. py:attribute:: partitioned
+      :value: True
+
+
+      Whether this timetable considers asset partitions.
+
+      This is *True* for timetables that switch scheduling to use partitions
+      instead of the traditional logic based on logical dates and data intervals.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+   .. py:attribute:: partition_mapper_config
+
+
+   .. py:attribute:: default_partition_mapper
+
+
+   .. py:method:: get_partition_mapper(*, name = '', uri = '')
+
+      Return the partition mapper for the asset identified by *name* or *uri*.
+
+      Only called by the scheduler when ``partitioned`` is *True*. The default
+      implementation raises :exc:`NotImplementedError`; timetables that set
+      ``partitioned = True`` must override this.
+
+
+
+   .. py:property:: partition_mapper_info
+      :type: list[airflow.timetables.base.PartitionMapperInfo]
+
+
+      JSON-serializable snapshot of partition mapper attributes per asset.
+
+      One :class:`~airflow.timetables.base.PartitionMapperInfo` entry per asset
+      (or asset ref) reachable from ``asset_condition``. Each entry uses the
+      mapper resolved by :meth:`get_partition_mapper`, so assets covered only
+      by ``default_partition_mapper`` (no ``partition_mapper_config`` entry)
+      still appear with the default mapper's ``is_rollup`` value. The UI reads
+      this from the cached ``DagModel.partition_mapper_info`` instead of
+      deserializing the timetable on each request.
+
+      Asset aliases are intentionally skipped: ``SerializedAssetAlias.iter_assets``
+      yields nothing (resolution happens at event time, not at parse time),
+      and :meth:`_build_name_uri_mapping` already warns that aliases are
+      unsupported as ``partition_mapper_config`` keys. The cache therefore
+      matches the alias-unsupported policy enforced elsewhere in this class.
+
+
+
+   .. py:method:: serialize()
+
+      Serialize the timetable for JSON encoding.
+
+      This is called during DAG serialization to store timetable information
+      in the database. This should return a JSON-serializable dict that will
+      be fed into ``deserialize`` when the DAG is deserialized. The default
+      implementation returns an empty dict.
+
+
+
+   .. py:method:: deserialize(data)
+      :classmethod:
+
+
+      Deserialize a timetable from data.
+
+      This is called when a serialized DAG is deserialized. ``data`` will be
+      whatever was returned by ``serialize`` during DAG serialization. The
+      default implementation constructs the timetable without any arguments.
+
+
+
