@@ -1,0 +1,144 @@
+airflow.providers.openlineage.api.emission_policy
+=================================================
+
+.. py:module:: airflow.providers.openlineage.api.emission_policy
+
+.. autoapi-nested-parse::
+
+   Public authoring-time API for per-task / per-DAG OpenLineage emission control.
+
+   The central function is :func:`extend_global_openlineage_emission_policy`. It lets Dag authors
+   override the global ``emission_policy`` Airflow configuration on individual tasks or entire
+   Dags at authoring time, *extending* the deployment-wide policy with a per-Dag / per-task delta.
+
+   Quick-start examples
+   --------------------
+
+   **Disable all OpenLineage events for a sensitive task**::
+
+       from airflow.providers.openlineage.api.emission_policy import (
+           extend_global_openlineage_emission_policy,
+       )
+
+       with DAG("my_dag", ...) as dag:
+           extract = PythonOperator(task_id="extract", ...)
+           sensitive = PythonOperator(task_id="sensitive", ...)
+
+       extend_global_openlineage_emission_policy(sensitive, emit=False)
+
+   **Disable source-code capture for an entire Dag, then re-enable for one task**::
+
+       extend_global_openlineage_emission_policy(dag, include_source_code=False)  # all tasks in dag
+       extend_global_openlineage_emission_policy(extract, include_source_code=True)  # override
+
+   **Use as the return value (fluent / inline style)**::
+
+       with DAG("my_dag", ...) as dag:
+           task = extend_global_openlineage_emission_policy(
+               PythonOperator(task_id="my_task", python_callable=my_fn),
+               include_source_code=False,
+               hook_lineage=False,
+           )
+
+   **Suppress DAG-run events while keeping task events**::
+
+       extend_global_openlineage_emission_policy(dag, emit_dag_events=False)
+
+   **Works with XComArg** — flags are applied to the underlying operator::
+
+       result = extend_global_openlineage_emission_policy(
+           my_python_task_function(),  # returns XComArg
+           extract_operator_metadata=False,
+       )
+
+   Flags and locked conf rules
+   ----------------------------
+
+   These flags sit **above** the ``emission_policy`` Airflow configuration in the resolution stack.
+   However, if an Airflow admin marks a conf rule with ``locked: true``, that field is protected
+   and cannot be overridden here — the attempt is silently ignored and an INFO log is emitted.
+
+   Example conf rule that locks include_source_code for all tasks::
+
+       [openlineage]
+       emission_policy = [{"scope": {}, "controls": {"include_source_code": false}, "locked": true}]
+
+   Even if a Dag author calls
+   ``extend_global_openlineage_emission_policy(task, include_source_code=True)`` after that,
+   the lock wins and source code is NOT included.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.openlineage.api.emission_policy.extend_global_openlineage_emission_policy
+
+
+Module Contents
+---------------
+
+.. py:function:: extend_global_openlineage_emission_policy(obj, *, emit = None, emit_task_events = None, emit_dag_events = None, extract_operator_metadata = None, include_source_code = None, hook_lineage = None, include_full_task_info = None)
+
+   Extend the global OpenLineage emission policy with per-task / per-DAG overrides.
+
+   Flags left as ``None`` are not set and will fall through to the ``emission_policy``
+   Airflow configuration (or its built-in defaults).  Only explicitly provided flags are
+   stored — successive calls **merge** into any previously stored flags.
+
+   When called on a **DAG**, flags are applied as follows:
+
+   - Task-relevant flags (``emit``, ``emit_task_events``, ``extract_operator_metadata``,
+     ``include_source_code``, ``hook_lineage``, ``include_full_task_info``) are
+     **propagated to all tasks** in the Dag at the time of the call.
+   - DAG-run-level flags (``emit``, ``emit_dag_events``) are stored on the Dag itself.
+   - ``emit_dag_events`` is meaningless on a task and logs a warning if provided.
+
+   .. warning::
+
+       **DAG-level calls only propagate to tasks that already exist on the DAG when the call
+       runs.** Tasks added later (for example, when
+       ``extend_global_openlineage_emission_policy`` is called inside ``with DAG(...) as dag:``
+       before the operators are defined) will **not** inherit the flags. Call
+       ``extend_global_openlineage_emission_policy(dag, ...)`` **after** all task definitions,
+       or set flags per-task.
+
+   .. note::
+
+       There is no "unset" API. Passing ``None`` for a flag is treated as "not provided" —
+       it does not remove a previously-stored value. To override, pass the explicit boolean
+       you want, or call again with the new value (successive calls merge, later wins per key).
+
+   ``emit`` is a shorthand that affects both task and Dag events:
+
+   - ``emit=False`` — disables **all** OpenLineage events (task + Dag).
+   - ``emit=True, emit_task_events=False`` — Dag-run events only (task events off).
+   - ``emit=True, emit_dag_events=False`` — task events only (Dag-run events off).
+
+   These flags sit **above** the ``emission_policy`` Airflow configuration in priority.
+   If an admin marks a conf rule with ``locked: true``, that field is protected and cannot
+   be overridden by this function.
+
+   .. note::
+
+       **No global authoring scope.** ``extend_global_openlineage_emission_policy`` only
+       accepts a single DAG, operator, or :class:`XComArg` — there is no equivalent of
+       "apply globally to every DAG in the deployment." Deployment-wide changes are an
+       admin concern and belong in the ``emission_policy`` Airflow configuration with an
+       empty ``"scope": {}``. Passing any other object type raises :class:`TypeError`.
+
+   :param obj: An Airflow Dag, operator, or XComArg.
+   :param emit: Enable/disable all OpenLineage events (shorthand for both scopes).
+   :param emit_task_events: Enable/disable task-level events only; takes precedence over
+       ``emit`` for task events.
+   :param emit_dag_events: Enable/disable Dag-run-level events only; takes precedence over
+       ``emit`` for Dag events.  Ignored (with a warning) when called on a task.
+   :param extract_operator_metadata: Whether to run operator-specific extractor-based metadata collection.
+   :param include_source_code: Whether to include operator source code in Python/Bash operator events.
+   :param hook_lineage: Whether to use ``HookLineageCollector`` as a fallback.
+   :param include_full_task_info: Whether to include the full serialized operator state.
+   :return: The same *obj* — allows use as a decorator or in chained calls.
+
+

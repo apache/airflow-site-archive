@@ -1,0 +1,277 @@
+airflow.providers.duckdb.hooks.duckdb
+=====================================
+
+.. py:module:: airflow.providers.duckdb.hooks.duckdb
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.duckdb.hooks.duckdb.IN_MEMORY_DATABASE
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.duckdb.hooks.duckdb.DuckDBHook
+
+
+Module Contents
+---------------
+
+.. py:data:: IN_MEMORY_DATABASE
+   :value: ':memory:'
+
+
+.. py:class:: DuckDBHook(*args, duckdb_conn_id = default_conn_name, database = None, extensions = None, extension_directory = None, autoinstall_extensions = None, autoload_extensions = None, allow_community_extensions = None, memory_limit = None, threads = None, temp_directory = None, read_only = None, settings = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.sql.hooks.sql.DbApiHook`
+
+
+   Interact with an in-process `DuckDB <https://duckdb.org/>`__ database.
+
+   The hook opens a DuckDB database — in memory, backed by a local file, or hosted by MotherDuck —
+   applies resource limits, and loads the requested extensions, so a Dag author only supplies SQL.
+
+   The Airflow connection is optional. With no ``duckdb_default`` connection configured the hook opens
+   an in-memory database, which is the right default for a stateless, task-scoped analytical query.
+   Supplying a connection id other than the default asserts that it exists, a missing connection raises
+   rather than quietly falling back to an in-memory database.
+
+   Extensions are not downloaded at task runtime by default. DuckDB fetches them from its extension
+   repository on first use, which a deployment without outbound internet access cannot do and which
+   costs every worker the download. Pre-populate an extension directory, point ``extension_directory``
+   at it, and set ``autoinstall_extensions=True`` only if downloading on demand is acceptable.
+
+   :param duckdb_conn_id: reference to a :ref:`DuckDB connection <howto/connection:duckdb>`. The
+       default connection need not exist; when it is missing an in-memory database is used. Any other
+       id must exist, and raises if it does not.
+   :param database: database to open. Overrides the connection. ``:memory:`` (the default) opens a
+       transient database that is discarded when the task finishes.
+   :param extensions: extensions to load on connect, for example ``["httpfs", "iceberg"]``.
+   :param extension_directory: directory DuckDB loads extensions from and installs them into.
+       Point this at a pre-populated directory to avoid downloading extensions at task runtime.
+   :param autoinstall_extensions: whether an extension that is not installed locally may be downloaded
+       from DuckDB's extension repository. Defaults to ``False``: a locked-down environment usually
+       cannot reach that repository, and downloading native code at task runtime is a decision worth
+       making explicitly. Set to ``True`` to allow it.
+   :param autoload_extensions: whether DuckDB may load an already-installed extension implicitly, so
+       that for example querying an ``s3://`` path pulls in ``httpfs`` without it being listed in
+       ``extensions``. Defaults to ``True``; this involves no download and no new code beyond what is
+       already present.
+   :param allow_community_extensions: whether DuckDB may load community (third-party) extensions.
+       Community extensions are native code from outside the DuckDB project, so this defaults to
+       ``False``.
+   :param memory_limit: memory DuckDB may use, for example ``"2GB"``. DuckDB otherwise sizes itself
+       from the memory it detects on the host, which over-commits inside a container that has a
+       smaller limit than the host it runs on.
+   :param threads: number of threads DuckDB may use. Defaults to the cores DuckDB detects, which is
+       subject to the same container caveat as ``memory_limit``.
+   :param temp_directory: directory DuckDB spills to when a query exceeds ``memory_limit``.
+   :param read_only: open the database read-only. Not valid for an in-memory database.
+   :param settings: additional DuckDB configuration options, passed through verbatim.
+
+   Every parameter above except ``duckdb_conn_id`` may also be set in the connection ``extra``, in
+   which case an explicit argument wins. This mirrors what
+   :class:`~airflow.providers.common.sql.operators.sql.BaseSQLOperator` does when it merges connection
+   extras into hook keyword arguments — a path the connection-optional operator has to bypass.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'duckdb_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'duckdb_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'duckdb'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'DuckDB'
+
+
+
+   .. py:attribute:: placeholder
+      :value: '?'
+
+
+      Return SQL placeholder.
+
+
+
+   .. py:attribute:: supports_autocommit
+      :value: False
+
+
+
+   .. py:attribute:: required_extensions
+      :type:  tuple[str, ...]
+      :value: ()
+
+
+
+   .. py:attribute:: database
+      :value: None
+
+
+
+   .. py:method:: resolve_parameter(name, explicit, default = None)
+
+      Return the explicit argument if given, else the connection extra, else the default.
+
+
+
+   .. py:property:: extension_directory
+      :type: str | None
+
+
+
+   .. py:property:: autoinstall_extensions
+      :type: bool
+
+
+
+   .. py:property:: autoload_extensions
+      :type: bool
+
+
+
+   .. py:property:: allow_community_extensions
+      :type: bool
+
+
+
+   .. py:property:: memory_limit
+      :type: str | None
+
+
+
+   .. py:property:: threads
+      :type: int | None
+
+
+
+   .. py:property:: temp_directory
+      :type: str | None
+
+
+
+   .. py:property:: read_only
+      :type: bool
+
+
+
+   .. py:property:: settings
+      :type: dict[str, Any]
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :classmethod:
+
+
+      Return custom UI field behaviour for the DuckDB connection.
+
+
+
+   .. py:property:: airflow_connection
+      :type: airflow.sdk.Connection | None
+
+
+      Return the configured Airflow connection, or ``None`` when the default one does not exist.
+
+      A missing connection is only tolerated for the default connection id, which is what makes the
+      hook usable with no configuration at all. An explicitly supplied id asserts that a particular
+      connection exists, so its absence is a misconfiguration: falling back there would let a task
+      that meant to write to a real database silently write to one that is discarded when it ends.
+
+
+
+   .. py:property:: connection_extra
+      :type: dict[str, Any]
+
+
+      Return the connection's ``extra``, or an empty mapping when there is no connection.
+
+
+
+   .. py:method:: get_database()
+
+      Return the DuckDB database to open.
+
+      Precedence: the ``database`` argument, the connection extra ``database``, a MotherDuck
+      database built from the connection's token, the connection host, then an in-memory database.
+
+
+
+   .. py:method:: get_extensions()
+
+      Return the extensions to load, in order, without duplicates.
+
+
+
+   .. py:method:: get_connect_config()
+
+      Return the DuckDB configuration applied when the database is opened.
+
+      These are passed to ``duckdb.connect(config=...)`` rather than issued as ``SET`` statements
+      so that options which are only settable at startup are honored.
+
+
+
+   .. py:method:: get_conn()
+
+      Return a DuckDB connection with configuration, extensions and secrets applied.
+
+
+
+   .. py:method:: load_extensions(conn)
+
+      Load every configured extension, installing it only if it is not already available.
+
+
+
+   .. py:method:: configure_secrets(conn)
+
+      Create DuckDB secrets on a freshly opened connection.
+
+      A no-op for a plain DuckDB database. Subclasses that broker credentials for remote storage
+      override this to issue ``CREATE SECRET``.
+
+
+
+   .. py:method:: get_uri()
+
+      Return a SQLAlchemy URI for the database, for ``get_sqlalchemy_engine``.
+
+
+
+   .. py:property:: dialect_name
+      :type: str
+
+
+      Return the SQL dialect name, without asking SQLAlchemy to resolve it.
+
+      ``DbApiHook`` derives this by handing ``get_uri()`` to SQLAlchemy and asking for a matching
+      dialect, which only resolves when the third-party ``duckdb-engine`` package happens to be
+      installed. Leaving it inferred would make dialect selection — and so the SQL generated for
+      things like ``insert_rows`` — differ between deployments that are otherwise identical. Naming
+      it here also keeps the MotherDuck token that ``get_uri()`` embeds out of SQLAlchemy's URL
+      parser.
+
+      Note this does not by itself populate :attr:`reserved_words`: that looks for a
+      ``sqlalchemy.dialects.duckdb`` module, which does not exist. Choosing a keyword source is a
+      separate decision.
+
+
+

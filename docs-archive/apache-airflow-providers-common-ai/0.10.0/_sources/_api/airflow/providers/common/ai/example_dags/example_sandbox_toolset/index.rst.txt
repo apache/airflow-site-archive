@@ -1,0 +1,179 @@
+airflow.providers.common.ai.example_dags.example_sandbox_toolset
+================================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_sandbox_toolset
+
+.. autoapi-nested-parse::
+
+   Example Dags for ``SandboxToolset``.
+
+   Three shapes, each a job a data team actually runs:
+
+   1. An agent investigates a revenue anomaly. It queries the warehouse through a
+      ``SQLToolset`` (the credential stays in the task, the model only sees rows) and
+      does the arithmetic in a Modal sandbox with pandas baked into the image, so a
+      bad pivot or a runaway loop costs a 0.125-core sandbox rather than a worker slot.
+   2. An agent normalizes a vendor CSV whose columns drift every month, on the local
+      ``sbx`` backend. Same toolset, same prompt, one constructor argument different,
+      which is how the same Dag moves from a laptop to production.
+   3. A plain ``@task`` drives a backend directly to convert a file the Dag already
+      knows how to convert. No model is involved. This is the shape for producing an
+      artifact today, because a file inside an agent's sandbox can only leave through
+      the model's context.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.SQLToolset
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.modal
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.ANALYSIS_IMAGE
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.VENDOR_SAMPLE
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.MIB
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.CONVERT_SCRIPT
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.Findings
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.ColumnMapping
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_agent_local
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_task_artifact
+
+
+Module Contents
+---------------
+
+.. py:data:: SQLToolset
+   :value: None
+
+
+.. py:data:: modal
+   :value: None
+
+
+.. py:class:: Findings(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   What the investigation concluded, in a shape a downstream task can act on.
+
+
+   .. py:attribute:: summary
+      :type:  str
+
+
+   .. py:attribute:: suspected_cause
+      :type:  str
+
+
+   .. py:attribute:: affected_segments
+      :type:  list[str]
+
+
+   .. py:attribute:: confidence
+      :type:  str
+
+
+.. py:class:: ColumnMapping(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   How the vendor's columns map onto the staging schema.
+
+
+   .. py:attribute:: mapped
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: unmapped
+      :type:  list[str]
+
+
+   .. py:attribute:: notes
+      :type:  str
+
+
+.. py:data:: ANALYSIS_IMAGE
+
+.. py:data:: VENDOR_SAMPLE
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """Order Ref,Customer,Order Dt,Amt (USD),Ship Country
+      A-1001,Acme Ltd,2026-03-01,1250.00,GB
+      A-1002,Globex,03/02/2026,980.50,US
+      A-1003,Initech,2 Mar 2026,"1,100.00",DE
+      """
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: example_sandbox_agent_local()
+
+   Map a vendor's drifting columns onto the staging schema, developing against ``sbx``.
+
+
+.. py:data:: MIB
+   :value: 1048576
+
+
+.. py:data:: CONVERT_SCRIPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """import sys
+      import pandas as pd
+      
+      frame = pd.read_csv(sys.argv[1])
+      frame.columns = [c.strip().lower().replace(" ", "_") for c in frame.columns]
+      frame = frame.drop_duplicates()
+      frame.to_parquet(sys.argv[2], index=False)
+      print(f"{len(frame)} rows, {len(frame.columns)} columns")
+      """
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: example_sandbox_task_artifact()
+
+   Convert a CSV to parquet inside a sandbox and land the result in object storage.
+
+   No agent is involved. The Dag knows exactly what to run, so a model would add
+   nothing, and a file produced inside an *agent's* sandbox could only come back
+   through the model's context, which is text-only and capped. Driving the
+   backend from a task has neither limit: the bytes move through the worker, and
+   the caller owns the sandbox's lifetime.
+
+

@@ -1,0 +1,249 @@
+airflow.providers.common.ai.sandbox.modal
+=========================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.modal
+
+.. autoapi-nested-parse::
+
+   Modal hosted-sandbox backend for the SandboxToolset.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.modal.log
+   airflow.providers.common.ai.sandbox.modal.DEFAULT_IMAGE
+   airflow.providers.common.ai.sandbox.modal.DEFAULT_APP_NAME
+   airflow.providers.common.ai.sandbox.modal.DEFAULT_WORKDIR
+   airflow.providers.common.ai.sandbox.modal.DEFAULT_SANDBOX_TIMEOUT
+   airflow.providers.common.ai.sandbox.modal.DEFAULT_IDLE_TIMEOUT
+   airflow.providers.common.ai.sandbox.modal.EgressEnforcement
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.modal.ModalSandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: DEFAULT_IMAGE
+   :value: 'python:3.12-slim'
+
+
+.. py:data:: DEFAULT_APP_NAME
+   :value: 'airflow-sandbox'
+
+
+.. py:data:: DEFAULT_WORKDIR
+   :value: '/workspace'
+
+
+.. py:data:: DEFAULT_SANDBOX_TIMEOUT
+   :value: 3600
+
+
+.. py:data:: DEFAULT_IDLE_TIMEOUT
+   :value: None
+
+
+.. py:data:: EgressEnforcement
+
+.. py:class:: ModalSandboxBackend(*, image = DEFAULT_IMAGE, app_name = DEFAULT_APP_NAME, create_app_if_missing = True, sandbox_timeout = DEFAULT_SANDBOX_TIMEOUT, idle_timeout = DEFAULT_IDLE_TIMEOUT, workdir = DEFAULT_WORKDIR, cpu = None, memory = None, gpu = None, region = None, cloud = None, tags = None, egress_enforcement = 'strict')
+
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+
+
+   Sandbox backend that runs agent commands in a `Modal <https://modal.com>`__ sandbox.
+
+   Each sandbox is a gVisor-isolated container in Modal's infrastructure, provisioned
+   over the API. Nothing has to be installed on the Airflow worker and model-written
+   code never executes on the worker host, which makes this the backend to reach for
+   on Kubernetes, where :class:`~airflow.providers.common.ai.sandbox.SbxSandboxBackend`
+   cannot run at all.
+
+   Modal reclaims a sandbox at ``sandbox_timeout`` whatever happens to the worker, so a
+   worker killed outright cannot leak one. Sandboxes are also named ``airflow-sandbox-*``
+   and carry whatever ``tags`` you set, so they can be found in Modal's dashboard. Those
+   tags are fixed when the backend is constructed, which is Dag-parse time, so they can
+   identify the Dag but not the run, task or map index that leaked one.
+
+   **Credentials are ambient.** Modal is authenticated the same way its CLI is: run
+   ``modal token new`` once to write ``~/.modal.toml``, or set ``MODAL_TOKEN_ID`` and
+   ``MODAL_TOKEN_SECRET`` in the worker environment. Nothing is read until the first
+   sandbox is created, so a Dag file that constructs this backend parses without
+   credentials present.
+
+   **What the network policy can and cannot promise.** ``SandboxSpec(block_network=True)``
+   maps to Modal's own ``block_network``, which drops all outbound traffic including DNS.
+   A :class:`~airflow.providers.common.ai.sandbox.SandboxSpec` that also names
+   ``allow_egress_to`` is **refused by default**, because Modal cannot combine an
+   allowlist with ``block_network`` and its hostname allowlist is enforced by matching
+   the TLS SNI: it permits TLS on port 443 to the listed hosts, blocks other hosts, and
+   leaves DNS resolution open for every hostname. Sandbox code can therefore still reach
+   a non-listed host that shares a TLS endpoint with a listed one, and can still carry
+   data out through DNS queries. Pass ``egress_enforcement="sni"`` to accept that and
+   have the allowlist applied.
+
+   ``allow_egress_to_cidrs`` needs no opt-in. It maps onto Modal's
+   ``outbound_cidr_allowlist``, which is enforced at the address layer for any port and
+   protocol: a listed address connects, anything else is dropped (measured: a
+   connection to an unlisted address times out rather than being refused). Name
+   resolution still works through Modal's own resolver, so hostnames resolve but only
+   listed addresses are reachable; DNS itself therefore remains a channel, as under the
+   hostname list. It is IPv4 only, since Modal rejects IPv6 ranges. Private ranges
+   (RFC 1918, link-local) are unreachable from a Modal sandbox whatever the allowlist
+   says, so the destination has to have a public address. The two lists apply
+   together, traffic matching either passes, and adding hostnames reopens TCP on port
+   443 to every address, gated by the handshake name alone; the backend logs a
+   warning at create when both are set.
+
+   **A timeout does not cost you the sandbox.** Modal stops the command server-side and
+   the sandbox stays usable, so files written by earlier calls survive and the model can
+   inspect them. That differs from ``sbx``, which has to destroy the sandbox to be sure
+   a command stopped.
+
+   The image must provide ``sh``, and ``stat``, ``head`` and ``base64`` for
+   :meth:`read_file`, which deliberately stays on the base class's shell implementation
+   (see that method). Any Debian or Ubuntu based image, including ``python:*-slim``, does.
+
+   :param image: Registry tag for the sandbox image, or a prepared ``modal.Image``.
+       Default ``"python:3.12-slim"``. An image carrying the packages an agent needs is
+       the alternative to opening egress so it can install them:
+       ``modal.Image.from_registry("python:3.12-slim").pip_install("pandas")``.
+   :param app_name: Modal app the sandboxes are created under. Default
+       ``"airflow-sandbox"``.
+   :param create_app_if_missing: Create the Modal app when it does not exist yet.
+       Default ``True``.
+   :param sandbox_timeout: Maximum lifetime in seconds of a sandbox before Modal shuts
+       it down. Bounds the whole sandbox, where a ``run_command`` timeout bounds one
+       command. Default ``3600``; Modal's own default of 300 is below a plausible agent
+       run.
+   :param idle_timeout: Seconds of inactivity after which Modal reclaims the sandbox.
+       Default ``None``, meaning ``sandbox_timeout`` is the only bound. Set it only if
+       you want tighter cost control and know your agent's pace: one sandbox serves a
+       whole run, nothing keeps it warm between tool calls, and a gap for model
+       generation would be reclaimed with every file in it.
+   :param workdir: Working directory for commands, created if the image lacks it.
+       Default ``"/workspace"``. ``None`` uses the image's own default, in which case
+       the backend has to ask the sandbox where that is before its first file
+       operation, so prefer stating it.
+   :param cpu: CPU cores to request. ``None`` uses Modal's default. Takes effect: a
+       sandbox created with ``cpu=4`` reports 4 from ``nproc``, though ``/proc/cpuinfo``
+       still lists the host's cores.
+   :param memory: Memory in MiB to request. ``None`` uses Modal's default. **A request,
+       not a ceiling**: a sandbox created with ``memory=512`` allocated 1.5 GiB without
+       complaint when measured, so this schedules the sandbox somewhere with room and does
+       not bound what model-written code can take. Nothing inside the sandbox can see it
+       either -- ``/proc/meminfo`` reports the host's memory.
+   :param gpu: GPU specification, e.g. ``"A10G"``. ``None`` requests none. Billed at a
+       different rate, so set it deliberately.
+   :param region: Region or regions to run in. ``None`` lets Modal choose. Validated by
+       Modal, so an unrecognized region fails the task rather than falling back.
+   :param cloud: Cloud provider to run on. ``None`` lets Modal choose. Validated the same
+       way.
+   :param tags: Extra Modal tags to set on every sandbox, e.g. ``{"dag_id": "my_dag"}``.
+       You can query them, which is the point: ``modal.Sandbox.list(app_id=..., tags={"dag_id":
+       "my_dag"})`` returns exactly the sandboxes carrying them, which is how an operator
+       finds what a Dag left behind. ``airflow_sandbox`` is set by this backend and will
+       overwrite a key of that name.
+   :param egress_enforcement: ``"strict"`` (default) refuses a ``SandboxSpec`` that
+       names ``allow_egress_to``, because Modal cannot enforce a hostname allowlist
+       below TLS. ``"sni"`` accepts it and applies Modal's SNI-matched allowlist, with
+       the limits described above. ``allow_egress_to_cidrs`` is accepted under either
+       setting.
+
+
+   .. py:attribute:: name
+      :value: 'modal'
+
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+      Every failure raised here is terminal, whichever class carries it. The
+      model has no input into provisioning, so a :class:`SandboxError` from
+      ``create`` is not something it can work around; the toolset re-raises one
+      as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
+      attempts the provisioning again.
+
+
+
+   .. py:method:: destroy(sandbox)
+
+      Ask Modal to terminate the sandbox, without waiting for it to finish stopping.
+
+      The request is not blocking on purpose. Measured against modal 1.5.5 in September
+      2026, ``terminate()`` returned in under 0.2s while ``terminate(wait=True)`` took 31
+      seconds, and this runs in the teardown path of every agent run, where that would be
+      pure added latency. The sandbox stops shortly afterwards and shows an exit status
+      within about 35 seconds; ``sandbox_timeout`` is the backstop if the request never
+      lands at all.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Override: write through Modal's filesystem API instead of a shell command.
+
+      The base implementation carries the payload in the command itself, so the guest's
+      command-line length caps it. ``write_bytes`` streams the content and creates
+      parent directories itself.
+
+      One behavioral difference this buys, worth knowing before pointing an agent at a
+      tree of symlinks: writing to a path that is a symlink **replaces the link with a
+      regular file** and leaves the original target untouched, where a shell redirect
+      (what ``sbx`` and the base class do) follows the link and writes through it.
+
+
+
+   .. py:method:: list_directory(sandbox, path)
+
+      Override: list through Modal's filesystem API instead of ``find``.
+
+      Returns structured entries, so nothing has to be parsed out of shell output and
+      the image needs nothing from GNU find. Modal's filesystem calls do run a helper binary
+      inside the sandbox, but Modal injects it rather than expecting it in the image.
+
+      A symlink reports ``is_dir()`` false whatever it points at, because Modal types it
+      as a symlink rather than as its target. That matches the base class's
+      ``find -printf '%y'``, which does not follow links either, so a directory reached by a link
+      lists without a trailing slash on both backends.
+
+
+

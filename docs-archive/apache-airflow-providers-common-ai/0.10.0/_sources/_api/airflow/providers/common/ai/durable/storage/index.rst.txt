@@ -1,0 +1,96 @@
+airflow.providers.common.ai.durable.storage
+===========================================
+
+.. py:module:: airflow.providers.common.ai.durable.storage
+
+.. autoapi-nested-parse::
+
+   ObjectStorage-backed durable storage for pydantic-ai agent step caching.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.storage.log
+   airflow.providers.common.ai.durable.storage.SECTION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.storage.DurableStorage
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: SECTION
+   :value: 'common.ai'
+
+
+.. py:class:: DurableStorage(*, dag_id, task_id, run_id, map_index = -1)
+
+   Stores step-level caches in a single JSON file on ObjectStorage.
+
+   All step caches (model responses and tool results) are stored as entries
+   in a single JSON blob, written to ``{base_path}/{cache_id}.json`` where
+   ``cache_id`` is a hash of the task instance's identity (dag, task, run,
+   map index) so distinct task instances never share a file.
+
+   The file survives Airflow task retries since it lives outside the
+   XCom system.  It is deleted on successful task completion.
+
+   :param dag_id: DAG ID of the running task.
+   :param task_id: Task ID of the running task.
+   :param run_id: DAG run ID.
+   :param map_index: Map index for mapped tasks (``-1`` for non-mapped).
+
+
+   .. py:method:: save_model_response(key, response, *, fingerprint)
+
+      Serialize and store a ModelResponse with the request fingerprint that produced it.
+
+
+
+   .. py:method:: load_model_response(key)
+
+      Load a cached ModelResponse and its stored request fingerprint.
+
+      Returns ``(None, None)`` if not cached. Entries written before
+      fingerprints existed load with a ``None`` fingerprint.
+
+
+
+   .. py:method:: save_tool_result(key, result, *, fingerprint)
+
+      Store a tool call result with the call fingerprint that produced it.
+
+      Non-serializable results (e.g. BinaryContent from MCP tools) are
+      skipped with a warning -- the tool call still succeeds, but won't
+      be replayed on retry.
+
+
+
+   .. py:method:: load_tool_result(key)
+
+      Load a cached tool result and its stored call fingerprint.
+
+      Returns a (found, value, fingerprint) tuple since the cached value
+      itself could be None. Entries written before fingerprints existed
+      load with a ``None`` fingerprint.
+
+
+
+   .. py:method:: cleanup()
+
+      Delete the cache file after successful execution.
+
+
+

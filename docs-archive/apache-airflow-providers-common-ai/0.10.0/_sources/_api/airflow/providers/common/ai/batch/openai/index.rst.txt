@@ -1,0 +1,152 @@
+airflow.providers.common.ai.batch.openai
+========================================
+
+.. py:module:: airflow.providers.common.ai.batch.openai
+
+.. autoapi-nested-parse::
+
+   OpenAI batch adapter.
+
+   Talks to the ``openai`` SDK directly rather than through
+   ``apache-airflow-providers-openai``: that provider's hook has no batch listing
+   or file-download methods, so reusing it would add a hard dependency without
+   the capabilities this needs. The SDK import is deferred to
+   :func:`_build_client` so importing this module never requires ``openai``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.openai.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.openai.OpenAIBatchAdapter
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: OpenAIBatchAdapter(*, api_key = None, base_url = None, client = None)
+
+   Bases: :py:obj:`airflow.providers.common.ai.batch.base.BatchAdapter`
+
+
+   Batch adapter for OpenAI's Batch API (``/v1/chat/completions``).
+
+   :param api_key: Passed straight to the ``openai.OpenAI`` client. ``None``
+       falls back to the SDK's own env-var resolution (``OPENAI_API_KEY``).
+   :param base_url: Passed straight to the ``openai.OpenAI`` client. Pointing
+       it at an OpenAI-compatible gateway that exposes ``/v1/files`` and
+       ``/v1/batches`` routes the batch through that gateway.
+   :param client: Inject a pre-built client (or a test double) instead of
+       constructing one from ``api_key``/``base_url``.
+
+
+   .. py:attribute:: name
+      :value: 'openai'
+
+
+
+   .. py:attribute:: max_requests
+      :value: 50000
+
+
+
+   .. py:attribute:: max_payload_bytes
+      :value: 200000000
+
+
+
+   .. py:attribute:: allows_per_request_model
+      :value: False
+
+
+
+   .. py:method:: build_output_directive(spec)
+
+      Translate ``spec.json_schema`` into this provider's structured-output request fields.
+
+      Returns ``{}`` when ``spec.is_structured`` is ``False``. The result is
+      merged into every request's body/params by the adapter itself.
+
+
+
+   .. py:method:: validate_requests(requests, *, model, output_spec, idempotency_key, system_prompt = '', max_tokens = 1024, request_params = None, **kwargs)
+
+      Reject an over-limit or otherwise invalid batch before any network call.
+
+      Must check ``len(requests)`` against ``max_requests`` and the serialized
+      request size (including the per-request output directive built from
+      ``output_spec``, which a large schema repeats in every request) against
+      ``max_payload_bytes``, and call :meth:`check_custom_id_length`. Raise a
+      subclass of ``LLMBatchInputError`` naming the limit, the actual
+      count/size, and the ``.expand()`` remedy.
+
+      ``**kwargs`` carries the same batch-level request-building context as
+      :meth:`submit` (``system_prompt``, ``max_tokens``, ``request_params``)
+      so the serialized-size estimate matches what ``submit`` sends.
+
+
+
+   .. py:method:: submit(requests, *, model, idempotency_key, input_fingerprint, output_spec, system_prompt = '', max_tokens = 1024, request_params = None, completion_window = '24h', **kwargs)
+
+      Upload/submit the batch and return the provider's batch id.
+
+      Where the provider offers batch-level metadata (OpenAI), record both
+      ``idempotency_key`` and ``input_fingerprint`` there so
+      :meth:`find_orphaned_batch` can read them back. The key alone identifies
+      the task instance, not this submission of it: it is stable across a
+      ``clear`` even when the prompts changed.
+
+
+
+   .. py:method:: get_batch(batch_id)
+
+      Return the current status of a submitted batch. Synchronous; the trigger wraps it in ``to_thread``.
+
+
+
+   .. py:method:: cancel_batch(batch_id)
+
+      Request cancellation of a batch.
+
+
+
+   .. py:method:: find_orphaned_batch(idempotency_key, input_fingerprint, not_before)
+
+      Look for a batch whose metadata carries both identifiers, created at or after ``not_before``.
+
+      :meth:`submit` records ``idempotency_key`` and ``input_fingerprint`` in
+      the batch's metadata, so a batch whose submit response never made it
+      back can be found and re-attached to. No server-side metadata filter
+      exists, so this walks up to ``_ORPHAN_SCAN_LIMIT`` batches client-side;
+      among every match the most recently created one wins.
+
+
+
+   .. py:method:: iter_results(batch_id)
+
+      Return (not ``yield``) a streaming iterator of per-request results.
+
+      Returning a plain iterator rather than using ``yield`` in this method
+      makes an invalid ``batch_id`` (or any other call-time failure) raise
+      immediately, instead of only once the caller starts iterating.
+
+
+
+   .. py:method:: extract_output(raw, spec)
+
+      Pull the model's output out of a provider-native result, in the shape ``ExtractedOutput`` describes.
+
+
+

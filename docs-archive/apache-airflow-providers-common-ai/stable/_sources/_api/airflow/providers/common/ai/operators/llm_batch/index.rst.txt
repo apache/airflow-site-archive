@@ -1,0 +1,226 @@
+airflow.providers.common.ai.operators.llm_batch
+===============================================
+
+.. py:module:: airflow.providers.common.ai.operators.llm_batch
+
+.. autoapi-nested-parse::
+
+   Operator for ``@task.llm_batch``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.operators.llm_batch.LLMBatchOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: LLMBatchOperator(*, requests, result_path, llm_conn_id, model_id = None, system_prompt = '', output_type = str, max_tokens = 1024, request_params = None, poll_interval = 60, timeout = 86400, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), cancel_on_kill = True, cancel_on_timeout = True, fail_on_partial_error = False, on_stale_state = 'cancel_and_resubmit', on_orphaned_intent = 'resubmit', completion_window = '24h', **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Submit prompts as a provider batch job and land results on object storage.
+
+   Routes to the OpenAI or Anthropic batch API based on ``model_id``'s
+   ``"<provider>:<model>"`` prefix (see
+   :mod:`~airflow.providers.common.ai.batch.dispatch`). Unlike
+   :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`, results
+   never go to XCom: they are written as JSONL to ``result_path``, and the
+   XCom value is a small manifest describing where to find them and how many
+   requests landed in each outcome bucket. See the operator guide for the
+   manifest and row schemas.
+
+   A retry (or a manual clear) computes the same identity key as the attempt
+   before it and re-attaches to that attempt's batch instead of submitting a
+   new one, as long as the input still matches. The recorded state is kept
+   after a successful landing too, so clearing a finished task re-lands the
+   same results at no cost. Only two outcomes clear the state so that the
+   next attempt submits fresh: a provider-side ``failed`` (input validation
+   failed, nothing was billed) and a cancellation that lost requests.
+
+   :param requests: The batch's inputs: a list of prompt strings, or a list
+       of dicts with a ``"prompt"`` key and optional ``model``,
+       ``system_prompt``, ``max_tokens`` and ``params`` overrides.
+   :param result_path: Directory URI (not a file path) where the JSONL
+       results and internal state are written, e.g. ``s3://bucket/prefix``.
+       Templated, but must render to the same value on every attempt of a
+       task instance; a retry looks for its recorded state there.
+   :param llm_conn_id: Connection ID for the LLM provider. Must be a
+       ``pydanticai`` connection today.
+   :param model_id: Model identifier as ``"<provider>:<model>"`` (e.g.
+       ``"openai:gpt-5"``). Falls back to the connection's Model field, as
+       ``LLMOperator`` does.
+   :param system_prompt: System-level instructions applied to every request
+       that does not set its own ``system_prompt`` override.
+   :param output_type: Expected output type. Default ``str``. Set to a
+       Pydantic ``BaseModel`` subclass (or another type ``TypeAdapter``
+       supports) for structured output; every result row is plain JSON.
+   :param max_tokens: Output token cap for requests that do not set their
+       own. Sent as ``max_tokens`` to Anthropic and as
+       ``max_completion_tokens`` to OpenAI.
+   :param request_params: Extra body parameters merged into every request
+       (e.g. ``{"temperature": 0.2}``); a request's own ``params`` wins on
+       conflicting keys. The keys the operator manages (``model``, the
+       messages, the token cap and the structured-output directive) cannot
+       be overridden from here.
+   :param poll_interval: Seconds between status checks. Minimum 30.
+   :param timeout: Seconds to wait for the batch to reach a terminal state,
+       measured from submission. Default 24 hours. When a retry re-attaches
+       to a batch whose budget has already elapsed (``cancel_on_timeout=False``),
+       it gets a fresh ``timeout`` measured from the retry. If
+       ``execution_timeout`` is set below ``timeout + poll_interval + 60``,
+       Airflow's hard timeout preempts this graceful path and
+       ``cancel_on_timeout`` never runs.
+   :param deferrable: Run in deferrable mode. Defaults to
+       ``[operators] default_deferrable``.
+   :param cancel_on_kill: Cancel the batch when the task is killed. In
+       deferrable mode this runs from the trigger's ``on_kill``, which only
+       Airflow 3.3+ calls; there, clearing or marking a deferred task from
+       the UI counts as a kill.
+   :param cancel_on_timeout: Cancel the batch when ``timeout`` is reached
+       without a terminal state. When ``False``, the task still fails, but
+       the batch keeps running (and billing) and a later retry re-attaches
+       to it.
+   :param fail_on_partial_error: Fail the task when any request errored on
+       the provider side, failed output validation, expired, was cancelled,
+       or is missing from the results. Default ``False``: the task succeeds
+       and the manifest's ``counts`` records each bucket. A batch in which
+       every request failed still counts as partial.
+   :param on_stale_state: What to do when a recorded batch for this task
+       instance no longer matches the current input (prompts, model,
+       ``output_type`` schema, ...): ``"cancel_and_resubmit"`` (default)
+       best-effort cancels the stale batch and submits a new one;
+       ``"fail"`` raises instead.
+   :param on_orphaned_intent: What to do when a previous attempt recorded
+       its intent to submit but no batch id, and the provider-side lookup
+       finds no matching batch: ``"resubmit"`` (default) submits a new
+       batch; ``"fail"`` raises instead. Anthropic offers no such lookup, so
+       ``"resubmit"`` may pay twice there if the original request did reach
+       the provider.
+   :param completion_window: OpenAI-specific completion window. Only
+       ``"24h"`` is offered by the API today. Ignored by Anthropic.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('requests', 'result_path', 'system_prompt', 'model_id', 'llm_conn_id')
+
+
+
+   .. py:attribute:: requests
+
+
+   .. py:attribute:: result_path
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: model_id
+      :value: None
+
+
+
+   .. py:attribute:: system_prompt
+      :value: ''
+
+
+
+   .. py:attribute:: output_type
+
+
+   .. py:attribute:: max_tokens
+      :value: 1024
+
+
+
+   .. py:attribute:: request_params
+      :value: None
+
+
+
+   .. py:attribute:: poll_interval
+      :value: 60
+
+
+
+   .. py:attribute:: timeout
+      :value: 86400
+
+
+
+   .. py:attribute:: deferrable
+
+
+   .. py:attribute:: cancel_on_kill
+      :value: True
+
+
+
+   .. py:attribute:: cancel_on_timeout
+      :value: True
+
+
+
+   .. py:attribute:: fail_on_partial_error
+      :value: False
+
+
+
+   .. py:attribute:: on_stale_state
+      :value: 'cancel_and_resubmit'
+
+
+
+   .. py:attribute:: on_orphaned_intent
+      :value: 'resubmit'
+
+
+
+   .. py:attribute:: completion_window
+      :value: '24h'
+
+
+
+   .. py:attribute:: batch_id
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+      Resume after the trigger fires.
+
+      This is a fresh operator instance (the deferred one released its
+      worker slot), so ``batch_id`` comes from ``event``, not ``self``.
+
+
+
+   .. py:method:: on_kill()
+
+      Cancel the batch if the (non-deferred) task is killed.
+
+      Only fires while the worker process is alive. A killed *deferred*
+      task is cancelled by the trigger's own ``on_kill`` instead, which only
+      Airflow 3.3+ calls.
+
+
+

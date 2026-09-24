@@ -1,0 +1,49 @@
+airflow.providers.common.ai.mixins.cancellable_run
+==================================================
+
+.. py:module:: airflow.providers.common.ai.mixins.cancellable_run
+
+.. autoapi-nested-parse::
+
+   Mixin that cancels an operator's in-flight pydantic-ai run when the task is killed.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.cancellable_run.CancellableAgentRunMixin
+
+
+Module Contents
+---------------
+
+.. py:class:: CancellableAgentRunMixin
+
+   Run a pydantic-ai agent synchronously with kill-time cancellation wired in.
+
+   The wrapper holds the in-flight run's ``CancellationToken`` so :meth:`on_kill` can
+   cancel it. Cancelling makes ``run_sync`` raise ``RunCancelled`` and unwind, giving the
+   agent's toolsets a chance to exit (tearing down a provisioned sandbox, for one) before
+   SIGKILL rather than leaving the run to die mid-flight.
+
+   This needs the Task SDK to call ``on_kill`` on SIGTERM, which lands in Airflow 3.0.4 and
+   3.1.0. On 3.0.0 to 3.0.3 the handler is absent, so a kill runs the pre-existing path (the
+   run continues until SIGKILL).
+
+
+   .. py:attribute:: log
+      :type:  Any
+
+
+   .. py:method:: run_agent_sync(agent, user_prompt, **run_kwargs)
+
+      Call ``agent.run_sync`` under a fresh cancellation token held for :meth:`on_kill`.
+
+
+
+   .. py:method:: on_kill()
+
+

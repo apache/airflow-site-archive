@@ -1,0 +1,208 @@
+airflow.providers.apache.livy.operators.livy
+============================================
+
+.. py:module:: airflow.providers.apache.livy.operators.livy
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.apache.livy.operators.livy.ResumableJobMixin
+   airflow.providers.apache.livy.operators.livy.LivyOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: ResumableJobMixin(*, durable = _DURABLE_UNSET, **kwargs)
+
+   Airflow <3.3 stub, task_state_store unavailable, always submits fresh.
+
+
+   .. py:attribute:: external_id_key
+      :type:  str
+      :value: 'livy_batch_id'
+
+
+
+   .. py:attribute:: durable
+      :value: False
+
+
+
+   .. py:method:: execute_resumable(context)
+
+
+.. py:class:: LivyOperator(*, file, class_name = None, args = None, conf = None, jars = None, py_files = None, files = None, driver_memory = None, driver_cores = None, executor_memory = None, executor_cores = None, num_executors = None, archives = None, queue = None, name = None, proxy_user = None, livy_conn_id = 'livy_default', livy_conn_auth_type = None, livy_endpoint_prefix = None, polling_interval = 0, extra_options = None, extra_headers = None, retry_args = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), openlineage_inject_parent_job_info = conf.getboolean('openlineage', 'spark_inject_parent_job_info', fallback=False), openlineage_inject_transport_info = conf.getboolean('openlineage', 'spark_inject_transport_info', fallback=False), durable = None, **kwargs)
+
+   Bases: :py:obj:`airflow.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Wraps the Apache Livy batch REST API, allowing to submit a Spark application to the underlying cluster.
+
+   :param file: path of the file containing the application to execute (required). (templated)
+   :param class_name: name of the application Java/Spark main class. (templated)
+   :param args: application command line arguments. (templated)
+   :param jars: jars to be used in this sessions. (templated)
+   :param py_files: python files to be used in this session. (templated)
+   :param files: files to be used in this session. (templated)
+   :param driver_memory: amount of memory to use for the driver process. (templated)
+   :param driver_cores: number of cores to use for the driver process. (templated)
+   :param executor_memory: amount of memory to use per executor process. (templated)
+   :param executor_cores: number of cores to use for each executor. (templated)
+   :param num_executors: number of executors to launch for this session. (templated)
+   :param archives: archives to be used in this session. (templated)
+   :param queue: name of the YARN queue to which the application is submitted. (templated)
+   :param name: name of this session. (templated)
+   :param conf: Spark configuration properties. (templated)
+   :param proxy_user: user to impersonate when running the job. (templated)
+   :param livy_conn_id: reference to a pre-defined Livy Connection.
+   :param livy_conn_auth_type: The auth type for the Livy Connection.
+   :param polling_interval: time in seconds between polling for job completion. Don't poll for values <= 0
+   :param extra_options: A dictionary of options, where key is string and value
+       depends on the option that's being modified.
+   :param extra_headers: A dictionary of headers passed to the HTTP request to livy.
+   :param retry_args: Arguments which define the retry behaviour.
+       See Tenacity documentation at https://github.com/jd/tenacity
+   :param deferrable: Run operator in the deferrable mode
+   :param durable: When True (the default) and the operator waits synchronously
+       (``deferrable=False`` with ``polling_interval > 0``), the Livy batch id is persisted before
+       polling so a worker crash reconnects to the running batch on retry instead of submitting a
+       duplicate. Requires Airflow 3.3+ (task_state_store); a no-op on earlier versions.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('spark_params',)
+
+
+
+   .. py:attribute:: template_fields_renderers
+
+
+   .. py:attribute:: external_id_key
+      :value: 'livy_batch_id'
+
+
+
+   .. py:attribute:: spark_params
+
+
+   .. py:attribute:: retry_args
+      :value: None
+
+
+
+   .. py:attribute:: deferrable
+
+
+   .. py:attribute:: openlineage_inject_parent_job_info
+
+
+   .. py:attribute:: openlineage_inject_transport_info
+
+
+   .. py:property:: hook
+      :type: airflow.providers.apache.livy.hooks.livy.LivyHook
+
+
+      Get valid hook.
+
+      :return: LivyHook
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
+
+
+
+   .. py:method:: poll_for_termination(batch_id)
+
+      Pool Livy for batch termination.
+
+      :param batch_id: id of the batch session to monitor.
+
+
+
+   .. py:method:: on_kill()
+
+      Override this method to clean up subprocesses when a task instance gets killed.
+
+      Any use of the threading, subprocess or multiprocessing module within an
+      operator needs to be cleaned up, or it will leave ghost processes behind.
+
+
+
+   .. py:method:: kill()
+
+      Delete the current batch session.
+
+
+
+   .. py:method:: execute_complete(context, event)
+
+      Execute when the trigger fires - returns immediately.
+
+      Relies on trigger to throw an exception, otherwise it assumes execution was successful.
+
+
+

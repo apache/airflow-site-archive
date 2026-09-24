@@ -1,0 +1,155 @@
+airflow.providers.common.ai.batch.anthropic
+===========================================
+
+.. py:module:: airflow.providers.common.ai.batch.anthropic
+
+.. autoapi-nested-parse::
+
+   Anthropic batch adapter (Message Batches API).
+
+   Talks to the ``anthropic`` SDK directly, for the same reason ``batch/openai.py``
+   does. The SDK import is deferred to :func:`_build_client`.
+
+   The SDK's ``messages.batches.create`` has no batch-level ``metadata``
+   parameter, so the idempotency key lives only in each request's ``custom_id``
+   prefix. That is enough to recognize results, but not to find an orphaned
+   batch: see :meth:`AnthropicBatchAdapter.find_orphaned_batch`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.anthropic.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.anthropic.AnthropicBatchAdapter
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: AnthropicBatchAdapter(*, api_key = None, base_url = None, client = None)
+
+   Bases: :py:obj:`airflow.providers.common.ai.batch.base.BatchAdapter`
+
+
+   Batch adapter for Anthropic's Message Batches API.
+
+   :param api_key: Passed straight to the ``anthropic.Anthropic`` client.
+       ``None`` falls back to the SDK's own env-var resolution
+       (``ANTHROPIC_API_KEY``).
+   :param base_url: Passed straight to the ``anthropic.Anthropic`` client.
+   :param client: Inject a pre-built client (or a test double) instead of
+       constructing one from ``api_key``/``base_url``.
+
+
+   .. py:attribute:: name
+      :value: 'anthropic'
+
+
+
+   .. py:attribute:: max_requests
+      :value: 100000
+
+
+
+   .. py:attribute:: max_payload_bytes
+      :value: 256000000
+
+
+
+   .. py:attribute:: allows_per_request_model
+      :value: True
+
+
+
+   .. py:method:: build_output_directive(spec)
+
+      Translate ``spec.json_schema`` into this provider's structured-output request fields.
+
+      Returns ``{}`` when ``spec.is_structured`` is ``False``. The result is
+      merged into every request's body/params by the adapter itself.
+
+
+
+   .. py:method:: validate_requests(requests, *, model, output_spec, idempotency_key, system_prompt = '', max_tokens = 1024, request_params = None, **kwargs)
+
+      Reject an over-limit or otherwise invalid batch before any network call.
+
+      Must check ``len(requests)`` against ``max_requests`` and the serialized
+      request size (including the per-request output directive built from
+      ``output_spec``, which a large schema repeats in every request) against
+      ``max_payload_bytes``, and call :meth:`check_custom_id_length`. Raise a
+      subclass of ``LLMBatchInputError`` naming the limit, the actual
+      count/size, and the ``.expand()`` remedy.
+
+      ``**kwargs`` carries the same batch-level request-building context as
+      :meth:`submit` (``system_prompt``, ``max_tokens``, ``request_params``)
+      so the serialized-size estimate matches what ``submit`` sends.
+
+
+
+   .. py:method:: submit(requests, *, model, idempotency_key, input_fingerprint, output_spec, system_prompt = '', max_tokens = 1024, request_params = None, **kwargs)
+
+      Upload/submit the batch and return the provider's batch id.
+
+      Where the provider offers batch-level metadata (OpenAI), record both
+      ``idempotency_key`` and ``input_fingerprint`` there so
+      :meth:`find_orphaned_batch` can read them back. The key alone identifies
+      the task instance, not this submission of it: it is stable across a
+      ``clear`` even when the prompts changed.
+
+
+
+   .. py:method:: get_batch(batch_id)
+
+      Return the current status of a submitted batch. Synchronous; the trigger wraps it in ``to_thread``.
+
+
+
+   .. py:method:: cancel_batch(batch_id)
+
+      Request cancellation of a batch.
+
+
+
+   .. py:method:: find_orphaned_batch(idempotency_key, input_fingerprint, not_before)
+
+      Return ``None`` unconditionally: this adapter does not recover orphaned batches.
+
+      The SDK's batch-create call has no ``metadata`` parameter and the list
+      endpoint cannot filter by ``custom_id``. A batch could in principle be
+      identified by listing recent batches and reading the ``custom_id``
+      prefix of an ended batch's first result, but that scan costs a result
+      download per candidate and cannot see a batch that is still running, so
+      it is not implemented. A crash between "submit sent" and "response
+      recorded" therefore falls through to ``on_orphaned_intent``.
+
+
+
+   .. py:method:: iter_results(batch_id)
+
+      Return (not ``yield``) a streaming iterator of per-request results.
+
+      Returning a plain iterator rather than using ``yield`` in this method
+      makes an invalid ``batch_id`` (or any other call-time failure) raise
+      immediately, instead of only once the caller starts iterating.
+
+
+
+   .. py:method:: extract_output(raw, spec)
+
+      Pull the model's output out of a provider-native result, in the shape ``ExtractedOutput`` describes.
+
+
+

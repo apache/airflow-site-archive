@@ -1,0 +1,91 @@
+airflow.providers.common.ai.toolsets.langchain_bridge
+=====================================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.langchain_bridge
+
+.. autoapi-nested-parse::
+
+   Bridge pydantic-ai toolsets into LangChain tools.
+
+   This is the reverse of pydantic-ai's upstream ``pydantic_ai.ext.langchain``
+   bridge. Upstream turns LangChain tools *into* a pydantic-ai toolset
+   (:class:`~pydantic_ai.ext.langchain.LangChainToolset`) so they can be used with
+   common.ai's ``AgentOperator``. This module goes the other way: it turns a
+   pydantic-ai :class:`~pydantic_ai.toolsets.abstract.AbstractToolset` -- such as
+   common.ai's :class:`~airflow.providers.common.ai.toolsets.sql.SQLToolset`,
+   :class:`~airflow.providers.common.ai.toolsets.hook.HookToolset`, or
+   :class:`~airflow.providers.common.ai.toolsets.mcp.MCPToolset` -- into a list of
+   LangChain ``StructuredTool`` objects, so Airflow's curated tools can be handed
+   to a LangChain agent or chain.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.langchain_bridge.airflow_toolset_to_langchain_tools
+
+
+Module Contents
+---------------
+
+.. py:function:: airflow_toolset_to_langchain_tools(toolset, *, deps = None)
+
+   Convert a pydantic-ai toolset into a list of LangChain ``StructuredTool`` objects.
+
+   Each returned tool is backed by ``toolset.call_tool`` and carries the
+   ``args_schema`` derived from the tool's JSON schema, so a LangChain agent or
+   chain can call it the same way it calls any native LangChain tool.
+
+   If a tool raises pydantic-ai's :exc:`~pydantic_ai.exceptions.ModelRetry`
+   (the bundled SQL toolsets do this to ask the model to correct its input,
+   e.g. an unknown column), the bridge returns the retry message as the tool's
+   output so the model sees it and tries again. ``ModelRetry`` is a
+   feed-the-model-and-retry signal, not a failure; returning it mirrors that and
+   works regardless of how the agent handles tool errors. Raising instead would
+   abort the run under ``create_agent``'s default tool-error handling.
+
+   Argument validation failures are handled the same way: each tool validates
+   its arguments with the toolset's ``args_validator`` before dispatch, and a
+   :exc:`pydantic.ValidationError` from that step is fed back to the model as
+   the tool output so it can correct the call. This mirrors pydantic-ai's
+   native two-stage behaviour: only arg-validation ``ValidationError`` is
+   retried; a ``ValidationError`` raised inside ``call_tool`` (for example from
+   a Hook method or MCP client) propagates rather than being fed back, so a
+   non-idempotent tool that already ran a side effect is not re-invoked.
+
+   The retry message is bounded by the tool's ``max_retries``: a tool that keeps
+   raising ``ModelRetry`` (or keeps failing arg validation) stops being fed back
+   and propagates once the budget is exhausted, so the run fails instead of
+   looping forever. The count resets after a successful call.
+
+   The toolset's ``get_tools`` is invoked eagerly here to enumerate the tools.
+
+   .. warning::
+       The bridge does not hold a toolset session open across calls. ``get_tools``
+       and every ``call_tool`` each run under their own event loop, and pydantic-ai
+       opens and tears the connection down around each one. For ``MCPToolset`` this
+       means the server is reconnected on every tool call. That is fine for
+       stateless tools (and for HTTP/SSE servers, modulo per-call latency), but a
+       stdio server, or any server that keeps state between calls, will lose that
+       state because each call starts a fresh process/session.
+
+   .. note::
+       A pydantic-ai toolset is normally driven inside an agent run, where a
+       live :class:`~pydantic_ai.RunContext` carries the model, usage, and
+       message history. Outside an agent run there is no such context, so this
+       bridge builds a minimal one with an inert placeholder model. The curated
+       common.ai toolsets (``SQLToolset``, ``HookToolset``, ``MCPToolset``)
+       ignore the context, so this works for them. A custom toolset that reads
+       live run state (``ctx.model``, ``ctx.messages``, ``ctx.usage``) will not
+       behave correctly when bridged standalone.
+
+   :param toolset: The pydantic-ai toolset to convert.
+   :param deps: Optional dependency object exposed to the toolset as
+       ``ctx.deps``. Defaults to ``None``.
+   :return: A list of LangChain ``StructuredTool`` objects, one per tool in the
+       toolset.
+
+

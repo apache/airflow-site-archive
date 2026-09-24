@@ -1,0 +1,192 @@
+airflow.providers.clickhousedb.hooks.clickhouse
+===============================================
+
+.. py:module:: airflow.providers.clickhousedb.hooks.clickhouse
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.clickhousedb.hooks.clickhouse.ClickHouseConnection
+   airflow.providers.clickhousedb.hooks.clickhouse.ClickHouseHook
+
+
+Module Contents
+---------------
+
+.. py:class:: ClickHouseConnection(client)
+
+   Minimal DB-API 2.0 connection adapter wrapping a ``clickhouse_connect`` Client.
+
+   SQL execution is delegated to ``clickhouse_connect.dbapi.cursor.Cursor``, which
+   routes each statement to ``client.query()`` or ``client.command()`` automatically
+   by inspecting the SQL keyword after stripping comments — the same logic used by
+   the ``clickhouse-connect`` SQLAlchemy dialect.
+
+   ClickHouse has no multi-statement transactions.  Every statement is effectively
+   auto-committed, so ``commit()`` and ``rollback()`` are intentional no-ops and
+   the ``autocommit`` attribute is always ``True``.  ``DbApiHook.run()`` checks
+   ``conn.autocommit`` via :meth:`ClickHouseHook.get_autocommit` and skips the
+   ``conn.commit()`` call when it is truthy.
+
+
+   .. py:attribute:: autocommit
+      :type:  bool
+      :value: True
+
+
+
+   .. py:method:: cursor()
+
+
+   .. py:method:: close()
+
+
+   .. py:method:: commit()
+
+
+   .. py:method:: rollback()
+
+
+.. py:class:: ClickHouseHook(*args, database = None, session_settings = None, client_kwargs = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.sql.hooks.sql.DbApiHook`
+
+
+   Interact with ClickHouse via the HTTP interface (``clickhouse-connect``).
+
+   This hook wraps ``clickhouse_connect.get_client()`` behind a thin DB-API 2.0
+   adapter (:class:`ClickHouseConnection`), so all standard
+   :class:`~airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator`
+   features work out of the box (templating, ``handler``, ``split_statements``,
+   etc.).
+
+   :param database: Optional database name.  Overrides the ``schema`` field of the
+       Airflow connection.  Useful when one connection points to a ClickHouse cluster
+       and individual tasks need to target different databases.
+   :param session_settings: Optional dict of ClickHouse session-level settings
+       (e.g. ``{"max_execution_time": 60, "max_threads": 4}``).  Values supplied
+       here are **merged on top of** any ``session_settings`` dict already present
+       in the connection's ``extra`` JSON field, with the constructor argument
+       taking precedence. For a full list of available session settings visit https://clickhouse.com/docs/operations/settings/settings
+   :param client_kwargs: Optional dict of additional keyword arguments forwarded
+       verbatim to ``clickhouse_connect.get_client()``.  Use this to pass any
+       parameter not otherwise exposed by the hook (e.g. ``http_proxy``,
+       ``pool_mgr_params``).  Values supplied here are **merged on top of** any
+       ``client_kwargs`` dict already present in the connection's ``extra`` JSON
+       field, with the constructor argument taking precedence on conflicting keys.
+       Keys that the hook manages itself (``host``, ``port``, ``username``,
+       ``password``, ``database``, ``secure``, ``verify``, ``client_name``,
+       ``settings``) are silently ignored so that hook-managed values always
+       take precedence.
+
+   .. seealso::
+       - `clickhouse-connect documentation <https://clickhouse.com/docs/en/integrations/python>`_
+       - `clickhouse session settings documentation <https://clickhouse.com/docs/operations/settings/settings>`_
+       - :ref:`howto/connection:clickhouse`
+
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'clickhouse_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'clickhouse_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'clickhouse'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'ClickHouse'
+
+
+
+   .. py:attribute:: supports_autocommit
+      :value: True
+
+
+
+   .. py:method:: set_autocommit(conn, autocommit)
+
+      No-op: ClickHouse has no transaction support.
+
+
+
+   .. py:method:: get_autocommit(conn)
+
+      Return ``True``: ClickHouse auto-commits every statement.
+
+
+
+   .. py:attribute:: database
+      :value: None
+
+
+
+   .. py:attribute:: session_settings
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: client_kwargs
+      :type:  dict[str, Any]
+
+
+   .. py:method:: get_conn()
+
+      Return a DB-API 2.0 compatible connection backed by ``clickhouse_connect``.
+
+
+
+   .. py:method:: get_client()
+
+      Return the raw ``clickhouse_connect`` Client for ClickHouse-specific operations.
+
+      Use this for bulk inserts, streaming queries, or any operation that
+      benefits from the native ``clickhouse_connect`` API rather than DB-API
+      cursors.  The caller is responsible for closing the client.
+
+
+
+   .. py:method:: bulk_insert_rows(table, rows, column_names, batch_size = None)
+
+      Insert rows into a ClickHouse table using the native columnar insert.
+
+      Uses ``clickhouse_connect``'s optimized insert path, which is
+      significantly faster than row-by-row cursor inserts for large datasets.
+
+      By default (``batch_size=None``) all rows are sent in a single call.
+      Set ``batch_size`` to bound peak memory usage on very large inputs; an
+      insert context is created once and reused across chunks to avoid a
+      repeated ``DESCRIBE TABLE`` round-trip per batch.
+
+      :param table: Target table name.
+      :param rows: List of row tuples to insert.
+      :param column_names: Column names matching each position in the row tuples.
+      :param batch_size: Number of rows per insert chunk.  ``None`` (default)
+          sends all rows in one request.
+
+
+
+   .. py:method:: get_uri()
+
+      Return a SQLAlchemy-compatible URI for ``get_sqlalchemy_engine()``.
+
+      Always uses the ``clickhousedb://`` scheme registered by ``clickhouse-connect``.
+      TLS and tuning parameters are forwarded as query-string arguments so that
+      SQLAlchemy-path users get the same settings as DB-API-path users:
+
+      * ``secure`` — enables HTTPS/TLS (``?secure=true``)
+      * ``verify`` — TLS certificate verification (``?verify=false`` to disable)
+      * ``connect_timeout``, ``send_receive_timeout``, ``compress`` — forwarded when
+        explicitly set in the connection's ``extra`` JSON
+
+
+

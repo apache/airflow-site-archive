@@ -1,0 +1,490 @@
+airflow.providers.microsoft.azure.hooks.msgraph
+===============================================
+
+.. py:module:: airflow.providers.microsoft.azure.hooks.msgraph
+
+.. autoapi-nested-parse::
+
+   This module contains a Microsoft Graph API hook and the email backend built on it.
+
+   .. spelling:word-list::
+
+       dryrun
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.microsoft.azure.hooks.msgraph.PaginationCallable
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.microsoft.azure.hooks.msgraph.CachedAsyncTokenCredential
+   airflow.providers.microsoft.azure.hooks.msgraph.DefaultResponseHandler
+   airflow.providers.microsoft.azure.hooks.msgraph.KiotaRequestAdapterHook
+   airflow.providers.microsoft.azure.hooks.msgraph.MSGraphMailHook
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.microsoft.azure.hooks.msgraph.execute_callable
+   airflow.providers.microsoft.azure.hooks.msgraph.send_email
+
+
+Module Contents
+---------------
+
+.. py:data:: PaginationCallable
+
+.. py:function:: execute_callable(func, *args, **kwargs)
+
+   Dynamically call a function by matching its signature to provided args/kwargs.
+
+
+.. py:class:: CachedAsyncTokenCredential(credential)
+
+   Bases: :py:obj:`azure.core.credentials_async.AsyncTokenCredential`
+
+
+   Wraps an async Azure credential to prevent ``kiota`` from closing it after each token request.
+
+   ``kiota_authentication_azure`` calls ``await credential.close()`` after every successful
+   ``get_token`` call (see ``AzureIdentityAccessTokenProvider.get_authorization_token``).  That
+   tears down the underlying ``AioHttpTransport`` session so the next request fails with
+   "HTTP transport has already been closed".  Suppressing ``close()`` keeps the session alive
+   for the lifetime of the cached ``RequestAdapter``.
+
+
+   .. py:property:: closed
+      :type: bool
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+      Return `self` upon entering the runtime context.
+
+
+
+   .. py:method:: __aexit__(exc_type = None, exc_value = None, traceback = None)
+      :async:
+
+
+      Raise any exception triggered within the runtime context.
+
+
+
+   .. py:method:: get_token(*args, **kwargs)
+      :async:
+
+
+      Request an access token for `scopes`.
+
+      :param str scopes: The type of access needed.
+
+      :keyword str claims: Additional claims required in the token, such as those returned in a resource
+          provider's claims challenge following an authorization failure.
+      :keyword str tenant_id: Optional tenant to include in the token request.
+      :keyword bool enable_cae: Indicates whether to enable Continuous Access Evaluation (CAE) for the requested
+          token. Defaults to False.
+
+      :rtype: AccessToken
+      :return: An AccessToken instance containing the token string and its expiration time in Unix time.
+
+
+
+   .. py:method:: get_token_info(*args, **kwargs)
+      :async:
+
+
+
+   .. py:method:: close()
+      :async:
+
+
+      Intentionally a no-op — the credential session is closed when the adapter is evicted.
+
+
+
+.. py:class:: DefaultResponseHandler
+
+   Bases: :py:obj:`kiota_abstractions.response_handler.ResponseHandler`
+
+
+   DefaultResponseHandler returns JSON payload or content in bytes or response headers.
+
+
+   .. py:method:: get_value(response)
+      :staticmethod:
+
+
+
+   .. py:method:: handle_response_async(response, error_map)
+      :async:
+
+
+      Invoke this callback method when a response is received.
+
+      param response: The type of the native response object.
+      param error_map: The error dict to use in case of a failed request.
+
+
+
+.. py:class:: KiotaRequestAdapterHook(conn_id = default_conn_name, timeout = None, proxies = None, host = None, scopes = None, api_version = None)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   A Microsoft Graph API interaction hook, a Wrapper around KiotaRequestAdapter.
+
+   https://github.com/microsoftgraph/msgraph-sdk-python-core
+
+   :param conn_id: The HTTP Connection ID to run the trigger against.
+   :param timeout: The HTTP timeout being used by the KiotaRequestAdapter (default is None).
+       When no timeout is specified or set to None then no HTTP timeout is applied on each request.
+   :param proxies: A Dict defining the HTTP proxies to be used (default is None).
+   :param host: The host to be used (default is "https://graph.microsoft.com").
+   :param scopes: The scopes to be used (default is ["https://graph.microsoft.com/.default"]).
+   :param api_version: The API version of the Microsoft Graph API to be used (default is v1).
+       You can pass an enum named APIVersion which has 2 possible members v1 and beta,
+       or you can pass a string as "v1.0" or "beta".
+
+
+   .. py:attribute:: DEFAULT_HEADERS
+
+
+   .. py:attribute:: DEFAULT_SCOPE
+      :value: 'https://graph.microsoft.com/.default'
+
+
+
+   .. py:attribute:: cached_request_adapters
+      :type:  dict[str, tuple[str, kiota_abstractions.request_adapter.RequestAdapter]]
+
+
+   .. py:attribute:: conn_type
+      :type:  str
+      :value: 'msgraph'
+
+
+
+   .. py:attribute:: conn_name_attr
+      :type:  str
+      :value: 'conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :type:  str
+      :value: 'msgraph_default'
+
+
+
+   .. py:attribute:: hook_name
+      :type:  str
+      :value: 'Microsoft Graph API'
+
+
+
+   .. py:attribute:: conn_id
+      :value: 'msgraph_default'
+
+
+
+   .. py:attribute:: timeout
+      :value: None
+
+
+
+   .. py:attribute:: proxies
+      :value: None
+
+
+
+   .. py:attribute:: host
+      :value: None
+
+
+
+   .. py:attribute:: api_version
+
+
+   .. py:attribute:: allowed_netloc
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:method:: get_connection_form_widgets()
+      :classmethod:
+
+
+      Return connection widgets to add to connection form.
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :classmethod:
+
+
+      Return custom field behaviour.
+
+
+
+   .. py:method:: resolve_api_version_from_value(api_version, default = None)
+      :staticmethod:
+
+
+
+   .. py:method:: get_api_version(config)
+
+
+   .. py:method:: get_host(connection)
+
+
+   .. py:method:: get_base_url(host, api_version, config)
+
+
+   .. py:method:: format_no_proxy_url(url)
+      :staticmethod:
+
+
+
+   .. py:method:: to_httpx_proxies(proxies)
+      :classmethod:
+
+
+
+   .. py:method:: to_msal_proxies(authority, proxies)
+
+
+   .. py:method:: get_allowed_hosts(authority, config)
+      :staticmethod:
+
+
+
+   .. py:method:: get_conn()
+
+      Initiate a new RequestAdapter connection.
+
+      .. warning::
+         This method is deprecated. Use :meth:`get_async_conn` instead.
+
+
+
+   .. py:method:: get_async_conn()
+      :async:
+
+
+      Initiate a new RequestAdapter connection asynchronously.
+
+
+
+   .. py:method:: get_proxies(config)
+
+
+   .. py:method:: get_credentials(login, password, config, authority, verify, proxies)
+
+
+   .. py:method:: test_connection()
+
+      Test HTTP Connection.
+
+
+
+   .. py:method:: default_pagination(response, url = None, query_parameters = None, responses = lambda: [])
+      :staticmethod:
+
+
+      Resolve the url and query parameters of the page following ``response``.
+
+      The ``$skip`` offset is derived from ``query_parameters`` rather than from ``responses``:
+      callers accumulate whatever their own callbacks produced, so the entries are not guaranteed
+      to be the raw pages this offset would have to be counted from.
+
+
+
+   .. py:method:: run(url = '', response_type = None, path_parameters = None, method = 'GET', query_parameters = None, headers = None, data = None)
+      :async:
+
+
+
+   .. py:method:: get_allowed_netlocs()
+      :async:
+
+
+      Return the endpoint's host and the connection's allowed hosts, for checking pagination links.
+
+
+
+   .. py:method:: assert_allowed_host(url)
+      :async:
+
+
+      Refuse an absolute ``url`` whose host the connection does not allow.
+
+      A pagination link (e.g. ``@odata.nextLink``) is echoed from the API response and is re-fetched
+      with the connection's bearer token attached. That token is withheld only from hosts outside
+      ``allowed_hosts``, which defaults to empty (any host) unless configured, so a tampered response
+      could send it to an arbitrary host (CWE-918).
+
+
+
+   .. py:method:: paginated_run(url = '', response_type = None, path_parameters = None, method = 'GET', query_parameters = None, headers = None, data = None, pagination_function = None)
+      :async:
+
+
+
+   .. py:method:: send_request(request_info, response_type = None)
+      :async:
+
+
+
+   .. py:method:: close()
+      :async:
+
+
+      Close the request adapter cached for this connection and evict it from the cache.
+
+
+
+   .. py:method:: request_information(url, response_type = None, path_parameters = None, method = 'GET', query_parameters = None, headers = None, data = None)
+
+
+   .. py:method:: normalize_url(url)
+      :staticmethod:
+
+
+
+   .. py:method:: encoded_query_parameters(query_parameters)
+      :staticmethod:
+
+
+
+   .. py:method:: error_mapping()
+      :staticmethod:
+
+
+
+.. py:class:: MSGraphMailHook(conn_id = default_conn_name, timeout = None, proxies = None, host = None, scopes = None, api_version = None)
+
+   Bases: :py:obj:`KiotaRequestAdapterHook`
+
+
+   Send mail from an Office 365 mailbox through the Microsoft Graph ``sendMail`` endpoint.
+
+   The application registration behind the connection needs the ``Mail.Send`` permission, and with
+   application permissions an administrator has to grant it access to the sending mailbox.
+
+   https://learn.microsoft.com/en-us/graph/api/user-sendmail
+
+   :param conn_id: The :ref:`Microsoft Graph API connection id <howto/connection:msgraph>`.
+   :param timeout: The HTTP timeout being used by the KiotaRequestAdapter (default is None).
+       When no timeout is specified or set to None then no HTTP timeout is applied on each request.
+   :param proxies: A Dict defining the HTTP proxies to be used (default is None).
+   :param host: The host to be used (default is "https://graph.microsoft.com").
+   :param scopes: The scopes to be used (default is ["https://graph.microsoft.com/.default"]).
+   :param api_version: The API version of the Microsoft Graph API to be used (default is v1).
+
+
+   .. py:attribute:: MAX_ATTACHMENTS_SIZE
+      :value: 3145728
+
+
+
+   .. py:method:: extract_email_addresses(addresses)
+      :staticmethod:
+
+
+      Split a comma or semicolon separated string, or an iterable, into a list of addresses.
+
+
+
+   .. py:method:: extract_sender(from_email)
+      :staticmethod:
+
+
+      Extract the bare address of the mailbox to send from.
+
+
+
+   .. py:method:: build_recipients(addresses)
+      :classmethod:
+
+
+      Build the Microsoft Graph recipient representation for the given addresses.
+
+
+
+   .. py:method:: build_attachments(files)
+      :classmethod:
+
+
+      Read each file from disk and build its Microsoft Graph ``fileAttachment`` representation.
+
+
+
+   .. py:method:: build_message(to, subject, html_content, files = None, cc = None, bcc = None, custom_headers = None)
+      :classmethod:
+
+
+      Build the Microsoft Graph message body for the given email fields.
+
+
+
+   .. py:method:: asend_email(from_email, to, subject, html_content, files = None, cc = None, bcc = None, custom_headers = None, save_to_sent_items = True, dryrun = False)
+      :async:
+
+
+      Send an email from the ``from_email`` mailbox (async).
+
+      :param from_email: The mailbox the message is sent from.
+      :param to: Recipient email address or list of addresses.
+      :param subject: Email subject.
+      :param html_content: Email body in HTML format.
+      :param files: List of file paths to attach to the email.
+      :param cc: Carbon copy recipient email address or list of addresses.
+      :param bcc: Blind carbon copy recipient email address or list of addresses.
+      :param custom_headers: Custom internet message headers, whose names have to start with "x-".
+      :param save_to_sent_items: Whether the message is saved in the mailbox's Sent Items folder.
+      :param dryrun: If True, the message is prepared but not sent.
+
+
+
+   .. py:method:: send_email(from_email, to, subject, html_content, files = None, cc = None, bcc = None, custom_headers = None, save_to_sent_items = True, dryrun = False)
+
+      Send an email from the ``from_email`` mailbox.
+
+      :param from_email: The mailbox the message is sent from.
+      :param to: Recipient email address or list of addresses.
+      :param subject: Email subject.
+      :param html_content: Email body in HTML format.
+      :param files: List of file paths to attach to the email.
+      :param cc: Carbon copy recipient email address or list of addresses.
+      :param bcc: Blind carbon copy recipient email address or list of addresses.
+      :param custom_headers: Custom internet message headers, whose names have to start with "x-".
+      :param save_to_sent_items: Whether the message is saved in the mailbox's Sent Items folder.
+      :param dryrun: If True, the message is prepared but not sent.
+
+
+
+.. py:function:: send_email(to, subject, html_content, files = None, dryrun = False, cc = None, bcc = None, mime_subtype = 'mixed', mime_charset = 'utf-8', conn_id = None, from_email = None, custom_headers = None, **kwargs)
+
+   Email backend for Microsoft Graph.
+
+   .. note::
+       For more information, see :ref:`email-configuration-msgraph`
+
+
