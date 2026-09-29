@@ -1,0 +1,135 @@
+airflow.providers.google.cloud.transfers.mongo_to_gcs
+=====================================================
+
+.. py:module:: airflow.providers.google.cloud.transfers.mongo_to_gcs
+
+.. autoapi-nested-parse::
+
+   MongoDB to GCS operator.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.google.cloud.transfers.mongo_to_gcs.MongoToGCSOperator
+
+
+Module Contents
+---------------
+
+.. py:class:: MongoToGCSOperator(*, mongo_conn_id = 'mongo_default', mongo_db, mongo_collection, mongo_query = None, mongo_projection = None, allow_disk_use = True, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.google.cloud.transfers.sql_to_gcs.BaseSQLToGCSOperator`
+
+
+   Copy data from MongoDB to Google Cloud Storage in JSON, CSV or Parquet format.
+
+   .. note::
+       MongoDB is a NoSQL store, so subclassing ``BaseSQLToGCSOperator`` is a
+       deliberate reuse choice rather than a natural fit. The base class already
+       implements the chunking, schema inference and GCS upload flow we want; this
+       operator reuses it by adapting the pymongo cursor to a DB-API style cursor
+       (see :class:`_MongoCursorAdapter`) and overriding ``query`` /
+       ``field_to_bigquery`` / ``convert_type``. A dedicated
+       ``BaseNoSQLToGCSOperator`` could be a cleaner home for this in the future.
+
+   .. seealso::
+       For more information on how to use this operator, take a look at the guide:
+       :ref:`howto/operator:MongoToGCSOperator`
+
+   :param mongo_conn_id: Reference to a specific
+       :ref:`Mongo connection <howto/connection:mongo>`.
+   :param mongo_db: The MongoDB database name.
+   :param mongo_collection: The MongoDB collection name.
+   :param mongo_query: A MongoDB find filter (``dict``) or aggregation pipeline
+       (``list``). Defaults to ``{}`` (match all).
+   :param mongo_projection: Optional projection passed to ``find()``. Ignored
+       when ``mongo_query`` is an aggregation pipeline. Accepts a dict
+       (``{"field": 1}``) or list of field names.
+   :param allow_disk_use: Whether to pass ``allowDiskUse=True`` to
+       ``aggregate()``. Defaults to True.
+
+
+   .. py:attribute:: ui_color
+      :value: '#a0e08c'
+
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('bucket', 'filename', 'schema_filename', 'schema', 'parameters', 'impersonation_chain',...
+
+
+
+   .. py:attribute:: template_ext
+      :type:  collections.abc.Sequence[str]
+      :value: ()
+
+
+
+   .. py:attribute:: template_fields_renderers
+
+
+   .. py:attribute:: type_map
+      :type:  dict[type, str]
+
+
+   .. py:attribute:: mongo_conn_id
+      :value: 'mongo_default'
+
+
+
+   .. py:attribute:: mongo_db
+
+
+   .. py:attribute:: mongo_collection
+
+
+   .. py:attribute:: mongo_query
+
+
+   .. py:attribute:: mongo_projection
+      :value: None
+
+
+
+   .. py:attribute:: allow_disk_use
+      :value: True
+
+
+
+   .. py:property:: db_hook
+      :type: airflow.providers.mongo.hooks.mongo.MongoHook
+
+
+
+   .. py:method:: query()
+
+      Execute the configured find/aggregate and return a DB-API style cursor.
+
+
+
+   .. py:method:: field_to_bigquery(field)
+
+      Convert a DBAPI field to BigQuery schema format.
+
+
+
+   .. py:method:: convert_type(value, schema_type, **kwargs)
+
+      Convert pymongo values to BigQuery-friendly types.
+
+      * ``ObjectId`` -> ``str``.
+      * ``Decimal128`` / ``Decimal`` -> ``float``.
+      * ``bytes`` -> base64-encoded ``str`` (or ``int`` when
+        ``schema_type == 'INTEGER'``).
+      * ``datetime`` -> ``str(value)``.
+      * ``date`` -> ISO date string when ``schema_type == 'DATE'``, otherwise
+        combined ``datetime`` string.
+      * ``list`` / ``dict`` / ``tuple`` -> JSON string.
+
+
+

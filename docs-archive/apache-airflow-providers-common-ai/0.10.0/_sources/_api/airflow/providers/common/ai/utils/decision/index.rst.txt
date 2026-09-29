@@ -1,0 +1,206 @@
+airflow.providers.common.ai.utils.decision
+==========================================
+
+.. py:module:: airflow.providers.common.ai.utils.decision
+
+.. autoapi-nested-parse::
+
+   Confidence gating and the decision record shared by the LLM operators.
+
+   A classifier model such as TypeSafe's reports a confidence per output field in
+   ``ModelResponse.provider_details`` (``{"confidence": {field: float}, "probabilities":
+   {field: {option: float}}}``). A text model reports nothing there. These helpers read
+   that, decide whether an answer should go to a person before the operator acts on it,
+   and shape the ``decision`` XCom record that says what was proposed, what was done, and
+   why.
+
+   Confidence is a statistic on the shape of the probability distribution the model
+   returned: concentrated on one option is high, spread out is low. It is not the
+   probability that the answer is correct, and the gate does not describe it as such.
+
+   The public configuration lives in :mod:`airflow.providers.common.ai.policies.decision`
+   (:class:`DecisionPolicy`, :class:`BranchOption`); this module is the machinery the
+   operators and the retry policy call, including :func:`described_choices`, which builds
+   the option type a model picks from with each option's description in the schema.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.decision.DECISION_XCOM_KEY
+   airflow.providers.common.ai.utils.decision.BARE_OUTPUT_FIELD
+   airflow.providers.common.ai.utils.decision.ReviewReason
+   airflow.providers.common.ai.utils.decision.DecidedBy
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.decision.ModelConfidence
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.decision.validate_decision_policy
+   airflow.providers.common.ai.utils.decision.threshold_for
+   airflow.providers.common.ai.utils.decision.review_reason
+   airflow.providers.common.ai.utils.decision.policy_fails
+   airflow.providers.common.ai.utils.decision.initial_decided_by
+   airflow.providers.common.ai.utils.decision.check_uncertain_action
+   airflow.providers.common.ai.utils.decision.policy_record
+   airflow.providers.common.ai.utils.decision.decision_record
+   airflow.providers.common.ai.utils.decision.finalize_record
+   airflow.providers.common.ai.utils.decision.timed_out_record
+   airflow.providers.common.ai.utils.decision.describe_confidence
+   airflow.providers.common.ai.utils.decision.described_choices
+   airflow.providers.common.ai.utils.decision.picked_key
+
+
+Module Contents
+---------------
+
+.. py:data:: DECISION_XCOM_KEY
+   :value: 'decision'
+
+
+.. py:data:: BARE_OUTPUT_FIELD
+   :value: 'response'
+
+
+   The field name a classifier model reports a bare (non-object) output type's confidence under.
+
+
+.. py:data:: ReviewReason
+
+.. py:data:: DecidedBy
+
+.. py:function:: validate_decision_policy(policy)
+
+   Accept a :class:`DecisionPolicy` or None (no gate); reject anything else at construction.
+
+
+.. py:class:: ModelConfidence
+
+   What the model reported about its own answer, or nothing for a model that reports nothing.
+
+
+   .. py:attribute:: model
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: confidence
+      :type:  dict[str, float]
+
+
+   .. py:attribute:: probabilities
+      :type:  dict[str, dict[str, float]]
+
+
+   .. py:method:: from_result(result)
+      :classmethod:
+
+
+      Read ``provider_details`` off a pydantic-ai run result; empty maps when there are none.
+
+      A confidence that is not a finite number is treated as not reported, so a NaN can never
+      pass the gate as confident.
+
+
+
+   .. py:method:: lowest(keys = None)
+
+      Return the least confident of the given fields (all when ``keys`` is None), or None if none reported.
+
+
+
+.. py:function:: threshold_for(min_confidence, overrides, keys)
+
+   Return the bar that applies to what the model picked.
+
+   No policy bar means no bar, whatever the overrides say (the branch operator rejects that
+   combination at construction). Otherwise every picked option has a bar, its own or the
+   policy's, and when several were picked at once the strictest applies.
+
+
+.. py:function:: review_reason(*, require_approval, threshold, confidence)
+
+   Why the answer does not proceed on its own, or None to act on it.
+
+   ``require_approval`` always wins. Below that, no bar means proceed. A bar with no reported
+   confidence is ``"missing_confidence"``: a text model reports none, and so does a bounded
+   float field, and a model swap must not silently switch off a control the author set. A
+   reported confidence under the bar is ``"below_threshold"``. What happens next is
+   ``on_uncertain``'s call; see :func:`check_uncertain_action`.
+
+
+.. py:function:: policy_fails(review, on_uncertain)
+
+   Whether ``on_uncertain="fail"`` applies to this answer: it is uncertain and the policy says fail.
+
+
+.. py:function:: initial_decided_by(review, on_uncertain)
+
+   Who decides when the record is first written.
+
+   ``"model"`` when the answer proceeds on its own; ``"policy"`` when ``on_uncertain="fail"``
+   is about to fail the task, so the record explains the failure without a join on task state;
+   None while a review is pending, until :func:`finalize_record` fills it in.
+
+
+.. py:function:: check_uncertain_action(review, on_uncertain, *, what, confidence, threshold)
+
+   Raise :class:`LowConfidenceError` when the answer is under its bar and the action is ``"fail"``.
+
+
+.. py:function:: policy_record(policy, branch_bars = None)
+
+   Record the gate settings in force when a decision was made, as plain JSON.
+
+
+.. py:function:: decision_record(*, model_confidence, proposed, action, threshold, review, decided_by, policy)
+
+   Build the ``decision`` XCom value: JSON-serialisable, ``action`` None until a review resolves.
+
+
+.. py:function:: finalize_record(record, event, *, action)
+
+   Copy a pending record with what ran and who decided, read from the review response.
+
+
+.. py:function:: timed_out_record(record)
+
+   Copy a pending record for a review that timed out with no default answer: nothing ran, nobody decided.
+
+
+.. py:function:: describe_confidence(model_confidence, key, threshold)
+
+   One Markdown paragraph for a review body: the confidence, the bar, and the distribution.
+
+
+.. py:function:: described_choices(name, options)
+
+   Build the type a model picks one of ``options`` from, each option carrying its description.
+
+   With a description on any option the schema renders as ``anyOf`` of ``{const, description}``
+   instead of a bare ``enum`` list. That is the one JSON Schema shape that carries a description
+   per value, and it is what both a text model's tool schema and pydantic-ai's TypeSafe adapter
+   read an option's meaning from. On pydantic-ai 2.46+ the type is its ``Choices``; before that,
+   an ``Enum`` whose schema hook emits the same shape. Either way the model has to answer with one
+   of the keys, in the order given, and :func:`picked_key` returns that key whichever type answered.
+
+
+.. py:function:: picked_key(value)
+
+   Return the key a picked option stands for: ``Choices`` answers with the key, the Enum fallback with a member.
+
+

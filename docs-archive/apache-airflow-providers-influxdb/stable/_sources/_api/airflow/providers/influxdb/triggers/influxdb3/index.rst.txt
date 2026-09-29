@@ -1,0 +1,79 @@
+airflow.providers.influxdb.triggers.influxdb3
+=============================================
+
+.. py:module:: airflow.providers.influxdb.triggers.influxdb3
+
+.. autoapi-nested-parse::
+
+   Trigger for running InfluxDB 3.x SQL queries from the triggerer.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.influxdb.triggers.influxdb3.InfluxDB3QueryTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: InfluxDB3QueryTrigger(sql, influxdb3_conn_id = 'influxdb3_default')
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Run a SQL query against InfluxDB 3.x without occupying a worker slot.
+
+   InfluxDB 3 executes queries over a single Apache Arrow Flight stream: there is no
+   server-side job to submit and then poll for completion, and therefore no query state
+   and no poll interval. The trigger instead awaits the query coroutine once and emits a
+   single event when the stream has been fully read.
+
+   ``influxdb3-python`` implements ``query_async`` by running the blocking Flight calls in
+   the event loop's default executor, so concurrency in the triggerer is bounded by that
+   thread pool rather than by native async IO. This is a limitation of the upstream client,
+   not of this trigger.
+
+   :param sql: The SQL query to be executed.
+   :param influxdb3_conn_id: Reference to :ref:`InfluxDB 3 connection id <howto/connection:influxdb3>`.
+
+
+   .. py:attribute:: sql
+
+
+   .. py:attribute:: influxdb3_conn_id
+      :value: 'influxdb3_default'
+
+
+
+   .. py:method:: serialize()
+
+      Return the information needed to reconstruct this Trigger.
+
+      :return: Tuple of (class path, keyword arguments needed to re-instantiate).
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the trigger in an asynchronous context.
+
+      The trigger should yield an Event whenever it wants to fire off
+      an event, and return None if it is finished. Single-event triggers
+      should thus yield and then immediately return.
+
+      If it yields, it is likely that it will be resumed very quickly,
+      but it may not be (e.g. if the workload is being moved to another
+      triggerer process, or a multi-event trigger was being used for a
+      single-event task defer).
+
+      In either case, Trigger classes should assume they will be persisted,
+      and then rely on cleanup() being called when they are no longer needed.
+
+
+

@@ -1,0 +1,67 @@
+airflow.providers.common.ai.utils.tool_definition
+=================================================
+
+.. py:module:: airflow.providers.common.ai.utils.tool_definition
+
+.. autoapi-nested-parse::
+
+   Version-tolerant helpers for building pydantic-ai ``ToolDefinition`` objects.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.tool_definition.return_schema_kwargs
+   airflow.providers.common.ai.utils.tool_definition.serialize_for_llm
+   airflow.providers.common.ai.utils.tool_definition.code_arg_kwargs
+   airflow.providers.common.ai.utils.tool_definition.build_args_validator
+
+
+Module Contents
+---------------
+
+.. py:function:: return_schema_kwargs(schema)
+
+   Return ``{"return_schema": schema}`` when pydantic-ai supports the field, else ``{}``.
+
+   ``return_schema`` lets CodeMode (the Monty sandbox) render a typed function
+   signature for a tool (``-> str``) instead of ``-> Any``, which helps the
+   model write correct code. It has no effect outside code mode.
+
+   :param schema: A JSON Schema fragment describing the tool's return value.
+
+
+.. py:function:: serialize_for_llm(value)
+
+   Convert a Python return value to a string suitable for an LLM.
+
+   :param value: The tool's return value.
+
+
+.. py:function:: code_arg_kwargs(arg_name, language)
+
+   Mark a tool as a code-execution surface whose ``arg_name`` argument holds code.
+
+   Two consumers read this metadata. Instrumentation renders the argument as
+   code in traces, tagged with ``language``. More importantly, CodeMode uses it
+   to decide which tools stay native: a tool that itself executes code must not
+   be folded into ``run_code``, because the model would then have to write a
+   script whose argument is a second script quoted as a string. Without the
+   marker, a sandbox tool is folded in and the generated orchestration runs
+   in-process on the worker -- the opposite of what a sandbox tool is for.
+
+   Returns ``{}`` when the installed pydantic-ai predates
+   ``ToolDefinition.metadata``, matching :func:`return_schema_kwargs`.
+
+   :param arg_name: The tool argument that carries the code or command.
+   :param language: Language tag for the argument, e.g. ``"shell"``.
+
+
+.. py:function:: build_args_validator(parameters_json_schema)
+
+   Build an argument validator from the schema advertised to the model.
+
+

@@ -1,0 +1,108 @@
+airflow.providers.common.ai.batch.dispatch
+==========================================
+
+.. py:module:: airflow.providers.common.ai.batch.dispatch
+
+.. autoapi-nested-parse::
+
+   Dispatch from a connection and a ``model_id`` to a :class:`~airflow.providers.common.ai.batch.base.BatchAdapter`.
+
+   The ``model_id`` prefix (``"openai"`` in ``"openai:gpt-5"``) selects the adapter,
+   because the prefix decides the request shape and the batch API being called.
+   The connection type is then checked against the adapter's
+   :attr:`~airflow.providers.common.ai.batch.base.BatchAdapter.conn_types`, since
+   the adapter has to know how to turn that connection's fields into credentials.
+   This is a separate decision from
+   :func:`~airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.infer_model`
+   (the synchronous ``Agent`` path), which has no notion of "does this provider
+   have a batch API".
+
+   Adapters are imported lazily, only once a request is dispatched to them, so
+   importing this module never requires ``openai``/``anthropic`` to be installed.
+   Another package can add an adapter in two ways: call :func:`register_adapter`
+   at import time, or declare an entry point in the
+   ``airflow.providers.common.ai.batch_adapters`` group whose name is the model
+   prefix and whose value is ``module:Class``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.dispatch.ENTRY_POINT_GROUP
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.dispatch.register_adapter
+   airflow.providers.common.ai.batch.dispatch.import_adapter_class
+   airflow.providers.common.ai.batch.dispatch.split_model_id
+   airflow.providers.common.ai.batch.dispatch.get_adapter_class
+   airflow.providers.common.ai.batch.dispatch.resolve_adapter_name
+   airflow.providers.common.ai.batch.dispatch.build_adapter_from_connection
+   airflow.providers.common.ai.batch.dispatch.build_adapter
+
+
+Module Contents
+---------------
+
+.. py:data:: ENTRY_POINT_GROUP
+   :value: 'airflow.providers.common.ai.batch_adapters'
+
+
+.. py:function:: register_adapter(adapter_cls)
+
+   Register an adapter class for its own :attr:`~airflow.providers.common.ai.batch.base.BatchAdapter.name` prefix.
+
+   Intended for other provider packages that ship a batch engine (Bedrock,
+   Vertex, Azure OpenAI). A registration overrides a built-in or entry-point
+   adapter with the same prefix.
+
+
+.. py:function:: import_adapter_class(name)
+
+   Return the adapter class for an already-resolved adapter name.
+
+
+.. py:function:: split_model_id(model_id)
+
+   Split ``"<provider>:<model>"`` into its two parts, rejecting a missing or empty half.
+
+   :raises UnsupportedBatchProviderError: ``model_id`` is ``None``, has no
+       ``":"``, or has an empty prefix or model name.
+
+
+.. py:function:: get_adapter_class(conn_type, model_id)
+
+   Resolve a connection type and ``model_id`` to an adapter class.
+
+   :raises UnsupportedBatchProviderError: no adapter serves the ``model_id``
+       prefix, or ``model_id`` is malformed.
+   :raises BatchProviderNotYetSupportedError: an adapter exists but does not
+       accept this connection type (e.g. ``pydanticai_azure`` today).
+
+
+.. py:function:: resolve_adapter_name(conn_type, model_id)
+
+   Return the adapter name for a connection/model pair. See :func:`get_adapter_class`.
+
+
+.. py:function:: build_adapter_from_connection(name, conn)
+
+   Instantiate an already-resolved adapter from a fetched connection.
+
+   Uses the connection's ``password``/``host`` fields as ``api_key``/``base_url``,
+   the same fields :class:`~airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook`
+   reads for the synchronous ``@task.llm`` path.
+
+
+.. py:function:: build_adapter(name, *, llm_conn_id)
+
+   Fetch ``llm_conn_id`` and instantiate the adapter; the trigger's entry point, which only carries the id.
+
+

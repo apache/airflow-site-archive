@@ -1,0 +1,293 @@
+airflow.providers.common.ai.utils.hitl_review
+=============================================
+
+.. py:module:: airflow.providers.common.ai.utils.hitl_review
+
+.. autoapi-nested-parse::
+
+   Shared data models, exceptions, and XCom key constants for HITL Review.
+
+   Used by both the API-server-side plugin (``plugins.hitl_review``) and the
+   worker-side operator mixin (``mixins.hitl_review``).  Depends only on
+   ``pydantic`` and the standard library.
+
+   **Storage**: all session state is persisted as XCom entries on the running
+   task instance.  See the *XCom key constants* below for the key naming scheme.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.hitl_review.HumanActionType
+   airflow.providers.common.ai.utils.hitl_review.XCOM_AGENT_SESSION
+   airflow.providers.common.ai.utils.hitl_review.XCOM_HUMAN_ACTION
+   airflow.providers.common.ai.utils.hitl_review.XCOM_AGENT_OUTPUT_PREFIX
+   airflow.providers.common.ai.utils.hitl_review.XCOM_HUMAN_FEEDBACK_PREFIX
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.hitl_review.SessionStatus
+   airflow.providers.common.ai.utils.hitl_review.ConversationEntry
+   airflow.providers.common.ai.utils.hitl_review.AgentSessionData
+   airflow.providers.common.ai.utils.hitl_review.HumanActionData
+   airflow.providers.common.ai.utils.hitl_review.HumanFeedbackRequest
+   airflow.providers.common.ai.utils.hitl_review.HITLReviewResponse
+
+
+Module Contents
+---------------
+
+.. py:data:: HumanActionType
+
+   These xcom keys are reserved for agentic operator with HITL feedback loop.
+
+
+.. py:data:: XCOM_AGENT_SESSION
+   :value: 'airflow_hitl_review_agent_session'
+
+
+   Session metadata written by the **worker**.
+
+   Value: ``{"status": "...", "iteration": N, "max_iterations": M,
+   "prompt": "...", "current_output": "..."}``.
+
+
+.. py:data:: XCOM_HUMAN_ACTION
+   :value: 'airflow_hitl_review_human_action'
+
+
+   Human action command written by the **plugin**.
+
+   Value: ``{"action": "approve"|"reject"|"changes_requested",
+   "feedback": "...", "iteration": N}``.
+
+
+.. py:data:: XCOM_AGENT_OUTPUT_PREFIX
+   :value: 'airflow_hitl_review_agent_output_'
+
+
+   Per-iteration AI output (append-only, written by worker).
+
+   Actual key: ``airflow_hitl_review_agent_output_1``, ``_2``, ...
+
+
+.. py:data:: XCOM_HUMAN_FEEDBACK_PREFIX
+   :value: 'airflow_hitl_review_human_feedback_'
+
+
+   Per-iteration human feedback (append-only, written by plugin).
+
+   Actual key: ``airflow_hitl_review_human_feedback_1``, ``_2``, ...
+
+
+.. py:class:: SessionStatus
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Lifecycle states of a HITL review session.
+
+
+   .. py:attribute:: PENDING_REVIEW
+      :value: 'pending_review'
+
+
+
+   .. py:attribute:: CHANGES_REQUESTED
+      :value: 'changes_requested'
+
+
+
+   .. py:attribute:: APPROVED
+      :value: 'approved'
+
+
+
+   .. py:attribute:: REJECTED
+      :value: 'rejected'
+
+
+
+   .. py:attribute:: MAX_ITERATIONS_EXCEEDED
+      :value: 'max_iterations_exceeded'
+
+
+
+   .. py:attribute:: TIMEOUT_EXCEEDED
+      :value: 'timeout_exceeded'
+
+
+
+.. py:class:: ConversationEntry(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Single turn in the feedback conversation.
+
+
+   .. py:attribute:: role
+      :type:  Literal['assistant', 'human']
+
+
+   .. py:attribute:: content
+      :type:  str
+
+
+   .. py:attribute:: iteration
+      :type:  int
+
+
+   .. py:attribute:: timestamp
+      :type:  datetime.datetime
+      :value: None
+
+
+
+.. py:class:: AgentSessionData(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Session metadata stored in the ``airflow_hitl_review_agent_session`` XCom.
+
+   Written by the **worker** only.
+
+
+   .. py:attribute:: status
+      :type:  SessionStatus
+
+
+   .. py:attribute:: iteration
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: max_iterations
+      :type:  int
+      :value: 5
+
+
+
+   .. py:attribute:: prompt
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: current_output
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: HumanActionData(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Human action payload stored in the ``airflow_hitl_review_human_action`` XCom.
+
+   Written by the **plugin** only. Invalid ``action`` values (e.g. typos like
+   "approved") fail validation at parse time instead of causing the worker to
+   loop indefinitely.
+
+
+   .. py:attribute:: action
+      :type:  HumanActionType
+
+
+   .. py:attribute:: feedback
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: iteration
+      :type:  int
+      :value: 1
+
+
+
+.. py:class:: HumanFeedbackRequest(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Payload for the ``POST .../feedback`` endpoint.
+
+
+   .. py:attribute:: feedback
+      :type:  str
+
+
+.. py:class:: HITLReviewResponse(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   API response for a HITL review session (combined from multiple XCom entries).
+
+
+   .. py:attribute:: dag_id
+      :type:  str
+
+
+   .. py:attribute:: run_id
+      :type:  str
+
+
+   .. py:attribute:: task_id
+      :type:  str
+
+
+   .. py:attribute:: status
+      :type:  SessionStatus
+
+
+   .. py:attribute:: iteration
+      :type:  int
+
+
+   .. py:attribute:: max_iterations
+      :type:  int
+      :value: 5
+
+
+
+   .. py:attribute:: prompt
+      :type:  str
+
+
+   .. py:attribute:: current_output
+      :type:  str
+
+
+   .. py:attribute:: conversation
+      :type:  list[ConversationEntry]
+      :value: []
+
+
+
+   .. py:attribute:: task_completed
+      :type:  bool
+      :value: False
+
+
+
+   .. py:method:: from_xcom(dag_id, run_id, task_id, session, outputs, human_entries, *, task_completed = False)
+      :staticmethod:
+
+
+      Combine a response from separate XCom values.
+
+
+

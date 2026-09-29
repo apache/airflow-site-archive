@@ -1,0 +1,59 @@
+airflow.providers.common.ai.sandbox.output
+==========================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.output
+
+.. autoapi-nested-parse::
+
+   Bounding helpers for sandbox output that the model reads.
+
+   Two independent caps apply everywhere: a line count and a byte budget,
+   whichever is reached first. Truncation never emits a partial line, so the model
+   never has to guess whether it is looking at a whole record.
+
+   The direction differs by tool, and that difference is the point:
+
+   - Command output keeps the **tail**. A traceback, a failing assertion and the
+     exit status all live at the end; the head is usually build noise.
+   - File reads keep the **head** and report the next ``offset``, so the model can
+     page forward through a file it is reading top-down.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.output.format_size
+   airflow.providers.common.ai.sandbox.output.truncate_output
+   airflow.providers.common.ai.sandbox.output.render_file_window
+
+
+Module Contents
+---------------
+
+.. py:function:: format_size(num_bytes)
+
+   Render a byte count the way the truncation notes show it to the model.
+
+
+.. py:function:: truncate_output(text, *, max_lines, max_bytes, already_truncated = False)
+
+   Cap free-form command output, keeping the tail and marking anything dropped.
+
+   ``already_truncated`` says the backend dropped bytes while reading the
+   stream, before this function saw ``text``. The cut is then marked even when
+   what survives happens to fit, so the model is never told it has the whole
+   output when it does not.
+
+
+.. py:function:: render_file_window(data, *, offset, limit, max_lines, max_bytes)
+
+   Render a window of a text file, head-first, with a continuation offset.
+
+   ``offset`` is a 1-indexed line number and ``limit`` a line count, both as the
+   model supplies them. The safety caps apply on top, so a file with very long
+   lines is bounded even when the model asks for few lines.
+
+

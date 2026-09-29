@@ -1,0 +1,354 @@
+airflow.providers.openlineage.utils.emission_policy
+===================================================
+
+.. py:module:: airflow.providers.openlineage.utils.emission_policy
+
+.. autoapi-nested-parse::
+
+   Per-scope emission policy resolution for the OpenLineage provider.
+
+   The ``emission_policy`` Airflow configuration option (``[openlineage]`` section)
+   accepts a JSON array of rule objects.  Each rule has the shape::
+
+       {
+           "scope":      {<scope keys>},        # required, may be empty for "global"
+           "match_mode": "exact" | "regex",     # optional, default "exact"
+           "controls":   {<control flags>},     # required, must be non-empty
+           "locked":     true | false           # optional, default false
+       }
+
+   Top-level keys outside the four above are rejected with a WARNING and the rule
+   is skipped.
+
+   Scope keys (all optional inside ``scope``):
+
+   - ``operator`` — fully-qualified operator class name; matches task events for that
+     operator type.
+   - ``dag_id`` — matches task and/or dag run events for all tasks / dag runs belonging
+     to the named DAG.  Use ``emit_task_events`` / ``emit_dag_events`` to target one
+     event type selectively.
+   - ``task_id`` — only valid alongside ``dag_id``; targets a specific task.
+   - *(empty ``scope: {}``)* — global default override; applies to every task and DAG event.
+
+   ``operator`` cannot be combined with ``dag_id`` or ``task_id`` (scope is one of:
+   global, operator-only, dag-only, dag+task).  ``task_id`` without ``dag_id`` and
+   ``operator`` combined with ``emit_dag_events`` (or ``task_id`` combined with
+   ``emit_dag_events``) are also rejected with a WARNING.
+
+   ``match_mode`` lives at the top level: ``"exact"`` (default) or ``"regex"``.
+   When set to ``"regex"``, every value inside ``scope`` (``dag_id``, ``task_id``,
+   ``operator``) is treated as a ``re.fullmatch`` pattern.
+
+   Control flag keys (all optional inside ``controls``; the dict must be non-empty):
+
+   - ``emit`` — shorthand: disable ALL OpenLineage events in scope (both task and dag
+     run events).  Default: ``true``.
+   - ``emit_task_events`` — disable task-level events only; takes precedence over
+     ``emit`` for task event decisions.  Default: ``true``.
+   - ``emit_dag_events`` — disable dag-run-level events only; takes precedence over
+     ``emit`` for dag event decisions.  Default: ``true``.
+   - ``extract_operator_metadata`` — whether to run operator-specific extractor-based metadata
+     collection.  When ``true``, the extractor manager calls the operator's OpenLineage extractor
+     (if registered), which may produce dataset inputs/outputs, job facets, run facets, and
+     other operator-specific metadata.  When ``false``, the entire extraction pipeline is skipped
+     and a minimal event is emitted.  Only meaningful for task events.  Default: ``true``.
+   - ``include_source_code`` — whether to include operator source code in the
+     ``SourceCodeJobFacet`` for Python and Bash operators.  Only meaningful for task events
+     when ``extract_operator_metadata`` is also ``true``.  Default: ``true``.
+   - ``hook_lineage`` — whether to use ``HookLineageCollector`` as a fallback when the
+     extractor finds no inputs/outputs.  **Has no effect when ``extract_operator_metadata``
+     is ``false``** — the entire extraction pipeline (including hook lineage) is skipped.
+     Only meaningful for task events.  Default: ``true``.
+   - ``include_full_task_info`` — whether to include the full serialized operator state
+     in the ``AirflowRunFacet``.  When ``false`` (default), only a curated subset of
+     task attributes is sent.  Only meaningful for task events.  Default: ``false``.
+
+   ``locked: true`` is an admin floor lock that prevents per-Dag / per-task authoring
+   overrides from changing the field(s) carried by this rule's ``controls`` dict.
+
+   Flag hierarchy
+   ~~~~~~~~~~~~~~
+
+   Flags are not fully independent — some only take effect when a higher-level flag is
+   enabled:
+
+   - ``extract_operator_metadata: false`` skips the **entire** operator extraction pipeline.
+     When this is ``false``, both ``include_source_code`` and ``hook_lineage`` have **no
+     effect** regardless of their values, because the code paths they control are never
+     reached.
+   - ``include_source_code`` only applies inside Python and Bash operator extractors; setting
+     it to ``false`` on other operator types is a no-op.
+
+   Priority for **task events** (most specific tier wins; within a tier, last matching
+   rule wins):
+
+   1. ``dag_id`` + ``task_id``
+   2. ``dag_id``
+   3. ``operator``
+   4. Global (no match keys)
+   5. Built-in defaults
+
+   For ``emit`` at the task level: ``emit_task_events`` beats ``emit`` within the same
+   rule.
+
+   Priority for **DAG run events**:
+
+   1. ``dag_id`` rule (using ``emit_dag_events`` or ``emit``)
+   2. Global (no match keys)
+   3. Built-in defaults
+
+   For ``emit`` at the dag level: ``emit_dag_events`` beats ``emit`` within the same
+   rule.
+
+   Legacy config translation
+   -------------------------
+
+   Any active legacy config option (``disabled_for_operators``, ``disable_source_code``,
+   ``include_full_task_info``, ``selective_enable``) is **always** translated into equivalent
+   ``emission_policy`` rules, regardless of whether ``emission_policy`` itself is set. The
+   translated rules are prepended before any user-provided rules, so user rules win within
+   each priority tier (last-wins). A ``DeprecationWarning`` is issued listing every translated
+   option — silence it by migrating those options into ``emission_policy`` exclusively.
+
+   When no legacy option is active and ``emission_policy`` is empty, the resolver returns
+   the built-in defaults with no warnings.
+
+   Audit logging
+   -------------
+
+   Every resolved field that is non-default — whether from a rule or from a legacy
+   translation — is logged at INFO level, identifying the field, the event context,
+   and the exact rule that caused the change.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.openlineage.utils.emission_policy.log
+   airflow.providers.openlineage.utils.emission_policy.EMIT
+   airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS
+   airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS
+   airflow.providers.openlineage.utils.emission_policy.EXTRACT_OPERATOR_METADATA
+   airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE
+   airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE
+   airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO
+   airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID
+   airflow.providers.openlineage.utils.emission_policy.SCOPE_TASK_ID
+   airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR
+   airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE
+   airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS
+   airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE
+   airflow.providers.openlineage.utils.emission_policy.RULE_LOCKED
+   airflow.providers.openlineage.utils.emission_policy.OL_EMISSION_POLICY_PARAM
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.openlineage.utils.emission_policy.EmissionPolicy
+   airflow.providers.openlineage.utils.emission_policy.Rule
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.openlineage.utils.emission_policy.resolve_task_emission_policy
+   airflow.providers.openlineage.utils.emission_policy.resolve_dag_emission_policy
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: EMIT
+   :value: 'emit'
+
+
+.. py:data:: EMIT_TASK_EVENTS
+   :value: 'emit_task_events'
+
+
+.. py:data:: EMIT_DAG_EVENTS
+   :value: 'emit_dag_events'
+
+
+.. py:data:: EXTRACT_OPERATOR_METADATA
+   :value: 'extract_operator_metadata'
+
+
+.. py:data:: INCLUDE_SOURCE_CODE
+   :value: 'include_source_code'
+
+
+.. py:data:: HOOK_LINEAGE
+   :value: 'hook_lineage'
+
+
+.. py:data:: INCLUDE_FULL_TASK_INFO
+   :value: 'include_full_task_info'
+
+
+.. py:data:: SCOPE_DAG_ID
+   :value: 'dag_id'
+
+
+.. py:data:: SCOPE_TASK_ID
+   :value: 'task_id'
+
+
+.. py:data:: SCOPE_OPERATOR
+   :value: 'operator'
+
+
+.. py:data:: RULE_SCOPE
+   :value: 'scope'
+
+
+.. py:data:: RULE_CONTROLS
+   :value: 'controls'
+
+
+.. py:data:: RULE_MATCH_MODE
+   :value: 'match_mode'
+
+
+.. py:data:: RULE_LOCKED
+   :value: 'locked'
+
+
+.. py:data:: OL_EMISSION_POLICY_PARAM
+   :value: '_openlineage_emission_policy'
+
+
+.. py:class:: EmissionPolicy
+
+   Resolved emission policy for a specific event context.
+
+
+   .. py:attribute:: emit
+      :type:  bool
+
+
+   .. py:attribute:: extract_operator_metadata
+      :type:  bool
+
+
+   .. py:attribute:: include_source_code
+      :type:  bool
+
+
+   .. py:attribute:: hook_lineage
+      :type:  bool
+
+
+   .. py:attribute:: include_full_task_info
+      :type:  bool
+
+
+   .. py:method:: defaults()
+      :classmethod:
+
+
+      Return the default policy (all controls at their built-in defaults).
+
+
+
+.. py:class:: Rule
+
+   A single, fully-validated ``emission_policy`` rule.
+
+   Instances are produced exclusively by :func:`_parse_rule`, so holding a ``Rule``
+   is itself the "this passed schema validation" guarantee — downstream resolution
+   never re-validates. ``scope`` / ``controls`` are the raw (validated) sub-dicts.
+
+
+   .. py:attribute:: scope
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: controls
+      :type:  dict[str, bool]
+
+
+   .. py:attribute:: match_mode
+      :type:  str
+      :value: 'exact'
+
+
+
+   .. py:attribute:: locked
+      :type:  bool
+      :value: False
+
+
+
+   .. py:property:: has_dag
+      :type: bool
+
+
+
+   .. py:property:: has_task
+      :type: bool
+
+
+
+   .. py:property:: has_op
+      :type: bool
+
+
+
+.. py:function:: resolve_task_emission_policy(operator, dag_id, task_id)
+
+   Resolve the emission policy for a task-level event.
+
+   This is the **single authoritative entry point** for task event emission decisions.
+
+   Any active legacy options (``disabled_for_operators``, ``disable_source_code``,
+   ``include_full_task_info``, ``selective_enable``) are *always* translated into equivalent
+   ``emission_policy`` rules, prepended to the user-provided rules so user rules win within
+   each tier (last-wins). A ``DeprecationWarning`` is issued whenever a legacy option
+   contributes a rule — silence it by migrating those options into ``emission_policy``
+   exclusively.
+
+   Never raises: any failure (e.g. a misconfigured ``emission_policy``) is logged and the
+   built-in defaults are returned, so a bad config degrades to "emit with defaults" rather
+   than crashing the listener's task-notification path.
+
+   :param operator: The Airflow operator/task object.
+   :param dag_id: The DAG ID for this task instance.
+   :param task_id: The task ID for this task instance.
+
+
+.. py:function:: resolve_dag_emission_policy(dag_id, dag = None)
+
+   Resolve the emission policy for a DAG-level event.
+
+   Returns a full :class:`EmissionPolicy` for a uniform resolver API across task and
+   DAG scopes. Today only ``emit`` governs DAG-run events; the remaining fields
+   (``extract_operator_metadata``, ``include_source_code``, ``hook_lineage``,
+   ``include_full_task_info``) are reserved — they carry their built-in defaults and
+   are not yet meaningful at DAG scope (no extraction happens at the DAG level). The
+   unified return type keeps room for future DAG-level controls (e.g. terminal-event
+   filtering) without re-widening the API.
+
+   Any active legacy options (currently only ``selective_enable`` affects DAG events)
+   are *always* translated into equivalent ``emission_policy`` rules, prepended to
+   the user-provided rules so user rules win within each tier (last-wins). A
+   ``DeprecationWarning`` is issued whenever a legacy option contributes a rule.
+
+   Never raises: any failure (e.g. a misconfigured ``emission_policy``) is logged and the
+   built-in defaults are returned, so a bad config degrades to "emit with defaults" rather
+   than crashing the listener's dag-run-notification path.
+
+   :param dag_id: The DAG ID for the dag run event.
+   :param dag: Optional DAG object used for the ``selective_enable`` check / translation.
+
+

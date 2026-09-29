@@ -1,0 +1,182 @@
+airflow.providers.common.ai.batch.results
+=========================================
+
+.. py:module:: airflow.providers.common.ai.batch.results
+
+.. autoapi-nested-parse::
+
+   Streaming result merge, JSONL landing, and XCom manifest assembly for ``@task.llm_batch``.
+
+   Memory-bounded streaming is a hard requirement, not an optimization: a batch
+   can have up to 100,000 results, each up to a few KB, so materializing the
+   full result set (``list()``, ``sorted()``, or otherwise) risks running the
+   worker out of memory. The only structure this module keeps resident for the
+   whole batch is ``seen``, a ``set[int]`` of indexes already written (~4MB for
+   100k ints) -- everything else is processed and written one item at a time, in
+   whatever order the provider streams it in (``ordered: false`` in the
+   manifest is an honest declaration of this, not an apology for it).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.results.log
+   airflow.providers.common.ai.batch.results.STATUS_SUCCESS
+   airflow.providers.common.ai.batch.results.STATUS_ERROR
+   airflow.providers.common.ai.batch.results.STATUS_INVALID_OUTPUT
+   airflow.providers.common.ai.batch.results.STATUS_EXPIRED
+   airflow.providers.common.ai.batch.results.STATUS_CANCELLED
+   airflow.providers.common.ai.batch.results.STATUS_MISSING
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.results.MergeDiagnostics
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.results.build_result_row
+   airflow.providers.common.ai.batch.results.stream_results_to_jsonl
+   airflow.providers.common.ai.batch.results.output_type_ref
+   airflow.providers.common.ai.batch.results.assemble_manifest
+   airflow.providers.common.ai.batch.results.missing_indexes
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: STATUS_SUCCESS
+   :value: 'success'
+
+
+.. py:data:: STATUS_ERROR
+   :value: 'error'
+
+
+.. py:data:: STATUS_INVALID_OUTPUT
+   :value: 'invalid_output'
+
+
+.. py:data:: STATUS_EXPIRED
+   :value: 'expired'
+
+
+.. py:data:: STATUS_CANCELLED
+   :value: 'cancelled'
+
+
+.. py:data:: STATUS_MISSING
+   :value: 'missing'
+
+
+.. py:function:: build_result_row(raw, adapter, spec)
+
+   Build one JSONL row from a provider-native result.
+
+   Non-success outcomes (``raw.provider_status in ("errored", "expired", "cancelled")``) never go
+   through output validation -- there is nothing to validate, the request itself never produced
+   usable output (``"expired"``/``"cancelled"`` are their own per-item statuses, not folded
+   into ``"errored"`` -- a provider that reports them at item granularity is telling you *why*
+   that item has no output, and collapsing that into a generic provider error would make it
+   indistinguishable from an actual API failure like rate limiting). Only a successful provider
+   response is extracted and validated against ``spec``, and validation failure produces
+   ``status: "invalid_output"``, never an exception: a model returning schema-non-conforming JSON
+   is expected batch data, not a reason to abort the merge.
+
+
+.. py:class:: MergeDiagnostics
+
+   Anomalies encountered while merging, surfaced separately from ``counts``.
+
+   Never inflates the officially reconciled ``counts`` -- visible instead of silently dropped
+   or silently double-counted.
+
+
+   .. py:attribute:: duplicate_result_count
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: out_of_range_result_count
+      :type:  int
+      :value: 0
+
+
+
+.. py:function:: stream_results_to_jsonl(*, adapter, batch_id, output_spec, request_count, custom_id_prefix, destination)
+
+   Stream every result for ``batch_id`` to ``destination`` as JSONL, one row per input index.
+
+   Every index in ``range(request_count)`` gets exactly one row: results
+   that never appeared in the provider stream (dropped by the provider, or
+   genuinely never processed) are filled in as ``status: "missing"`` once
+   the stream is exhausted. Validation happens inline, per item, as results
+   arrive -- not after collecting them all -- so the memory bound holds for
+   the invalid-output case too.
+
+   Two defensive checks keep a single anomalous item from corrupting the whole batch's
+   accounting or making the manifest impossible to ever produce:
+
+   - An index the adapter yields **twice** is written once (the first occurrence); the repeat
+     is dropped and counted in ``MergeDiagnostics.duplicate_result_count``, never double-counted
+     into ``counts``.
+   - An index **outside** ``range(request_count)`` (a corrupt/foreign ``custom_id``) is dropped
+     entirely -- it cannot be rejoined to any input -- and counted in
+     ``MergeDiagnostics.out_of_range_result_count``.
+
+   Without this, either anomaly would inflate the total past ``request_count`` and make
+   :func:`assemble_manifest`'s reconciliation check raise on *every* attempt to finalize this
+   batch, including every retry -- the dirty data never goes away on its own.
+
+   :return: a tuple of (per-status row counts for ``"success"``/``"error"``/``"invalid_output"``/
+       ``"expired"``/``"cancelled"``/``"missing"``, diagnostics for anomalies excluded from those
+       counts).
+
+
+.. py:function:: output_type_ref(spec)
+
+.. py:function:: assemble_manifest(*, batch_id, adapter_name, llm_conn_id, model_id, output_spec, result_uri, request_count, merge_counts, extra_counts = None, merge_diagnostics = None, custom_id_prefix, submitted_at, completed_at)
+
+   Assemble the XCom manifest (the sole XCom payload of ``@task.llm_batch`` -- results never are).
+
+   ``merge_counts`` is the per-item breakdown from :func:`stream_results_to_jsonl`, including
+   ``"expired"``/``"cancelled"`` rows the provider reported per item. ``extra_counts`` carries
+   the job-level ``{"expired", "cancelled"}`` counts from the batch's terminal event; it is the
+   only source of that information for requests the provider never wrote a result line for.
+   ``None``/absent keys default to ``0``.
+
+   An ``expired`` or ``cancelled`` terminal event still reaches this function (unlike a plain
+   ``timeout``, which fails the task before any results are fetched) so that partial,
+   already-billed results are not discarded.
+
+   The two sources are combined without double-counting: per-item counts are taken as-is, and
+   ``extra_counts`` only re-labels whatever ``merge_counts["missing"]`` still has left after
+   subtracting what the job-level figure already agrees was accounted for per item. Any part
+   of ``extra_counts`` that ``missing`` cannot cover is dropped rather than allowed to inflate the total
+   past ``request_count``.
+
+   ``terminal_reason`` is ``"expired"`` if any request expired, else ``"cancelled"`` if any was
+   cancelled, else ``"succeeded"`` when every request succeeded and ``"partial"`` otherwise.
+
+   :raises ValueError: the counts do not reconcile against
+       ``request_count`` -- every request must land in exactly one bucket.
+
+
+.. py:function:: missing_indexes(seen, request_count)
+
+   Return the sorted indexes in ``range(request_count)`` absent from ``seen``.
+
+
