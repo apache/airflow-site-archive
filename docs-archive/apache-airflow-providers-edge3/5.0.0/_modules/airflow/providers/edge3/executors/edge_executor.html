@@ -710,7 +710,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_4_PLUS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.db</span><span class="w"> </span><span class="kn">import</span> <span class="n">DBLocks</span><span class="p">,</span> <span class="n">create_global_lock</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">prune_dict</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">provide_session</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">create_session</span><span class="p">,</span> <span class="n">provide_session</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceState</span>
 
 <span class="k">if</span> <span class="n">AIRFLOW_V_3_4_PLUS</span><span class="p">:</span>
@@ -1118,12 +1118,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Revoked task instance </span><span class="si">%s</span><span class="s2"> from EdgeExecutor"</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">)</span></div>
 
 
-    <span class="nd">@provide_session</span>
 <div class="viewcode-block" id="EdgeExecutor.try_adopt_task_instances">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/executors/edge_executor/index.html#airflow.providers.edge3.executors.edge_executor.EdgeExecutor.try_adopt_task_instances">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">try_adopt_task_instances</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">tis</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">NEW_SESSION</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">try_adopt_task_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tis</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Adopt the task instances whose job is still in flight in the edge_job table.</span>
 
@@ -1133,10 +1130,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="sd">        :return: any TaskInstances that were unable to be adopted</span>
 <span class="sd">        """</span>
-        <span class="n">tracked_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_tracked_job_keys</span><span class="p">(</span>
-            <span class="n">session</span><span class="p">,</span>
-            <span class="n">states</span><span class="o">=</span><span class="p">(</span><span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">QUEUED</span><span class="p">,</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RESTARTING</span><span class="p">,</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">),</span>
-        <span class="p">)</span>
+        <span class="c1"># The scheduler calls this without passing a session, while its own scoped session still holds</span>
+        <span class="c1"># ``tis``. A scoped session here would be that same session, and create_session() would commit</span>
+        <span class="c1"># and close it on exit, which detaches ``tis`` before the scheduler reads them again.</span>
+        <span class="k">with</span> <span class="n">create_session</span><span class="p">(</span><span class="n">scoped</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+            <span class="n">tracked_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_tracked_job_keys</span><span class="p">(</span>
+                <span class="n">session</span><span class="p">,</span>
+                <span class="n">states</span><span class="o">=</span><span class="p">(</span><span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">QUEUED</span><span class="p">,</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RESTARTING</span><span class="p">,</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">),</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">running</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">key</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">tis</span> <span class="k">if</span> <span class="n">ti</span><span class="o">.</span><span class="n">key</span> <span class="ow">in</span> <span class="n">tracked_keys</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">ti</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">tis</span> <span class="k">if</span> <span class="n">ti</span><span class="o">.</span><span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tracked_keys</span><span class="p">]</span></div>
 

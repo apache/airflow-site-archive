@@ -742,7 +742,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">annotations_to_key</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.pod_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">PodGenerator</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_4_PLUS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_1_PLUS</span><span class="p">,</span> <span class="n">AIRFLOW_V_3_4_PLUS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Stats</span><span class="p">,</span> <span class="n">conf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">prune_dict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.log.logging_mixin</span><span class="w"> </span><span class="kn">import</span> <span class="n">remove_escape_codes</span>
@@ -1117,6 +1117,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">job</span> <span class="o">=</span> <span class="n">KubernetesJob</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">kube_executor_config</span><span class="p">,</span> <span class="n">pod_template_file</span><span class="p">,</span> <span class="n">coordinator_kube_image</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pod_launch_attempts</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_PodLaunchAttempt</span><span class="p">(</span><span class="n">job</span><span class="o">=</span><span class="n">job</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">task_queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">job</span><span class="p">)</span></div>
+
+
+    <span class="c1"># TODO: Remove this once the minimum supported Airflow version is 3.1+ and defer to BaseExecutor.queue_workload.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_1_PLUS</span><span class="p">:</span>
+
+<div class="viewcode-block" id="KubernetesExecutor.queue_workload">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/cncf/kubernetes/executors/kubernetes_executor/index.html#airflow.providers.cncf.kubernetes.executors.kubernetes_executor.KubernetesExecutor.queue_workload">[docs]</a>
+        <span class="k">def</span><span class="w"> </span><span class="nf">queue_workload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workload</span><span class="p">:</span> <span class="n">workloads</span><span class="o">.</span><span class="n">All</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors</span><span class="w"> </span><span class="kn">import</span> <span class="n">workloads</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteTask</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2"> cannot handle workloads of type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">queued_tasks</span><span class="p">[</span><span class="n">workload</span><span class="o">.</span><span class="n">ti</span><span class="o">.</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">workload</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_process_workloads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">workloads</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">workloads</span><span class="o">.</span><span class="n">All</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
