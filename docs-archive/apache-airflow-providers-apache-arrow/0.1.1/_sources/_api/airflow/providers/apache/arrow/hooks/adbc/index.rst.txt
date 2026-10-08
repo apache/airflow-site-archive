@@ -1,0 +1,192 @@
+airflow.providers.apache.arrow.hooks.adbc
+=========================================
+
+.. py:module:: airflow.providers.apache.arrow.hooks.adbc
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.apache.arrow.hooks.adbc.AdbcHook
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.apache.arrow.hooks.adbc.fetch_all_handler
+   airflow.providers.apache.arrow.hooks.adbc.replace_placeholders
+
+
+Module Contents
+---------------
+
+.. py:function:: fetch_all_handler(cursor)
+
+   Return results for DbApiHook.run().
+
+
+.. py:function:: replace_placeholders(sql, placeholder)
+
+.. py:class:: AdbcHook(*args, schema = None, log_sql = True, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.sql.hooks.sql.DbApiHook`
+
+
+   General-purpose Airflow hook for interacting with databases via the Arrow Database Connectivity (ADBC) standard.
+
+   This hook enables connections to any database supported by an ADBC driver, using the Python ADBC driver manager.
+   It provides methods for executing SQL queries, inserting rows in bulk, and handling Arrow-native data transfers.
+
+   Key Features:
+       - Supports chunked and batched inserts using Apache Arrow RecordBatches for efficient data transfer.
+       - Discovers and loads ADBC drivers dynamically based on connection extras or naming conventions.
+       - Handles dialect-specific connection URIs and driver entrypoints.
+       - Integrates with Airflow's connection system (conn_id, extras, etc.).
+       - Provides custom placeholder replacement for parameterized SQL queries.
+       - Supports both native Arrow binding and DBAPI ``executemany`` for inserts.
+       - Exposes configuration via connection extras: driver, entrypoint, db_kwargs, conn_kwargs, dialect.
+
+   Connection Extras:
+       - driver: Name of the ADBC driver to use (e.g., "adbc_driver_postgresql").
+       - entrypoint: Optional Python entrypoint for the driver.
+       - db_kwargs: Driver-specific database initialization options passed to
+         ``AdbcDatabase``.  Keys and value types are defined by the driver
+         (e.g., ``"username"``, ``"password"`` for the PostgreSQL driver).
+         Do **not** put ADBC connection options here — they belong in
+         ``conn_kwargs``.
+       - conn_kwargs: ADBC connection options as string key-value pairs.
+         Keys must use the canonical dotted ADBC option names, for example:
+         ``"adbc.connection.autocommit": "true"``,
+         ``"adbc.connection.read_only": "true"``,
+         ``"adbc.connection.current_catalog": "my_catalog"``,
+         ``"adbc.connection.current_db_schema": "my_schema"``.
+         Short names such as ``autocommit`` or ``read_only`` are **not**
+         recognized by ADBC drivers and will raise ``NotSupportedError``.
+       - dialect: SQL dialect name (default: "default").
+
+   Example usage:
+       hook = AdbcHook(adbc_conn_id="my_adbc_conn")
+       records = hook.get_records("SELECT * FROM my_table")
+
+   For more details, see:
+       - Apache Arrow ADBC Python API: https://arrow.apache.org/adbc/current/python/api/adbc_driver_manager.html
+       - Airflow SQL hooks: https://airflow.apache.org/docs/apache-airflow/stable/howto/custom-operator.html#hooks
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'adbc_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'adbc_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'adbc'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'ADBC Connection'
+
+
+
+   .. py:attribute:: supports_autocommit
+      :value: True
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :classmethod:
+
+
+      Get custom field behaviour.
+
+
+
+   .. py:property:: uri
+      :type: str
+
+
+
+   .. py:property:: driver
+      :type: str
+
+
+
+   .. py:property:: entrypoint
+      :type: str | None
+
+
+
+   .. py:property:: db_kwargs
+      :type: dict
+
+
+
+   .. py:property:: conn_kwargs
+      :type: dict
+
+
+
+   .. py:property:: dialect_name
+      :type: str
+
+
+
+   .. py:method:: get_conn()
+
+      Return a connection object.
+
+
+
+   .. py:method:: set_autocommit(conn, autocommit)
+
+      Set autocommit on the ADBC connection.
+
+      The DBAPI attribute ``conn.autocommit`` has no effect on the underlying
+      ADBC driver; the real lever is the ``adbc.connection.autocommit`` option.
+      This override applies the option at the driver level, then calls super()
+      to keep the Python-level bookkeeping attribute in sync so that the base
+      class ``get_autocommit()`` and ``run()`` commit-guard behave correctly.
+
+
+
+   .. py:method:: get_records(sql, parameters = None)
+
+      Execute the sql and return a set of records.
+
+      :param sql: the sql statement to be executed (str) or a list of sql statements to execute
+      :param parameters: The parameters to render the SQL query with.
+
+
+
+   .. py:method:: insert_rows(table, rows, target_fields=None, commit_every=1000, replace=False, *, executemany=False, fast_executemany=False, autocommit=False, **kwargs)
+
+      Insert a collection of tuples into a table.
+
+      Rows are inserted in chunks, each chunk (of size ``commit_every``) is
+      done in a new transaction.
+
+      :param table: Name of the target table
+      :param rows: The rows to insert into the table
+      :param target_fields: The names of the columns to fill in the table
+      :param commit_every: The maximum number of rows to insert in one
+          transaction. Set to 0 to insert all rows in one transaction.
+      :param replace: Whether to replace instead of insert
+      :param executemany: If True, all rows are inserted at once in
+          chunks defined by the commit_every parameter. This only works if all rows
+          have same number of column names, but leads to better performance.
+      :param fast_executemany: If True, the `fast_executemany` parameter will be set on the
+          cursor used by `executemany` which leads to better performance, if supported by driver.
+      :param autocommit: What to set the connection's autocommit setting to
+          before executing the query.
+
+
+

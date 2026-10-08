@@ -1,0 +1,216 @@
+airflow.providers.modal.hooks.modal
+===================================
+
+.. py:module:: airflow.providers.modal.hooks.modal
+
+.. autoapi-nested-parse::
+
+   Hook that resolves a ``modal`` connection to an authenticated Modal client.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.modal.hooks.modal.ModalHook
+
+
+Module Contents
+---------------
+
+.. py:class:: ModalHook(modal_conn_id = default_conn_name, *args, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Hook for `Modal <https://modal.com/>`__.
+
+   Turns an Airflow connection of type ``modal`` into a :class:`modal.Client`, so every piece
+   of Airflow code that talks to Modal (operators, the Common AI sandbox toolset backend, a
+   future executor) reads credentials the same way instead of each one reaching for the
+   worker's environment.
+
+   Connection fields:
+
+   - **Login**: Modal token id (``ak-...``).
+   - **Password**: Modal token secret (``as-...``).
+   - **Extra** ``environment`` (optional): Modal environment name to scope app lookups and
+     sandboxes to. When unset, the Modal SDK resolves it from ``MODAL_ENVIRONMENT`` or the
+     active profile in ``~/.modal.toml``.
+
+   Credential precedence:
+
+   1. Token id and secret on the connection: the client is built from exactly those.
+   2. A connection with **neither** token field set, or no connection at all for the default
+      connection id: the Modal SDK's own resolution applies (``MODAL_TOKEN_ID`` /
+      ``MODAL_TOKEN_SECRET``, then ``~/.modal.toml``). This keeps a worker that already has
+      ``modal token new`` run on it working without any Airflow configuration.
+   3. Exactly one of the two token fields set: an error. A half-filled connection is a
+      misconfiguration, and silently falling back to ambient credentials would hide it.
+
+   Workspace is not a connection field because Modal derives it from the token itself.
+
+   :param modal_conn_id: :ref:`Modal connection id <howto/connection:modal>`. Pass ``None``
+       to skip connection lookup entirely and use ambient credentials.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'modal_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'modal_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'modal'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Modal'
+
+
+
+   .. py:attribute:: modal_conn_id
+      :value: 'modal_default'
+
+
+
+   .. py:property:: credentials
+      :type: tuple[str, str] | None
+
+
+      Token id and secret from the connection, or ``None`` to defer to the Modal SDK.
+
+
+
+   .. py:property:: environment_name
+      :type: str | None
+
+
+      Modal environment from the connection extra, or ``None`` to defer to the Modal SDK.
+
+
+
+   .. py:property:: client
+      :type: modal.Client
+
+
+      The Modal client, built once per hook instance and per process.
+
+      A client owns a gRPC transport, and the Modal SDK documents its recovery of a client
+      inherited across ``os.fork()`` as best-effort, recommending a fresh client instead. So
+      the cache is keyed on the PID: a hook whose client was populated before a fork (for
+      example one held by an executor or a long-lived plugin) rebuilds it on first use in the
+      child instead of reusing the parent's transport.
+
+
+
+   .. py:method:: get_conn()
+
+      Return the Modal client for this connection (same cached object as :attr:`client`).
+
+
+
+   .. py:property:: client_kwargs
+      :type: dict[str, Any]
+
+
+      Keyword arguments that route a Modal SDK call through this connection's credentials.
+
+      For calls that also take ``environment_name`` (``Function.from_name``, ``Cls.from_name``,
+      ``Secret.from_name``, ``Volume.from_name``, ``App.lookup``) prefer the matching hook
+      method, which applies the connection's environment as well. Use this for calls that only
+      take a client, such as ``modal.Sandbox.list(**hook.client_kwargs)``.
+
+
+
+   .. py:method:: lookup_app(name, *, create_if_missing = False)
+
+      Look up a Modal app by name in the connection's environment.
+
+      :param name: App name.
+      :param create_if_missing: Create the app when it does not exist yet.
+
+
+
+   .. py:method:: get_function(app_name, name, *, version = None)
+
+      Return a handle to a deployed Modal function in the connection's environment.
+
+      Call ``.remote(...)``, ``.spawn(...)`` or ``.map(...)`` on the result as with any Modal
+      function handle.
+
+      :param app_name: Name of the deployed app.
+      :param name: Function name within the app.
+      :param version: Pin a specific deployment version; latest when omitted.
+
+
+
+   .. py:method:: get_cls(app_name, name, *, version = None)
+
+      Return a handle to a deployed Modal class in the connection's environment.
+
+      :param app_name: Name of the deployed app.
+      :param name: Class name within the app.
+      :param version: Pin a specific deployment version; latest when omitted.
+
+
+
+   .. py:method:: get_secret(name, *, required_keys = None)
+
+      Return a named Modal secret from the connection's environment.
+
+      :param name: Secret name.
+      :param required_keys: Keys the secret must contain; the SDK raises when one is missing.
+
+
+
+   .. py:method:: get_volume(name, *, create_if_missing = False)
+
+      Return a named Modal volume from the connection's environment.
+
+      :param name: Volume name.
+      :param create_if_missing: Create the volume when it does not exist yet.
+
+
+
+   .. py:method:: create_sandbox(*entrypoint, app_name, create_app_if_missing = False, **sandbox_kwargs)
+
+      Create a Modal sandbox under a named app, through this connection.
+
+      The app is resolved with :meth:`lookup_app`, so the sandbox lands in the connection's
+      environment (Modal derives a sandbox's environment from its app). Remaining keyword
+      arguments go to ``modal.Sandbox.create`` unchanged: ``image``, ``gpu``, ``cpu``,
+      ``memory``, ``timeout``, ``secrets``, ``volumes`` and so on.
+
+      :param entrypoint: Command to run, as separate arguments.
+      :param app_name: App the sandbox belongs to.
+      :param create_app_if_missing: Create the app when it does not exist yet.
+
+
+
+   .. py:method:: get_sandbox(sandbox_id)
+
+      Reattach to an existing sandbox by id, through this connection.
+
+      :param sandbox_id: The ``sb-...`` id returned by ``Sandbox.object_id``.
+
+
+
+   .. py:method:: test_connection()
+
+      Authenticate against Modal and report the outcome for the connection form.
+
+      Explicit credentials are checked with :meth:`modal.Client.verify`, which opens a
+      throwaway client, sends one ``ClientHello`` and closes it again, so repeated tests from
+      the API server do not accumulate transports. The ambient path checks the SDK's shared
+      ``from_env`` client, which the hook does not own and therefore does not close.
+
+
+

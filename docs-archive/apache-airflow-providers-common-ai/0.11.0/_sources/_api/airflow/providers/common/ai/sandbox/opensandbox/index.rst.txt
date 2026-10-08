@@ -1,0 +1,157 @@
+airflow.providers.common.ai.sandbox.opensandbox
+===============================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.opensandbox
+
+.. autoapi-nested-parse::
+
+   OpenSandbox backend for :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.opensandbox.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.opensandbox.OpenSandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: OpenSandboxBackend(opensandbox_conn_id = 'opensandbox_default', *, image = 'python:3.12-slim', cpu = '1', memory = '2Gi', sandbox_timeout = 3600.0, ready_timeout = 120.0, use_server_proxy = None)
+
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+
+
+   Run sandbox tools through an OpenSandbox server.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   OpenSandbox supports Docker and Kubernetes runtimes behind the same API.
+   Airflow workers need only network access to that API; the OpenSandbox
+   deployment owns container provisioning and isolation.
+
+   A generic Airflow connection supplies the server configuration. ``host``
+   and ``port`` identify the lifecycle API, ``schema`` selects ``http`` or
+   ``https``, and ``password`` carries the optional API key. Connection extras
+   may set ``request_timeout`` and ``use_server_proxy``.
+
+   For a deny-by-default spec, the create API accepts a network policy whether
+   or not the server runs the egress sidecar that enforces it, so after creating
+   the sandbox the backend reads the enforced policy back and destroys the
+   sandbox if it differs from what
+   :class:`~airflow.providers.common.ai.sandbox.SandboxSpec` asked for. The
+   fail-closed contract is this backend's to keep, not the server's.
+
+   Command deadlines are enforced by execd. If its event stream stalls, the
+   call is abandoned ``_EXEC_GRACE`` seconds past the budget, the sandbox is
+   destroyed to end it, and the result reports ``timed_out`` with
+   ``sandbox_terminated`` so the toolset provisions a fresh one. Output is
+   streamed and each stream is kept to ``max_output_bytes`` on the worker, with
+   one caveat: the SDK reassembles a whole output line before handing it over,
+   so a single line with no newline in it is resident in full first.
+
+   :param opensandbox_conn_id: Generic Airflow connection ID. ``None`` lets the
+       SDK resolve ``OPEN_SANDBOX_DOMAIN`` and ``OPEN_SANDBOX_API_KEY``.
+   :param image: Container image used for each sandbox.
+   :param cpu: OpenSandbox CPU resource limit.
+   :param memory: OpenSandbox memory resource limit.
+   :param sandbox_timeout: Server-side sandbox lifetime in seconds.
+   :param ready_timeout: Seconds to wait for a newly created sandbox to become healthy.
+   :param use_server_proxy: Route sandbox service calls through the lifecycle
+       server. ``None`` reads the connection extra and otherwise defaults to ``True``.
+
+
+   .. py:attribute:: name
+      :value: 'opensandbox'
+
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+      Every failure raised here is terminal, whichever class carries it. The
+      model has no input into provisioning, so a :class:`SandboxError` from
+      ``create`` is not something it can work around; the toolset re-raises one
+      as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
+      attempts the provisioning again.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: read_file(sandbox, path, *, max_bytes)
+
+      Read a file from the sandbox.
+
+      Raise :class:`SandboxFileTooLargeError` instead of transferring a file
+      larger than ``max_bytes``.
+
+
+
+   .. py:method:: export_file(sandbox, path, dest, *, max_bytes)
+
+      Override: stream the file through the SDK's ranged download, one chunk at a time.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Write ``content`` to ``path`` in the sandbox, creating parent directories.
+
+      The payload rides in the command itself, so this default is bounded by
+      the guest's command-line length. A backend that can stream stdin or
+      upload directly should override.
+
+
+
+   .. py:method:: list_directory(sandbox, path)
+
+      Return ``(name, is_dir)`` for each entry in a sandbox directory.
+
+
+
+   .. py:method:: destroy(sandbox)
+
+      Tear down the sandbox. Must be idempotent.
+
+
+

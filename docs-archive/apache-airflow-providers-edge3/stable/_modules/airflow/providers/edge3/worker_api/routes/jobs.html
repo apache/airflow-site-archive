@@ -684,10 +684,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Annotated</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Body</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">status</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span><span class="p">,</span> <span class="n">update</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.common.db.common</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionDep</span>  <span class="c1"># noqa: TC001</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.common.router</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowRouter</span>
@@ -708,6 +710,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.models.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExecuteTypeBody</span>
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/edge3/worker_api/routes/jobs/index.html#airflow.providers.edge3.worker_api.routes.jobs.log">[docs]</a>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
+
 
 <div class="viewcode-block" id="jobs_router">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/edge3/worker_api/routes/jobs/index.html#airflow.providers.edge3.worker_api.routes.jobs.jobs_router">[docs]</a>
@@ -737,6 +744,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_400_BAD_REQUEST</span><span class="p">,</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_403_FORBIDDEN</span><span class="p">,</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_404_NOT_FOUND</span><span class="p">,</span>
+            <span class="n">status</span><span class="o">.</span><span class="n">HTTP_409_CONFLICT</span><span class="p">,</span>
         <span class="p">]</span>
     <span class="p">),</span>
 <span class="p">)</span>
@@ -775,6 +783,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">job</span><span class="p">:</span> <span class="n">EdgeJobModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">job</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">task_instance_id</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">body</span><span class="o">.</span><span class="n">supports_task_instance_uuid</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Edge worker </span><span class="si">%s</span><span class="s2"> cannot fetch UUID-keyed jobs; upgrade the worker."</span><span class="p">,</span> <span class="n">worker_name</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span>
+            <span class="n">status</span><span class="o">.</span><span class="n">HTTP_409_CONFLICT</span><span class="p">,</span> <span class="s2">"Upgrade this Edge worker to report task-instance UUIDs."</span>
+        <span class="p">)</span>
     <span class="n">job</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RESTARTING</span>  <span class="c1"># keep this intermediate state until worker sets to running</span>
     <span class="n">job</span><span class="o">.</span><span class="n">edge_worker</span> <span class="o">=</span> <span class="n">worker_name</span>
     <span class="n">job</span><span class="o">.</span><span class="n">last_update</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
@@ -792,6 +805,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">try_number</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
         <span class="n">command</span><span class="o">=</span><span class="n">parse_command</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">run_id</span><span class="p">),</span>
         <span class="n">concurrency_slots</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">concurrency_slots</span><span class="p">,</span>
+        <span class="n">task_instance_id</span><span class="o">=</span><span class="n">UUID</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">task_instance_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">task_instance_id</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -816,44 +830,59 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">map_index</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">WorkerApiDocs</span><span class="o">.</span><span class="n">map_index</span><span class="p">],</span>
     <span class="n">state</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">TaskInstanceState</span><span class="p">,</span> <span class="n">WorkerApiDocs</span><span class="o">.</span><span class="n">state</span><span class="p">],</span>
     <span class="n">session</span><span class="p">:</span> <span class="n">SessionDep</span><span class="p">,</span>
+    <span class="n">task_instance_id</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">Body</span><span class="p">(</span><span class="n">embed</span><span class="o">=</span><span class="kc">True</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Update the state of a job running on the edge worker."""</span>
-    <span class="c1"># execute query to catch the queue and check if state toggles to success or failed</span>
-    <span class="c1"># otherwise possible that Executor resets orphaned jobs and stats are exported 2 times</span>
-    <span class="k">if</span> <span class="n">state</span> <span class="ow">in</span> <span class="p">[</span><span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">SUCCESS</span><span class="p">,</span> <span class="n">state</span> <span class="o">==</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">FAILED</span><span class="p">]:</span>
-        <span class="n">query</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="n">dag_id</span><span class="p">,</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_id</span> <span class="o">==</span> <span class="n">task_id</span><span class="p">,</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">run_id</span> <span class="o">==</span> <span class="n">run_id</span><span class="p">,</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">map_index</span> <span class="o">==</span> <span class="n">map_index</span><span class="p">,</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">try_number</span> <span class="o">==</span> <span class="n">try_number</span><span class="p">,</span>
-            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">job</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">job</span><span class="p">:</span>
-            <span class="c1"># Edge worker does not backport emitted Airflow metrics, so export some metrics</span>
-            <span class="n">tags</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s2">"dag_id"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                <span class="s2">"task_id"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                <span class="s2">"queue"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span>
-                <span class="s2">"state"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
-                <span class="s2">"team_name"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">team_name</span><span class="p">,</span>
-            <span class="p">}</span>
-            <span class="n">Stats</span><span class="o">.</span><span class="n">incr</span><span class="p">(</span><span class="s2">"edge_worker.ti.finish"</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="n">prune_dict</span><span class="p">(</span><span class="n">tags</span><span class="p">))</span>
-
-    <span class="n">query2</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">update</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="p">)</span>
+    <span class="n">job</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span>
+        <span class="n">select</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="p">)</span>
         <span class="o">.</span><span class="n">where</span><span class="p">(</span>
             <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="n">dag_id</span><span class="p">,</span>
             <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_id</span> <span class="o">==</span> <span class="n">task_id</span><span class="p">,</span>
             <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">run_id</span> <span class="o">==</span> <span class="n">run_id</span><span class="p">,</span>
             <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">map_index</span> <span class="o">==</span> <span class="n">map_index</span><span class="p">,</span>
             <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">try_number</span> <span class="o">==</span> <span class="n">try_number</span><span class="p">,</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_instance_id</span> <span class="o">==</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">task_instance_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">task_instance_id</span> <span class="k">else</span> <span class="s2">""</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="o">.</span><span class="n">values</span><span class="p">(</span><span class="n">state</span><span class="o">=</span><span class="n">state</span><span class="p">,</span> <span class="n">last_update</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">())</span>
+        <span class="o">.</span><span class="n">with_for_update</span><span class="p">()</span>
     <span class="p">)</span>
-    <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query2</span><span class="p">)</span></div>
+    <span class="k">if</span> <span class="n">job</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">sibling_identity</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span>
+            <span class="n">select</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_instance_id</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">where</span><span class="p">(</span>
+                <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="n">dag_id</span><span class="p">,</span>
+                <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_id</span> <span class="o">==</span> <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">run_id</span> <span class="o">==</span> <span class="n">run_id</span><span class="p">,</span>
+                <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">map_index</span> <span class="o">==</span> <span class="n">map_index</span><span class="p">,</span>
+                <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">try_number</span> <span class="o">==</span> <span class="n">try_number</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">sibling_identity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"Ignoring Edge state report for </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2"> run </span><span class="si">%s</span><span class="s2"> try </span><span class="si">%s</span><span class="s2"> map </span><span class="si">%s</span><span class="s2">: "</span>
+                <span class="s2">"task-instance UUID </span><span class="si">%s</span><span class="s2"> does not match a stored job."</span><span class="p">,</span>
+                <span class="n">dag_id</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">run_id</span><span class="p">,</span>
+                <span class="n">try_number</span><span class="p">,</span>
+                <span class="n">map_index</span><span class="p">,</span>
+                <span class="n">task_instance_id</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span>
+    <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">RUNNING</span> <span class="ow">and</span> <span class="n">state</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">SUCCESS</span><span class="p">,</span>
+        <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">FAILED</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"dag_id"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
+            <span class="s2">"task_id"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
+            <span class="s2">"queue"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span>
+            <span class="s2">"state"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+            <span class="s2">"team_name"</span><span class="p">:</span> <span class="n">job</span><span class="o">.</span><span class="n">team_name</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="n">Stats</span><span class="o">.</span><span class="n">incr</span><span class="p">(</span><span class="s2">"edge_worker.ti.finish"</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="n">prune_dict</span><span class="p">(</span><span class="n">tags</span><span class="p">))</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">state</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">last_update</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span></div>
 
 </pre></div>
 
@@ -1115,8 +1144,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../../../../../../_static/documentation_options.js?v=ce74c6a2"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

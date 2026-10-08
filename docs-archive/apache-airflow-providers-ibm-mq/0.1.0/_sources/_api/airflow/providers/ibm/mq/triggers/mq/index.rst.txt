@@ -1,0 +1,83 @@
+airflow.providers.ibm.mq.triggers.mq
+====================================
+
+.. py:module:: airflow.providers.ibm.mq.triggers.mq
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.ibm.mq.triggers.mq.AwaitMessageTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: AwaitMessageTrigger(mq_conn_id, queue_name, poll_interval = 5, open_options = None)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseEventTrigger`
+
+
+   Trigger that polls an IBM MQ queue and fires a TriggerEvent when a message arrives.
+
+   Delegates to :meth:`IBMMQHook.aconsume` which retries with exponential
+   back-off on transient failures so that an AssetWatcher is never silently
+   killed by a broken connection or swallowed exception.
+
+   The trigger consumes messages with ``MQGMO_NO_SYNCPOINT``, so it provides
+   **at-most-once** delivery semantics. If the trigger is canceled after IBM
+   MQ returns a message but before Airflow yields the corresponding
+   ``TriggerEvent``, that message may be lost.
+
+   :param mq_conn_id: Airflow connection id for the IBM MQ broker.
+   :param queue_name: Name of the IBM MQ queue to consume from.
+   :param poll_interval: Seconds between MQ get attempts inside the hook.
+   :param open_options: Optional integer bitmask of MQOO_* flags for queue open.
+
+
+   .. py:attribute:: mq_conn_id
+
+
+   .. py:attribute:: queue_name
+
+
+   .. py:attribute:: poll_interval
+      :value: 5
+
+
+
+   .. py:attribute:: open_options
+      :value: None
+
+
+
+   .. py:method:: serialize()
+
+      Return the information needed to reconstruct this Trigger.
+
+      :return: Tuple of (class path, keyword arguments needed to re-instantiate).
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the trigger in an asynchronous context.
+
+      The trigger should yield an Event whenever it wants to fire off
+      an event, and return None if it is finished. Single-event triggers
+      should thus yield and then immediately return.
+
+      If it yields, it is likely that it will be resumed very quickly,
+      but it may not be (e.g. if the workload is being moved to another
+      triggerer process, or a multi-event trigger was being used for a
+      single-event task defer).
+
+      In either case, Trigger classes should assume they will be persisted,
+      and then rely on cleanup() being called when they are no longer needed.
+
+
+
