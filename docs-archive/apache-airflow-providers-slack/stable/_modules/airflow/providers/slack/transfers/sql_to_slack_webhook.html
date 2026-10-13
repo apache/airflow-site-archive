@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.11.0</span>
+        <span class="version-label">Version: </span><span class="version">9.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -422,7 +422,7 @@
 <p class="caption" role="heading"><span class="caption-text">References</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../_api/airflow/providers/slack/index.html">Python API</a></li>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-slack/9.11.0/providers/slack/tests/system/slack">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-slack/9.11.1/providers/slack/tests/system/slack">Example Dags</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.11.0</span>
+        <span class="version-label">Version: </span><span class="version">9.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -538,7 +538,7 @@
 <p class="caption" role="heading"><span class="caption-text">References</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../_api/airflow/providers/slack/index.html">Python API</a></li>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-slack/9.11.0/providers/slack/tests/system/slack">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-slack/9.11.1/providers/slack/tests/system/slack">Example Dags</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
@@ -773,6 +773,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/slack/transfers/sql_to_slack_webhook/index.html#airflow.providers.slack.transfers.sql_to_slack_webhook.SqlToSlackWebhookOperator.slack_message">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">slack_message</span> <span class="o">=</span> <span class="n">slack_message</span></div>
 
+        <span class="c1"># Rendered once, at send time, from this original text. A mapped task's first render also</span>
+        <span class="c1"># renders slack_message, and rendering that output again would evaluate any Jinja that arrived</span>
+        <span class="c1"># in a context value (``dag_run.conf``, a param).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_slack_message_template</span> <span class="o">=</span> <span class="n">slack_message</span>
 <div class="viewcode-block" id="SqlToSlackWebhookOperator.results_df_name">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/slack/transfers/sql_to_slack_webhook/index.html#airflow.providers.slack.transfers.sql_to_slack_webhook.SqlToSlackWebhookOperator.results_df_name">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">results_df_name</span> <span class="o">=</span> <span class="n">results_df_name</span></div>
@@ -783,9 +787,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_render_and_send_slack_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Put the dataframe into the context and render the JINJA template fields</span>
+        <span class="c1"># Render only slack_message, without going through render_template_fields: a mapped task's</span>
+        <span class="c1"># first render never increments times_rendered, so relying on that counter would render the</span>
+        <span class="c1"># already-rendered fields a second time.</span>
         <span class="n">context</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">results_df_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">render_template_fields</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">slack_message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_template</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_slack_message_template</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_jinja_env</span><span class="p">()</span>
+        <span class="p">)</span>
 
         <span class="n">slack_hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_slack_hook</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Sending slack message: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">slack_message</span><span class="p">)</span>
@@ -807,17 +815,23 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">times_rendered</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">fields_to_render</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_fields</span> <span class="k">if</span> <span class="n">x</span> <span class="o">!=</span> <span class="s2">"slack_message"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">fields_to_render</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_fields</span>
+            <span class="c1"># Only the deferred field. Re-rendering a field that the first pass already rendered</span>
+            <span class="c1"># feeds its own output back in as template source, so any Jinja syntax that arrived in</span>
+            <span class="c1"># a context value (``dag_run.conf``, a param) would be evaluated on this second pass.</span>
+            <span class="n">fields_to_render</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"slack_message"</span><span class="p">,)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">jinja_env</span><span class="p">:</span>
-            <span class="n">jinja_env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_template_env</span><span class="p">()</span>
-
-        <span class="c1"># Add the tabulate library into the JINJA environment</span>
-        <span class="n">jinja_env</span><span class="o">.</span><span class="n">filters</span><span class="p">[</span><span class="s2">"tabulate"</span><span class="p">]</span> <span class="o">=</span> <span class="n">tabulate</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">_do_render_template_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fields_to_render</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">jinja_env</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_do_render_template_fields</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">fields_to_render</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_jinja_env</span><span class="p">(</span><span class="n">jinja_env</span><span class="p">),</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">times_rendered</span> <span class="o">+=</span> <span class="mi">1</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_jinja_env</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jinja_env</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jinja_env</span><span class="p">:</span>
+            <span class="n">jinja_env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_template_env</span><span class="p">()</span>
+        <span class="c1"># Add the tabulate library into the JINJA environment</span>
+        <span class="n">jinja_env</span><span class="o">.</span><span class="n">filters</span><span class="p">[</span><span class="s2">"tabulate"</span><span class="p">]</span> <span class="o">=</span> <span class="n">tabulate</span>
+        <span class="k">return</span> <span class="n">jinja_env</span>
 
 <div class="viewcode-block" id="SqlToSlackWebhookOperator.execute">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/slack/transfers/sql_to_slack_webhook/index.html#airflow.providers.slack.transfers.sql_to_slack_webhook.SqlToSlackWebhookOperator.execute">[docs]</a>
@@ -1094,9 +1108,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=4dc34ad6"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=e9bbcecf"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.2.0</span>
+        <span class="version-label">Version: </span><span class="version">2.3.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -487,7 +487,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.2.0</span>
+        <span class="version-label">Version: </span><span class="version">2.3.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -998,11 +998,12 @@ between two connections.</p>
 <ul class="simple">
 <li><p>S3</p></li>
 <li><p>GCS</p></li>
+<li><p>Azure Blob Storage</p></li>
 <li><p>Local File System</p></li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Azure, HTTP, Delta are not yet supported but will be added in the future.</p>
+<p>HTTP, Delta are not yet supported but will be added in the future.</p>
 </div>
 </section>
 <section id="supported-file-formats">
@@ -1075,6 +1076,65 @@ the GCE/GKE metadata server</p></li>
     <span class="n">queries</span><span class="o">=</span><span class="p">[</span><span class="s2">"SELECT * FROM users_data"</span><span class="p">,</span> <span class="s2">"SELECT count(*) FROM users_data"</span><span class="p">],</span>
 <span class="p">)</span>
 <span class="n">analytics_with_s3</span> <span class="o">&gt;&gt;</span> <span class="n">analytics_with_gcs</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="azure-storage">
+<h3>Azure Storage<a class="headerlink" href="#azure-storage" title="Link to this heading">¶</a></h3>
+<p>Use an <code class="docutils literal notranslate"><span class="pre">az://</span></code> URI with a <code class="docutils literal notranslate"><span class="pre">conn_id</span></code> pointing to a <code class="docutils literal notranslate"><span class="pre">wasb</span></code> connection.
+<code class="docutils literal notranslate"><span class="pre">abfs://</span></code> and <code class="docutils literal notranslate"><span class="pre">abfss://</span></code> URIs are not recognized yet. The account name
+comes from <code class="docutils literal notranslate"><span class="pre">host</span></code> (its first DNS label) when set, falling back to
+<code class="docutils literal notranslate"><span class="pre">login</span></code> only when <code class="docutils literal notranslate"><span class="pre">host</span></code> is empty; only the public
+<code class="docutils literal notranslate"><span class="pre">*.blob.core.windows.net</span></code> cloud is supported, since DataFusion’s binding
+otherwise has no endpoint override – unless the worker sets
+<code class="docutils literal notranslate"><span class="pre">AZURE_STORAGE_ENDPOINT</span></code>/<code class="docutils literal notranslate"><span class="pre">AZURE_ENDPOINT</span></code> for a real sovereign-cloud
+hostname. A <code class="docutils literal notranslate"><span class="pre">host:port</span></code> address (the Azurite emulator’s shape, e.g.
+<code class="docutils literal notranslate"><span class="pre">azurite:10000</span></code>) is never a real DNS hostname and always raises instead,
+even with those variables set: put the account name in <code class="docutils literal notranslate"><span class="pre">login</span></code> with
+<code class="docutils literal notranslate"><span class="pre">host</span></code> left empty for Azurite, alongside those same variables and
+<code class="docutils literal notranslate"><span class="pre">AZURE_ALLOW_HTTP=true</span></code>. <code class="docutils literal notranslate"><span class="pre">client_secret_auth_config</span></code> (the authority
+override <code class="docutils literal notranslate"><span class="pre">WasbHook</span></code> honors) is not read here.</p>
+<p>The connection supplies one of the following credentials, checked in this
+order (matching <code class="docutils literal notranslate"><span class="pre">WasbHook.get_conn</span></code>):</p>
+<ol class="arabic simple">
+<li><p>Azure AD service principal – <code class="docutils literal notranslate"><span class="pre">tenant_id</span></code> extra, with <code class="docutils literal notranslate"><span class="pre">login</span></code> as the
+client ID and <code class="docutils literal notranslate"><span class="pre">password</span></code> as the client secret (both required together)</p></li>
+<li><p>Shared key – the <code class="docutils literal notranslate"><span class="pre">shared_access_key</span></code> extra</p></li>
+<li><p>SAS token – <code class="docutils literal notranslate"><span class="pre">sas_token</span></code> extra, as a query string</p></li>
+<li><p>Shared key – <code class="docutils literal notranslate"><span class="pre">password</span></code>, or the <code class="docutils literal notranslate"><span class="pre">account_key</span></code> extra</p></li>
+<li><p>None of the above – ambient auth (see below)</p></li>
+</ol>
+<p><strong>A worker environment variable can override the connection, but only from a
+higher-priority tier.</strong> DataFusion reads <code class="docutils literal notranslate"><span class="pre">AZURE_*</span></code> environment variables
+first, and resolves credentials in this priority order:</p>
+<ol class="arabic simple">
+<li><p>Bearer token</p></li>
+<li><p>Access key – the shared-key connection’s tier</p></li>
+<li><p>Workload identity</p></li>
+<li><p>Client secret – the service-principal connection’s tier</p></li>
+<li><p>SAS – the SAS connection’s tier</p></li>
+</ol>
+<p>Only a complete credential from an earlier tier can override the
+connection – a single bearer or access-key variable, or every variable a
+multi-field tier needs. This raises when found, naming the variables,
+instead of silently using the wrong identity.</p>
+<p>With no explicit credential, authentication falls back to <code class="docutils literal notranslate"><span class="pre">AZURE_*</span></code>
+environment variables, managed identity, or workload identity. Unlike
+<code class="docutils literal notranslate"><span class="pre">WasbHook</span></code> (which tries <code class="docutils literal notranslate"><span class="pre">az</span> <span class="pre">login</span></code> automatically), DataFusion’s
+underlying <code class="docutils literal notranslate"><span class="pre">object_store</span></code> binding only tries the Azure CLI if
+<code class="docutils literal notranslate"><span class="pre">AZURE_USE_AZURE_CLI=true</span></code> is set; otherwise it defaults straight to
+IMDS managed identity.</p>
+<p><code class="docutils literal notranslate"><span class="pre">connection_string</span></code>, <code class="docutils literal notranslate"><span class="pre">managed_identity_client_id</span></code>, <code class="docutils literal notranslate"><span class="pre">workload_identity_tenant_id</span></code>,
+and a URL-form <code class="docutils literal notranslate"><span class="pre">sas_token</span></code> are not supported.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/sql/example_dags/example_analytics.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/sql/example_dags/example_analytics.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">analytics_with_azure</span> <span class="o">=</span> <span class="n">AnalyticsOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"analytics_with_azure"</span><span class="p">,</span>
+    <span class="n">datasource_configs</span><span class="o">=</span><span class="p">[</span><span class="n">datasource_config_azure</span><span class="p">],</span>
+    <span class="n">queries</span><span class="o">=</span><span class="p">[</span><span class="s2">"SELECT * FROM users_data"</span><span class="p">,</span> <span class="s2">"SELECT count(*) FROM users_data"</span><span class="p">],</span>
+<span class="p">)</span>
+<span class="n">analytics_with_s3</span> <span class="o">&gt;&gt;</span> <span class="n">analytics_with_azure</span>
 </pre></div>
 </div>
 </div>
@@ -1215,6 +1275,7 @@ analytics sql queries:</p>
 <li><a class="reference internal" href="#datasourceconfig-parameters">DataSourceConfig Parameters</a></li>
 <li><a class="reference internal" href="#s3-storage">S3 Storage</a></li>
 <li><a class="reference internal" href="#gcs-storage">GCS Storage</a></li>
+<li><a class="reference internal" href="#azure-storage">Azure Storage</a></li>
 <li><a class="reference internal" href="#local-file-system-storage">Local File System Storage</a></li>
 <li><a class="reference internal" href="#analytics-taskflow-decorator">Analytics TaskFlow Decorator</a></li>
 <li><a class="reference internal" href="#analytics-with-iceberg">Analytics with Iceberg</a></li>
@@ -1439,9 +1500,9 @@ analytics sql queries:</p>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=b21de401"></script>
-        <script src="_static/doctools.js?v=9bcbadda"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="_static/documentation_options.js?v=c3c8ae58"></script>
+        <script src="_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="_static/copybutton.js?v=f281be69"></script>
         <script src="_static/js/globaltoc.js?v=32f50df6"></script>

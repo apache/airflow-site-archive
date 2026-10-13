@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.21.0</span>
+        <span class="version-label">Version: </span><span class="version">7.22.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -428,7 +428,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-databricks/7.21.0/providers/databricks/tests/system/databricks">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-databricks/7.22.0/providers/databricks/tests/system/databricks">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-databricks/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -485,7 +485,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.21.0</span>
+        <span class="version-label">Version: </span><span class="version">7.22.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -544,7 +544,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-databricks/7.21.0/providers/databricks/tests/system/databricks">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-databricks/7.22.0/providers/databricks/tests/system/databricks">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-databricks/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -693,6 +693,76 @@ command.</p>
 </section>
 </section>
 </section>
+<section id="databrickscopyintoassetoperator">
+<span id="howto-operator-databrickscopyintoassetoperator"></span><h1 data-pagefind-weight="9.0">DatabricksCopyIntoAssetOperator<a class="headerlink" href="#databrickscopyintoassetoperator" title="Link to this heading">¶</a></h1>
+<p>Use <a class="reference internal" href="../_api/airflow/providers/databricks/operators/databricks_sql/index.html#airflow.providers.databricks.operators.databricks_sql.DatabricksCopyIntoAssetOperator" title="airflow.providers.databricks.operators.databricks_sql.DatabricksCopyIntoAssetOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatabricksCopyIntoAssetOperator</span></code></a>
+when the <code class="docutils literal notranslate"><span class="pre">COPY</span> <span class="pre">INTO</span></code> target is a Unity Catalog table that downstream Dags schedule on.
+It accepts every <code class="docutils literal notranslate"><span class="pre">DatabricksCopyIntoOperator</span></code> argument plus a required <code class="docutils literal notranslate"><span class="pre">unity_table</span></code>.
+<code class="docutils literal notranslate"><span class="pre">DatabricksCopyIntoOperator</span></code> itself declares no assets.</p>
+<p><code class="docutils literal notranslate"><span class="pre">unity_table</span></code> is a <a class="reference internal" href="../_api/airflow/providers/databricks/assets/databricks/index.html#airflow.providers.databricks.assets.databricks.UnityTableIdentity" title="airflow.providers.databricks.assets.databricks.UnityTableIdentity"><code class="xref py py-class docutils literal notranslate"><span class="pre">UnityTableIdentity</span></code></a>
+with <code class="docutils literal notranslate"><span class="pre">host</span></code>, <code class="docutils literal notranslate"><span class="pre">catalog</span></code>, <code class="docutils literal notranslate"><span class="pre">schema</span></code>, and <code class="docutils literal notranslate"><span class="pre">table</span></code>. All four are required and static.
+Jinja in any field raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. <code class="docutils literal notranslate"><span class="pre">host</span></code> follows the Databricks connection rule, so
+<code class="docutils literal notranslate"><span class="pre">https://my-workspace.cloud.databricks.com/</span></code> becomes <code class="docutils literal notranslate"><span class="pre">my-workspace.cloud.databricks.com</span></code>.
+The hostname, catalog, schema, and table are normalized to lowercase because their names
+are case-insensitive. Different capitalization therefore produces the same asset URI.
+<code class="docutils literal notranslate"><span class="pre">unity_table.to_asset()</span></code> returns the <code class="docutils literal notranslate"><span class="pre">databricks://host/catalog/schema/table</span></code> asset.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.databricks.assets.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">UnityTableIdentity</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.databricks.operators.databricks_sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksCopyIntoAssetOperator</span>
+
+<span class="n">users</span> <span class="o">=</span> <span class="n">UnityTableIdentity</span><span class="p">(</span>
+    <span class="n">host</span><span class="o">=</span><span class="s2">"my-workspace.cloud.databricks.com"</span><span class="p">,</span>
+    <span class="n">catalog</span><span class="o">=</span><span class="s2">"main"</span><span class="p">,</span>
+    <span class="n">schema</span><span class="o">=</span><span class="s2">"default"</span><span class="p">,</span>
+    <span class="n">table</span><span class="o">=</span><span class="s2">"users"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">load_users</span> <span class="o">=</span> <span class="n">DatabricksCopyIntoAssetOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"load_users"</span><span class="p">,</span>
+    <span class="n">sql_endpoint_name</span><span class="o">=</span><span class="s2">"my-endpoint"</span><span class="p">,</span>
+    <span class="n">file_location</span><span class="o">=</span><span class="s2">"/Volumes/main/default/landing/users.csv"</span><span class="p">,</span>
+    <span class="n">file_format</span><span class="o">=</span><span class="s2">"CSV"</span><span class="p">,</span>
+    <span class="n">table_name</span><span class="o">=</span><span class="s2">"main.default.users"</span><span class="p">,</span>
+    <span class="n">unity_table</span><span class="o">=</span><span class="n">users</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<section id="outlets">
+<h2>Outlets<a class="headerlink" href="#outlets" title="Link to this heading">¶</a></h2>
+<p>When you omit <code class="docutils literal notranslate"><span class="pre">outlets</span></code>, the operator sets <code class="docutils literal notranslate"><span class="pre">outlets=[unity_table.to_asset()]</span></code> at parse time.
+When you pass <code class="docutils literal notranslate"><span class="pre">outlets</span></code>, including <code class="docutils literal notranslate"><span class="pre">outlets=[]</span></code>, the operator keeps your value.
+To add extra outlets, pass the Unity table asset among them, as in
+<code class="docutils literal notranslate"><span class="pre">outlets=[users.to_asset(),</span> <span class="pre">other_asset]</span></code>.</p>
+</section>
+<section id="templated-table-names">
+<h2>Templated table names<a class="headerlink" href="#templated-table-names" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">table_name</span></code> stays templated. <code class="docutils literal notranslate"><span class="pre">unity_table</span></code> is not templated and fixes the asset at parse time.
+Before running SQL, the operator resolves the rendered <code class="docutils literal notranslate"><span class="pre">table_name</span></code> and compares it with <code class="docutils literal notranslate"><span class="pre">unity_table</span></code>.
+The table and connection hostname comparisons are case-insensitive; the SQL keeps the supplied casing.</p>
+<ul class="simple">
+<li><p>A three-part name <code class="docutils literal notranslate"><span class="pre">catalog.schema.table</span></code> is used as is.</p></li>
+<li><p>A two-part name <code class="docutils literal notranslate"><span class="pre">schema.table</span></code> takes the catalog from the <code class="docutils literal notranslate"><span class="pre">catalog</span></code> argument.</p></li>
+<li><p>A one-part name <code class="docutils literal notranslate"><span class="pre">table</span></code> takes the catalog and schema from the <code class="docutils literal notranslate"><span class="pre">catalog</span></code> and <code class="docutils literal notranslate"><span class="pre">schema</span></code> arguments.</p></li>
+</ul>
+<p>The operator never guesses the workspace default catalog or schema. If a part is missing or the
+resolved table differs from <code class="docutils literal notranslate"><span class="pre">unity_table</span></code>, the task raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> and no SQL runs.</p>
+</section>
+<section id="dynamic-task-mapping">
+<h2>Dynamic task mapping<a class="headerlink" href="#dynamic-task-mapping" title="Link to this heading">¶</a></h2>
+<p>A mapped task does not run the operator constructor when the Dag is parsed, so it gets no
+automatic outlet. Pass <code class="docutils literal notranslate"><span class="pre">outlets=[users.to_asset()]</span></code> in <code class="docutils literal notranslate"><span class="pre">partial()</span></code>. All mapped instances share
+one <code class="docutils literal notranslate"><span class="pre">unity_table</span></code>, so each rendered <code class="docutils literal notranslate"><span class="pre">table_name</span></code> must still resolve to that table.</p>
+</section>
+<section id="sources-and-other-operators">
+<h2>Sources and other operators<a class="headerlink" href="#sources-and-other-operators" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">file_location</span></code> may be a Unity Catalog volume path such as <code class="docutils literal notranslate"><span class="pre">/Volumes/main/default/landing</span></code>.
+The volume is the <code class="docutils literal notranslate"><span class="pre">COPY</span> <span class="pre">INTO</span></code> source. It is not an outlet. The outlet is the target table.</p>
+<p><a class="reference internal" href="../_api/airflow/providers/databricks/operators/databricks/index.html#airflow.providers.databricks.operators.databricks.DatabricksSQLStatementsOperator" title="airflow.providers.databricks.operators.databricks.DatabricksSQLStatementsOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatabricksSQLStatementsOperator</span></code></a> does not
+infer assets from SQL. Pass <code class="docutils literal notranslate"><span class="pre">outlets=[users.to_asset()]</span></code> for the tables your statements write.</p>
+<p>Databricks job and pipeline operators, such as
+<a class="reference internal" href="../_api/airflow/providers/databricks/operators/databricks/index.html#airflow.providers.databricks.operators.databricks.DatabricksRunNowOperator" title="airflow.providers.databricks.operators.databricks.DatabricksRunNowOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">DatabricksRunNowOperator</span></code></a>, do not infer
+table assets either. Pass <code class="docutils literal notranslate"><span class="pre">outlets</span></code> explicitly.</p>
+</section>
+</section>
 
 
     <div class="pager" role="navigation" aria-label="related navigation">
@@ -775,6 +845,13 @@ command.</p>
 <li><a class="reference internal" href="#importing-csv-data">Importing CSV data</a></li>
 </ul>
 </li>
+</ul>
+</li>
+<li><a class="reference internal" href="#databrickscopyintoassetoperator">DatabricksCopyIntoAssetOperator</a><ul>
+<li><a class="reference internal" href="#outlets">Outlets</a></li>
+<li><a class="reference internal" href="#templated-table-names">Templated table names</a></li>
+<li><a class="reference internal" href="#dynamic-task-mapping">Dynamic task mapping</a></li>
+<li><a class="reference internal" href="#sources-and-other-operators">Sources and other operators</a></li>
 </ul>
 </li>
 </ul>
@@ -994,9 +1071,9 @@ command.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=aed6c870"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=3ca9169b"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

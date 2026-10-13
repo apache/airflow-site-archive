@@ -1,0 +1,94 @@
+airflow.providers.informatica.example_dags.example_informatica_lineage
+======================================================================
+
+.. py:module:: airflow.providers.informatica.example_dags.example_informatica_lineage
+
+.. autoapi-nested-parse::
+
+   Example DAG for Informatica EDC lineage.
+
+   This DAG demonstrates automatic and manual lineage reporting to Informatica
+   EDC using the ``apache-airflow-providers-informatica`` provider.
+
+   Prerequisites
+   -------------
+   1. Start the local dev stack::
+
+          cd providers/informatica/dev
+          docker-compose up -d
+
+   2. Create the Airflow connections (UI → Admin → Connections):
+
+      **informatica_edc_default**
+        - Connection Type : HTTP
+        - Host            : localhost  (or ``informatica_sim`` inside Breeze)
+        - Port            : 8082
+        - Schema          : http
+
+      **postgres_lineage**
+        - Connection Type : Postgres
+        - Host            : localhost  (or ``informatica-lineage-postgres`` inside Breeze)
+        - Port            : 55433      (host mapping, 5432 inside Breeze network)
+        - Schema          : lineage_demo
+        - Login           : airflow
+        - Password        : airflow
+
+   3. Enable auto-lineage in ``airflow.cfg`` (or via env var)::
+
+          [informatica]
+          auto_lineage_enabled = True
+
+   What this DAG demonstrates
+   ---------------------------
+   * **Auto-lineage (task: build_order_summary)**
+     A multi-join SELECT → INSERT.  The provider parses the SQL with ``sqlglot``,
+     extracts ``orders``, ``customers``, ``products`` as inlets and
+     ``order_summary`` as the outlet, then reports the relationship to EDC.
+
+   * **Manual lineage (task: compute_customer_ltv)**
+     Inlets / outlets are set explicitly on the task via ``task.inlets`` and
+     ``task.outlets``.  Auto-detection is skipped when manual lineage is present.
+
+   * **Lineage disabled per-task (task: truncate_staging)**
+     ``disable_informatica_lineage(truncate_staging)`` is called after task
+     creation, so the provider skips EDC reporting entirely for this task.
+
+   * **Lineage disabled via operator class (task: log_run_metadata)**
+     The operator's fully-qualified class name is added to
+     ``[informatica] disabled_for_operators`` in the example config block
+     (commented out here; uncomment to test).
+
+   * **Strict pre-execution validation (task: compute_customer_ltv)**
+     ``pre_execute=validate_informatica_lineage`` is set on the operator so
+     that the task fails **before** ``execute()`` if any inlet/outlet URI
+     cannot be resolved in the EDC catalog.  Without ``pre_execute``, the
+     listener logs a warning but does not block execution.
+
+   * **Generic transfer with explicit target table (task: build_customer_segment_snapshot_generic)**
+       A complex ``CTE``-based ``SELECT`` is executed by ``GenericTransfer`` and loaded
+       into ``destination_table='customer_segment_snapshot'``.
+
+   Inspecting results
+   ------------------
+   After a successful DAG run, check the simulator's in-memory lineage store::
+
+       curl http://localhost:8082/lineage
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.informatica.example_dags.example_informatica_lineage.task_logger
+   airflow.providers.informatica.example_dags.example_informatica_lineage.build_order_summary
+
+
+Module Contents
+---------------
+
+.. py:data:: task_logger
+
+.. py:data:: build_order_summary
+

@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -485,7 +485,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -697,7 +697,8 @@ one vector per input item in the same order.</p>
 <span id="howto-operator-openairesponseoperator"></span><h1 data-pagefind-weight="9.0">OpenAIResponseOperator<a class="headerlink" href="#openairesponseoperator" title="Link to this heading">¶</a></h1>
 <p>Use the <a class="reference internal" href="../_api/airflow/providers/openai/operators/openai/index.html#airflow.providers.openai.operators.openai.OpenAIResponseOperator" title="airflow.providers.openai.operators.openai.OpenAIResponseOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">OpenAIResponseOperator</span></code></a> to generate a
 model response with the OpenAI Responses API, OpenAI’s recommended interface for text generation and
-tool use. The operator returns the response’s aggregated output text. When <code class="docutils literal notranslate"><span class="pre">do_xcom_push</span></code> is
+tool use. By default, the operator returns the response’s aggregated output text; it can also return
+Pydantic-validated structured output as a JSON-compatible value (see below). When <code class="docutils literal notranslate"><span class="pre">do_xcom_push</span></code> is
 enabled (the default), <code class="docutils literal notranslate"><span class="pre">execute</span></code> also pushes two XCom keys: <code class="docutils literal notranslate"><span class="pre">response_id</span></code> (the response’s ID,
 usable as a downstream task’s <code class="docutils literal notranslate"><span class="pre">previous_response_id</span></code> for chaining) and <code class="docutils literal notranslate"><span class="pre">usage</span></code> (the response’s
 token usage, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when the API omits it). <code class="docutils literal notranslate"><span class="pre">usage</span></code> is the nested dict returned by
@@ -731,7 +732,7 @@ so a ceiling can vary by environment or Dag run without hardcoding it. <code cla
 the number of tokens generated; <code class="docutils literal notranslate"><span class="pre">max_tool_calls</span></code> caps the number of built-in tool calls the model
 may make. Both limits are enforced by the OpenAI API itself; OpenAI exposes no monetary cost limit
 on the Responses API, so this operator has no cost cap. For a monetary limit, use
-<a class="reference external" href="/docs/apache-airflow-providers-common-ai/stable/index.html" title="(in apache-airflow-providers-common-ai v0.10.0)"><span>apache-airflow-providers-common-ai</span></a> instead. Hitting <code class="docutils literal notranslate"><span class="pre">max_output_tokens</span></code> does not
+<a class="reference external" href="/docs/apache-airflow-providers-common-ai/stable/index.html" title="(in apache-airflow-providers-common-ai v0.11.0)"><span>apache-airflow-providers-common-ai</span></a> instead. Hitting <code class="docutils literal notranslate"><span class="pre">max_output_tokens</span></code> does not
 fail the request: the response comes back with <code class="docutils literal notranslate"><span class="pre">status=&quot;incomplete&quot;</span></code>, so <code class="docutils literal notranslate"><span class="pre">return_value</span></code> will
 not raise – but it is not guaranteed to be truncated text either. A reasoning model can spend
 the entire ceiling on reasoning tokens and return an empty <code class="docutils literal notranslate"><span class="pre">output_text</span></code>, in which case
@@ -845,9 +846,50 @@ the dollar cost of a run; controlling spend means bounding those counts yourself
 before the response finishes. <code class="docutils literal notranslate"><span class="pre">OpenAIResponseOperator</span></code> is synchronous: it makes one
 <code class="docutils literal notranslate"><span class="pre">create_response</span></code> call and returns <code class="docutils literal notranslate"><span class="pre">response.output_text</span></code> immediately, so a response
 started with <code class="docutils literal notranslate"><span class="pre">background=True</span></code> comes back incomplete, and the operator logs its own warning
-because <code class="docutils literal notranslate"><span class="pre">response.status</span></code> is not yet <code class="docutils literal notranslate"><span class="pre">&quot;completed&quot;</span></code>. Do not set <code class="docutils literal notranslate"><span class="pre">background=True</span></code> on
+because <code class="docutils literal notranslate"><span class="pre">response.status</span></code> is not yet <code class="docutils literal notranslate"><span class="pre">&quot;completed&quot;</span></code>. With <code class="docutils literal notranslate"><span class="pre">text_format</span></code> set, the task
+raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> instead, and the background response is left running on OpenAI’s side.
+Do not set <code class="docutils literal notranslate"><span class="pre">background=True</span></code> on
 <code class="docutils literal notranslate"><span class="pre">OpenAIResponseOperator</span></code>. If you need a background response, create it from a <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>
 using <a class="reference internal" href="../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.OpenAIHook" title="airflow.providers.openai.hooks.openai.OpenAIHook"><code class="xref py py-class docutils literal notranslate"><span class="pre">OpenAIHook</span></code></a>’s <code class="docutils literal notranslate"><span class="pre">create_response</span></code> directly.</p>
+</div>
+</section>
+<section id="structured-outputs-pydantic-models">
+<h2>Structured outputs (Pydantic models)<a class="headerlink" href="#structured-outputs-pydantic-models" title="Link to this heading">¶</a></h2>
+<p>To request a structured response, pass a Pydantic <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> subclass as <code class="docutils literal notranslate"><span class="pre">text_format</span></code>. The
+operator then calls the Responses API’s structured-output path (<code class="docutils literal notranslate"><span class="pre">responses.parse</span></code>) and returns
+the parsed model’s JSON-mode dump (via <code class="docutils literal notranslate"><span class="pre">model_dump(mode=&quot;json&quot;)</span></code>). This renders supported field
+types such as enums and dates as JSON-compatible values before the result is pushed to XCom. Most
+models produce a <code class="docutils literal notranslate"><span class="pre">dict</span></code>; a Pydantic custom model serializer may produce another JSON shape such
+as a list or scalar.</p>
+<p><code class="docutils literal notranslate"><span class="pre">response_kwargs</span></code>, <code class="docutils literal notranslate"><span class="pre">max_output_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">max_tool_calls</span></code> are validated and passed through
+for structured requests exactly as for plain-text ones, and the <code class="docutils literal notranslate"><span class="pre">response_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom
+keys are pushed the same way – before the checks below, so a rejected response still records its
+id and token usage. With <code class="docutils literal notranslate"><span class="pre">multiple_outputs=True</span></code>, each top-level field of the result is pushed as
+its own XCom after <code class="docutils literal notranslate"><span class="pre">execute</span></code> returns, so <code class="docutils literal notranslate"><span class="pre">response_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code> are reserved field names: a
+field with either name would overwrite the XCom the operator pushes under that key.</p>
+<p>The operator rejects any response that did not complete – incomplete, failed, or still in
+progress – even if the partial output happens to match the Pydantic model, so unlike the
+plain-text path, reaching <code class="docutils literal notranslate"><span class="pre">max_output_tokens</span></code> fails the task instead of returning truncated
+output. The resulting <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> includes the response id and
+available API details, such as <code class="docutils literal notranslate"><span class="pre">status</span></code>, <code class="docutils literal notranslate"><span class="pre">error</span></code>, <code class="docutils literal notranslate"><span class="pre">incomplete_details</span></code>, refusal text, or
+output item types. If the SDK cannot parse the model output, it raises <code class="docutils literal notranslate"><span class="pre">ValidationError</span></code> before
+returning a response object; the operator converts that to <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> naming the requested
+model and notes that reaching <code class="docutils literal notranslate"><span class="pre">max_output_tokens</span></code> is a likely cause. In that case, a response id
+and API details are unavailable, and neither XCom key is pushed.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/openai/example_openai.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/tests/system/openai/example_openai.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="k">class</span><span class="w"> </span><span class="nc">Person</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+        <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
+
+    <span class="n">OpenAIResponseOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"openai_response_structured"</span><span class="p">,</span>
+        <span class="n">conn_id</span><span class="o">=</span><span class="s2">"openai_default"</span><span class="p">,</span>
+        <span class="n">input_text</span><span class="o">=</span><span class="s2">"Extract the name and age from: 'Alice is 30 years old'."</span><span class="p">,</span>
+        <span class="n">text_format</span><span class="o">=</span><span class="n">Person</span><span class="p">,</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
 </div>
 </section>
 </section>
@@ -856,7 +898,8 @@ using <a class="reference internal" href="../_api/airflow/providers/openai/hooks
 <p>The <a class="reference internal" href="../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.OpenAIHook" title="airflow.providers.openai.hooks.openai.OpenAIHook"><code class="xref py py-class docutils literal notranslate"><span class="pre">OpenAIHook</span></code></a> exposes the Responses and
 Conversations APIs directly for use inside <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> functions or custom operators:</p>
 <ul class="simple">
-<li><p>Responses: <code class="docutils literal notranslate"><span class="pre">create_response</span></code>, <code class="docutils literal notranslate"><span class="pre">get_response</span></code>, <code class="docutils literal notranslate"><span class="pre">delete_response</span></code> and <code class="docutils literal notranslate"><span class="pre">cancel_response</span></code>
+<li><p>Responses: <code class="docutils literal notranslate"><span class="pre">create_response</span></code>, <code class="docutils literal notranslate"><span class="pre">parse_response</span></code> (structured-output wrapper),
+<code class="docutils literal notranslate"><span class="pre">get_response</span></code>, <code class="docutils literal notranslate"><span class="pre">delete_response</span></code> and <code class="docutils literal notranslate"><span class="pre">cancel_response</span></code>
 (the last cancels a response created with <code class="docutils literal notranslate"><span class="pre">background=True</span></code>).</p></li>
 <li><p>Conversations: <code class="docutils literal notranslate"><span class="pre">create_conversation</span></code>, <code class="docutils literal notranslate"><span class="pre">get_conversation</span></code>, <code class="docutils literal notranslate"><span class="pre">update_conversation</span></code> and
 <code class="docutils literal notranslate"><span class="pre">delete_conversation</span></code>. Pass the conversation id to <code class="docutils literal notranslate"><span class="pre">create_response</span></code> (via the operator’s
@@ -1063,6 +1106,7 @@ For other resources, use the SDK client returned by <code class="docutils litera
 <li><a class="reference internal" href="#openairesponseoperator">OpenAIResponseOperator</a><ul>
 <li><a class="reference internal" href="#id1">Using the Operator</a></li>
 <li><a class="reference internal" href="#passing-responses-api-options">Passing Responses API options</a></li>
+<li><a class="reference internal" href="#structured-outputs-pydantic-models">Structured outputs (Pydantic models)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#using-the-openaihook-for-responses-and-conversations">Using the OpenAIHook for Responses and Conversations</a></li>
@@ -1292,9 +1336,9 @@ For other resources, use the SDK client returned by <code class="docutils litera
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=51b770b3"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=20623aea"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

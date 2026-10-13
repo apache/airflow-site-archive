@@ -78,17 +78,18 @@ Module Contents
 
 
 
-.. py:class:: OpenAIResponseOperator(conn_id, input_text, model = 'gpt-4o-mini', response_kwargs = None, *, max_output_tokens = None, max_tool_calls = None, **kwargs)
+.. py:class:: OpenAIResponseOperator(conn_id, input_text, model = 'gpt-4o-mini', response_kwargs = None, *, max_output_tokens = None, max_tool_calls = None, text_format = None, **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
 
    Operator that generates a model response using the OpenAI Responses API.
 
-   The operator is synchronous and returns the response's aggregated output text; the
-   response id is also pushed to XCom (see below), so a downstream task can pick it up
-   for ``previous_response_id`` chaining without going through the hook. For
-   ``background=True`` responses, or access to the full structured response, use
+   The operator is synchronous and returns the response's aggregated output text, or, when
+   ``text_format`` is set, the structured output parsed into that Pydantic model (see
+   ``text_format`` below). The response id is also pushed to XCom (see below), so a downstream
+   task can pick it up for ``previous_response_id`` chaining without going through the hook. For
+   ``background=True`` responses, or access to the full response object, use
    :class:`~airflow.providers.openai.hooks.openai.OpenAIHook` directly.
 
    ``max_output_tokens`` caps the number of tokens generated for the response; ``max_tool_calls``
@@ -108,10 +109,13 @@ Module Contents
        input items.
    :param model: The OpenAI model to use.
    :param response_kwargs: Additional keyword arguments to pass to the OpenAI ``create_response``
-       method (for example ``instructions``, ``tools``, ``conversation`` or ``previous_response_id``).
-       Templated, so values (e.g. ``previous_response_id``) may reference upstream XCom.
+       method, or ``parse_response`` when ``text_format`` is set (for example ``instructions``,
+       ``tools``, ``conversation`` or ``previous_response_id``). Templated, so values (e.g.
+       ``previous_response_id``) may reference upstream XCom.
        Do not set ``background`` or ``stream`` here: ``background=True`` returns before the response
-       completes, so this operator logs a warning and the returned output text may be empty, while
+       completes, so this operator logs a warning and the returned output text may be empty (with
+       ``text_format`` set, the parsed response comes back ``queued`` or ``in_progress``, so the task
+       raises ``ValueError`` and the background response is left running on OpenAI's side), while
        ``stream=True`` returns an object without ``status`` or ``output_text``, so the task raises
        ``AttributeError``. See :ref:`howto/operator:OpenAIResponseOperator` for these and other
        options this operator can pass through, such as ``truncation`` and ``metadata``. ``max_output_tokens``
@@ -141,6 +145,16 @@ Module Contents
    :param max_tool_calls: Optional upper bound on the number of built-in tool calls the model may
        make while generating the response. Same templating, type, validation, blank-as-unset, and
        mutual-exclusion rules as ``max_output_tokens``.
+   :param text_format: Optional Pydantic ``BaseModel`` subclass describing the expected structured
+       output. When set, the operator calls ``parse_response`` instead of ``create_response`` and
+       returns the parsed model's ``model_dump(mode="json")``, so enums, dates and other non-JSON
+       field types reach XCom as their JSON representations. The task fails with ``ValueError``
+       rather than returning partial data when the response did not complete (for example because
+       ``max_output_tokens`` was reached), when it carries no parsed output (for example a
+       refusal), or when the SDK cannot validate the output against the model. With
+       ``multiple_outputs=True`` each top-level field is pushed as its own XCom after ``execute``
+       returns, so ``response_id`` and ``usage`` are reserved field names: a field with either
+       name would overwrite the XCom this operator pushes under that key.
 
    .. seealso::
        For more information on how to use this operator, take a look at the guide:
@@ -154,7 +168,9 @@ Module Contents
    not ``None`` it also carries a ``try_number`` key recording which attempt produced it --
    XCom is cleared at the start of every attempt, so this makes it visible that the value
    only reflects the current attempt rather than a silently under-reported total across
-   retries. Both XCom pushes are skipped when ``do_xcom_push=False``.
+   retries. With ``text_format`` set, both keys are pushed before the structured output is
+   checked, so a response that then fails the task still records its id and token usage.
+   Both XCom pushes are skipped when ``do_xcom_push=False``.
 
 
    .. py:attribute:: template_fields
@@ -183,6 +199,11 @@ Module Contents
 
 
    .. py:attribute:: max_tool_calls
+      :value: None
+
+
+
+   .. py:attribute:: text_format
       :value: None
 
 
@@ -221,9 +242,10 @@ Module Contents
    :param deferrable: Optional. Run operator in the deferrable mode.
    :param wait_seconds: Optional. Number of seconds between checks. Only used when ``deferrable`` is False.
        Defaults to 3 seconds.
-   :param timeout: Optional. The amount of time, in seconds, to wait for the request to complete.
-       Applies in both deferrable and non-deferrable mode. Defaults to 24 hours, which is the SLA for
-       OpenAI Batch API.
+   :param timeout: Optional. The number of seconds to wait for the batch to complete, in both
+       deferrable and non-deferrable mode. Defaults to 24 hours, the SLA for OpenAI Batch API.
+       In deferrable mode, if ``execution_timeout`` is set shorter than ``timeout``, the task is
+       failed with ``TaskDeferralTimeout`` before the trigger times out, and the batch is not cancelled.
    :param wait_for_completion: Optional. Whether to wait for the batch to complete. If set to False, the operator
        will return immediately after triggering the batch. Defaults to True.
    :param metadata: Optional. A set of key-value pairs that can be attached to the batch. (templated)
@@ -319,7 +341,20 @@ Module Contents
       Invoke this callback when the trigger fires; return immediately.
 
       Relies on trigger to throw an exception, otherwise it assumes execution was
-      successful.
+      successful. The exception raised depends on the event's ``termination_reason``:
+      :class:`~airflow.providers.openai.exceptions.OpenAIBatchTimeout` for a timeout
+      (matching the exception the synchronous path raises for the same condition),
+      :class:`~airflow.providers.openai.exceptions.OpenAIBatchCancelled` for a cancellation
+      (a subclass of :class:`~airflow.providers.openai.exceptions.OpenAIBatchJobException`),
+      and :class:`~airflow.providers.openai.exceptions.OpenAIBatchJobException` for any
+      other failure (including events from a trigger serialized before
+      ``termination_reason`` existed).
+
+      On a timeout, cancellation of the batch is requested before the timeout is raised
+      (see :meth:`_cancel_batch_quietly`). No other termination reason triggers
+      cancellation: a ``polling_error`` may be a transient, Airflow-side failure rather than
+      a real batch problem, and cancellation is irreversible, so it is left alone to run to
+      its own 24-hour completion window instead.
 
 
 

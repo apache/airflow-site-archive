@@ -684,7 +684,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">TypedDict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">uuid4</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Header</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">status</span>
@@ -697,8 +699,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">InvalidSignatureError</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.tokens</span><span class="w"> </span><span class="kn">import</span> <span class="n">JWTValidator</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.tokens</span><span class="w"> </span><span class="kn">import</span> <span class="n">JWKS</span><span class="p">,</span> <span class="n">JWTValidator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowConfigException</span><span class="p">,</span> <span class="n">conf</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.log">[docs]</a>
@@ -706,23 +711,178 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
+<div class="viewcode-block" id="WorkerTokenAuthorization">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.WorkerTokenAuthorization">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WorkerTokenAuthorization</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Result of authorizing an OIDC worker token beyond signature verification.</span>
+
+<span class="sd">    Returned by a ``[edge] jwt_verifier`` callable to answer "may this token act</span>
+<span class="sd">    as an edge worker?". ``authorized`` must be ``True`` for the request to</span>
+<span class="sd">    proceed; a falsy result (or a raised exception) rejects it.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="WorkerTokenAuthorization.authorized">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.WorkerTokenAuthorization.authorized">[docs]</a>
+    <span class="n">authorized</span><span class="p">:</span> <span class="nb">bool</span></div>
+</div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="WorkerTokenContext">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.WorkerTokenContext">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WorkerTokenContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Request context passed to a ``[edge] jwt_verifier`` alongside the token claims."""</span>
+
+<div class="viewcode-block" id="WorkerTokenContext.method">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.WorkerTokenContext.method">[docs]</a>
+    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<span class="w">    </span><span class="sd">"""The requested Edge worker API path after the ``/edge_worker/v1/`` prefix."""</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_default_jwt_verifier</span><span class="p">(</span><span class="n">claims</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">WorkerTokenContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WorkerTokenAuthorization</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Authorize any token that passed signature, issuer and audience verification."""</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"authorized"</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_trusted_jwks_url</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the configured trusted JWKS URL, or an empty string when unset."""</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"trusted_jwks_url"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_jwt_algorithms</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the accepted signing algorithms for OIDC worker tokens."""</span>
+    <span class="n">configured</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_algorithm"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">"RS256"</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">"RS256"</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">algorithm</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">algorithm</span> <span class="ow">in</span> <span class="n">configured</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">","</span><span class="p">)</span> <span class="k">if</span> <span class="n">algorithm</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_jwt_audience</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the configured audience, or None to accept only tokens without an ``aud`` claim."""</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_audience"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_jwt_issuer</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the expected issuer, or None to skip issuer verification when left empty."""</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_issuer"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_jwt_leeway</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the clock-skew leeway (seconds) for OIDC worker tokens."""</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_leeway"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_jwt_verifier</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">WorkerTokenContext</span><span class="p">],</span> <span class="n">WorkerTokenAuthorization</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Import the configured worker-authorization callable, or the permissive default.</span>
+
+<span class="sd">    Resolved once when the OIDC authenticator is built (not per request).</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">getimport</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_verifier"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_default_jwt_verifier</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_jwt_verifier_configured</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return whether an explicit ``[edge] jwt_verifier`` is set."""</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"edge"</span><span class="p">,</span> <span class="s2">"jwt_verifier"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">))</span>
+
+
 <span class="nd">@cache</span>
-<div class="viewcode-block" id="jwt_validator">
-<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.jwt_validator">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">jwt_validator</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">JWTValidator</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_oidc_enabled</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return whether OIDC verification is enabled, decided once and cached.</span>
+
+<span class="sd">    The validator is also cached, so the mode must be read from a single place;</span>
+<span class="sd">    otherwise a request-time re-read could disagree with the cached validator and</span>
+<span class="sd">    skip the ``method``-claim check for a shared-secret token.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_trusted_jwks_url</span><span class="p">())</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_shared_secret_validator</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">JWTValidator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build a validator for worker tokens signed with the shared ``[api_auth] jwt_secret``."""</span>
     <span class="k">return</span> <span class="n">JWTValidator</span><span class="p">(</span>
         <span class="n">secret_key</span><span class="o">=</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api_auth"</span><span class="p">,</span> <span class="s2">"jwt_secret"</span><span class="p">),</span>
         <span class="n">leeway</span><span class="o">=</span><span class="n">conf</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s2">"api_auth"</span><span class="p">,</span> <span class="s2">"jwt_leeway"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="mi">30</span><span class="p">),</span>
         <span class="n">audience</span><span class="o">=</span><span class="s2">"api"</span><span class="p">,</span>
-    <span class="p">)</span></div>
+    <span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_OidcAuthenticator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""A JWKS-backed validator paired with its worker-authorization callable."""</span>
+
+    <span class="n">validator</span><span class="p">:</span> <span class="n">JWTValidator</span>
+    <span class="n">verifier</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">dict</span><span class="p">,</span> <span class="n">WorkerTokenContext</span><span class="p">],</span> <span class="n">WorkerTokenAuthorization</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_oidc_authenticator</span><span class="p">(</span><span class="n">jwks_url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_OidcAuthenticator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Build the validator and worker-authorization callable for a trusted OIDC provider.</span>
+
+<span class="sd">    Verifies the token signature against the provider JWKS and checks the</span>
+<span class="sd">    ``iss`` and (optionally) ``aud`` claims. Used when ``[edge] trusted_jwks_url``</span>
+<span class="sd">    is configured, so workers can authenticate with tokens minted by an</span>
+<span class="sd">    external identity provider instead of the shared secret.</span>
+
+<span class="sd">    Raises when issuer verification is skipped (empty ``jwt_issuer``) without a</span>
+<span class="sd">    ``jwt_verifier``, since that combination would accept any token signed by a</span>
+<span class="sd">    key in the JWKS.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_jwt_issuer</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_jwt_verifier_configured</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">AirflowConfigException</span><span class="p">(</span>
+            <span class="s2">"[edge] jwt_verifier must be set when trusted_jwks_url is configured "</span>
+            <span class="s2">"without jwt_issuer, otherwise any token signed by the JWKS is accepted."</span>
+        <span class="p">)</span>
+    <span class="n">validator</span> <span class="o">=</span> <span class="n">JWTValidator</span><span class="p">(</span>
+        <span class="n">jwks</span><span class="o">=</span><span class="n">JWKS</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">jwks_url</span><span class="p">),</span>
+        <span class="n">issuer</span><span class="o">=</span><span class="n">_jwt_issuer</span><span class="p">(),</span>
+        <span class="n">audience</span><span class="o">=</span><span class="n">_jwt_audience</span><span class="p">(),</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="n">_jwt_algorithms</span><span class="p">(),</span>
+        <span class="n">required_claims</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">({</span><span class="s2">"iat"</span><span class="p">,</span> <span class="s2">"exp"</span><span class="p">}),</span>
+        <span class="n">leeway</span><span class="o">=</span><span class="n">_jwt_leeway</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_OidcAuthenticator</span><span class="p">(</span><span class="n">validator</span><span class="o">=</span><span class="n">validator</span><span class="p">,</span> <span class="n">verifier</span><span class="o">=</span><span class="n">_resolve_jwt_verifier</span><span class="p">())</span>
+
+
+<span class="nd">@cache</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_oidc_authenticator</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">_OidcAuthenticator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the cached OIDC validator and verifier for the configured JWKS URL."""</span>
+    <span class="k">return</span> <span class="n">_build_oidc_authenticator</span><span class="p">(</span><span class="n">_trusted_jwks_url</span><span class="p">())</span>
+
+
+<span class="nd">@cache</span>
+<div class="viewcode-block" id="jwt_validator">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.jwt_validator">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">jwt_validator</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">JWTValidator</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_oidc_enabled</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">_oidc_authenticator</span><span class="p">()</span><span class="o">.</span><span class="n">validator</span>
+    <span class="k">return</span> <span class="n">_shared_secret_validator</span><span class="p">()</span></div>
 
 
 
 <div class="viewcode-block" id="jwt_validate">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.jwt_validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">jwt_validate</span><span class="p">(</span><span class="n">authorization</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">jwt_validator</span><span class="p">()</span><span class="o">.</span><span class="n">validated_claims</span><span class="p">(</span><span class="n">authorization</span><span class="p">)</span></div>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">jwt_validate</span><span class="p">(</span><span class="n">authorization</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">jwt_validator</span><span class="p">()</span><span class="o">.</span><span class="n">avalidated_claims</span><span class="p">(</span><span class="n">authorization</span><span class="p">)</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_worker_authorization</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Verify the token identity is allowed to act as an edge worker in OIDC mode.</span>
+
+<span class="sd">    A valid signature proves who signed the token, not that the identity may act</span>
+<span class="sd">    as a worker. The configured ``[edge] jwt_verifier`` answers the second</span>
+<span class="sd">    question; a falsy result rejects the request.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_oidc_enabled</span><span class="p">():</span>
+        <span class="k">return</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_oidc_authenticator</span><span class="p">()</span><span class="o">.</span><span class="n">verifier</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">WorkerTokenContext</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"authorized"</span><span class="p">):</span>
+        <span class="n">_forbidden_response</span><span class="p">(</span><span class="s2">"Token is not authorized to act as an edge worker."</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_forbidden_response</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
@@ -735,19 +895,34 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_method_claim</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Verify the signed ``method`` claim for shared-secret tokens.</span>
+
+<span class="sd">    Tokens minted by the Edge API carry the request ``method`` they are valid</span>
+<span class="sd">    for. Tokens issued by an external OIDC provider do not, so the check is</span>
+<span class="sd">    skipped when OIDC verification is enabled.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">_oidc_enabled</span><span class="p">():</span>
+        <span class="k">return</span>
+
+    <span class="n">signed_method</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"method"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">signed_method</span> <span class="ow">or</span> <span class="n">signed_method</span> <span class="o">!=</span> <span class="n">method</span><span class="p">:</span>
+        <span class="n">_forbidden_response</span><span class="p">(</span>
+            <span class="s2">"Invalid method in token authorization. "</span>
+            <span class="sa">f</span><span class="s2">"signed method='</span><span class="si">{</span><span class="n">signed_method</span><span class="si">}</span><span class="s2">' "</span>
+            <span class="sa">f</span><span class="s2">"called method='</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">'"</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
 <div class="viewcode-block" id="jwt_token_authorization">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.jwt_token_authorization">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">jwt_token_authorization</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">authorization</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">jwt_token_authorization</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">authorization</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Check if the JWT token is correct."""</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">payload</span> <span class="o">=</span> <span class="n">jwt_validate</span><span class="p">(</span><span class="n">authorization</span><span class="p">)</span>
-        <span class="n">signed_method</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"method"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">signed_method</span> <span class="ow">or</span> <span class="n">signed_method</span> <span class="o">!=</span> <span class="n">method</span><span class="p">:</span>
-            <span class="n">_forbidden_response</span><span class="p">(</span>
-                <span class="s2">"Invalid method in token authorization. "</span>
-                <span class="sa">f</span><span class="s2">"signed method='</span><span class="si">{</span><span class="n">signed_method</span><span class="si">}</span><span class="s2">' "</span>
-                <span class="sa">f</span><span class="s2">"called method='</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">'"</span><span class="p">,</span>
-            <span class="p">)</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="k">await</span> <span class="n">jwt_validate</span><span class="p">(</span><span class="n">authorization</span><span class="p">)</span>
+        <span class="n">_check_method_claim</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+        <span class="n">_check_worker_authorization</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
     <span class="k">except</span> <span class="n">BadSignature</span><span class="p">:</span>
         <span class="n">_forbidden_response</span><span class="p">(</span><span class="s2">"Bad Signature. Please use only the tokens provided by the API."</span><span class="p">)</span>
     <span class="k">except</span> <span class="n">InvalidAudienceError</span><span class="p">:</span>
@@ -773,14 +948,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="jwt_token_authorization_rest">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/worker_api/auth/index.html#airflow.providers.edge3.worker_api.auth.jwt_token_authorization_rest">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">jwt_token_authorization_rest</span><span class="p">(</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">jwt_token_authorization_rest</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">authorization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Header</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">"JWT Authorization Token"</span><span class="p">)</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Check if the JWT token is correct for REST API requests."""</span>
     <span class="n">PREFIX</span> <span class="o">=</span> <span class="s2">"/edge_worker/v1/"</span>
     <span class="n">path</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">url</span><span class="o">.</span><span class="n">path</span>
     <span class="n">method_path</span> <span class="o">=</span> <span class="n">path</span><span class="p">[</span><span class="n">path</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">PREFIX</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">PREFIX</span><span class="p">)</span> <span class="p">:]</span> <span class="k">if</span> <span class="n">PREFIX</span> <span class="ow">in</span> <span class="n">path</span> <span class="k">else</span> <span class="n">path</span>
-    <span class="n">jwt_token_authorization</span><span class="p">(</span><span class="n">method_path</span><span class="p">,</span> <span class="n">authorization</span><span class="p">)</span></div>
+    <span class="k">await</span> <span class="n">jwt_token_authorization</span><span class="p">(</span><span class="n">method_path</span><span class="p">,</span> <span class="n">authorization</span><span class="p">)</span></div>
 
 </pre></div>
 
@@ -1042,8 +1217,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../../../../../_static/documentation_options.js?v=ce74c6a2"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

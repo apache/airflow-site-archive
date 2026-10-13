@@ -1,0 +1,160 @@
+airflow.providers.ssh.tunnel
+============================
+
+.. py:module:: airflow.providers.ssh.tunnel
+
+.. autoapi-nested-parse::
+
+   SSH tunnel implementations for the Airflow SSH provider.
+
+   This module provides ``SSHTunnel`` (sync, paramiko-based) and ``AsyncSSHTunnel``
+   (async, asyncssh-based) as replacements for the removed ``sshtunnel.SSHTunnelForwarder``.
+
+   **SSHTunnel** reuses an already-connected ``paramiko.SSHClient`` from
+   ``SSHHook.get_conn()``, so all authentication and proxy configuration is inherited
+   automatically. It binds a local TCP socket and forwards connections to a remote
+   host/port through the SSH transport using ``open_channel('direct-tcpip', ...)``.
+
+   **AsyncSSHTunnel** wraps ``asyncssh.forward_local_port()`` and is intended for use
+   with ``SSHHookAsync``.
+
+   Migration from ``sshtunnel.SSHTunnelForwarder``
+   -----------------------------------------------
+
+   Before::
+
+       from sshtunnel import SSHTunnelForwarder
+
+       tunnel = hook.get_tunnel(remote_port=5432)
+       tunnel.start()
+       # use tunnel.local_bind_port
+       tunnel.stop()
+
+   After::
+
+       with hook.get_tunnel(remote_port=5432) as tunnel:
+           # use tunnel.local_bind_port
+
+   The ``.start()`` / ``.stop()`` methods still exist but emit deprecation warnings.
+   Use the context manager interface instead.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.ssh.tunnel.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.ssh.tunnel.SSHTunnel
+   airflow.providers.ssh.tunnel.AsyncSSHTunnel
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: SSHTunnel(ssh_client, remote_host, remote_port, local_port = None, logger = None)
+
+   Local port-forwarding tunnel over an existing paramiko SSH connection.
+
+   This replaces ``sshtunnel.SSHTunnelForwarder`` by using the SSH client's
+   transport directly via ``open_channel('direct-tcpip', ...)``.
+
+   The recommended usage is as a context manager::
+
+       client = hook.get_conn()
+       with SSHTunnel(client, "dbhost", 5432) as tunnel:
+           connect_to_db("localhost", tunnel.local_bind_port)
+
+   :param ssh_client: An already-connected ``paramiko.SSHClient``.
+   :param remote_host: The destination host to forward to (from the SSH server's perspective).
+   :param remote_port: The destination port to forward to.
+   :param local_port: Local port to bind. ``None`` means an OS-assigned ephemeral port.
+   :param logger: Optional logger instance. Falls back to the module logger.
+
+
+   .. py:property:: local_bind_port
+      :type: int
+
+
+      Return the local port the tunnel is listening on.
+
+
+
+   .. py:property:: local_bind_address
+      :type: tuple[str, int]
+
+
+      Return ``('localhost', <port>)`` — the local address the tunnel is listening on.
+
+
+
+   .. py:method:: __enter__()
+
+
+   .. py:method:: __exit__(exc_type, exc_val, exc_tb)
+
+
+   .. py:method:: start()
+
+      Start the tunnel. **Deprecated** — use the context manager interface instead.
+
+
+
+   .. py:method:: stop()
+
+      Stop the tunnel. **Deprecated** — use the context manager interface instead.
+
+
+
+   .. py:method:: __getattr__(name)
+
+
+.. py:class:: AsyncSSHTunnel(ssh_conn, remote_host, remote_port, local_port = None)
+
+   Async local port-forwarding tunnel over an asyncssh SSH connection.
+
+   This wraps ``asyncssh.SSHClientConnection.forward_local_port()`` and is
+   intended for use with ``SSHHookAsync``.
+
+   Usage::
+
+       async with await hook.get_tunnel(remote_port=5432) as tunnel:
+           connect_to_db("localhost", tunnel.local_bind_port)
+
+   On exit, both the forwarding listener and the underlying SSH connection
+   are closed.
+
+   :param ssh_conn: An ``asyncssh.SSHClientConnection``.
+   :param remote_host: The destination host to forward to.
+   :param remote_port: The destination port to forward to.
+   :param local_port: Local port to bind. ``None`` means an OS-assigned ephemeral port.
+
+
+   .. py:property:: local_bind_port
+      :type: int
+
+
+      Return the local port the tunnel is listening on.
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+
+   .. py:method:: __aexit__(exc_type, exc_val, exc_tb)
+      :async:
+
+
+

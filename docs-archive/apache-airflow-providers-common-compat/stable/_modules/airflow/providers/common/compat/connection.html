@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.20.0</span>
+        <span class="version-label">Version: </span><span class="version">1.21.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -471,7 +471,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.20.0</span>
+        <span class="version-label">Version: </span><span class="version">1.21.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -649,7 +649,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span>
 
@@ -684,8 +684,39 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
+<div class="viewcode-block" id="get_async_extra_dejson">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/common/compat/connection/index.html#airflow.providers.common.compat.connection.get_async_extra_dejson">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_async_extra_dejson</span><span class="p">(</span><span class="n">conn</span><span class="p">:</span> <span class="n">Connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Get the connection's extra as a dict, asynchronously and backwards compatible.</span>
+
+<span class="sd">    The async counterpart of ``Connection.extra_dejson``, for hooks running on an event loop</span>
+<span class="sd">    (async tasks, triggers). ``extra_dejson`` masks the extra's secrets with a synchronous</span>
+<span class="sd">    call to the supervisor, which raises ``DeadlockImminentError`` when another async call</span>
+<span class="sd">    is in flight on the same event loop.</span>
+
+<span class="sd">    On Airflow 3.3.2+ this awaits ``Connection.aextra_dejson()``, which masks the secrets</span>
+<span class="sd">    asynchronously. On older versions the synchronous ``extra_dejson`` runs in a worker</span>
+<span class="sd">    thread, where blocking on the supervisor is safe, the same way</span>
+<span class="sd">    :func:`get_async_connection` falls back to ``get_connection``.</span>
+
+<span class="sd">    :param conn: The connection, e.g. from :func:`get_async_connection`.</span>
+<span class="sd">    :returns: The deserialized extra, with its secrets masked.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="s2">"aextra_dejson"</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Get connection extra using `Connection.aextra_dejson()`."</span><span class="p">)</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">aextra_dejson</span><span class="p">()</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">asgiref.sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">sync_to_async</span>
+
+    <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Get connection extra using `Connection.extra_dejson` in a worker thread."</span><span class="p">)</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">sync_to_async</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span><span class="p">)()</span></div>
+
+
+
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">"get_async_connection"</span><span class="p">,</span>
+    <span class="s2">"get_async_extra_dejson"</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 
@@ -946,9 +977,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=2a6ef5f7"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=5bbbbfae"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.1.0</span>
+        <span class="version-label">Version: </span><span class="version">7.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -481,7 +481,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.1.0</span>
+        <span class="version-label">Version: </span><span class="version">7.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -914,6 +914,46 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn_count</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_worker_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SFTPHook</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Build a new SFTPHook for a concurrent-transfer worker.</span>
+
+<span class="sd">        Mirrors this hook's effective connection settings -- i.e. the result of merging</span>
+<span class="sd">        this hook's constructor overrides (``remote_host``, ``port``, ``username``, etc.)</span>
+<span class="sd">        with the underlying Airflow connection -- so worker hooks used by</span>
+<span class="sd">        ``store_directory_concurrently`` and ``retrieve_directory_concurrently`` connect</span>
+<span class="sd">        the same way the parent hook does, instead of falling back to the connection's</span>
+<span class="sd">        raw defaults.</span>
+<span class="sd">        """</span>
+        <span class="n">worker_hook</span> <span class="o">=</span> <span class="n">SFTPHook</span><span class="p">(</span>
+            <span class="n">ssh_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh_conn_id</span><span class="p">,</span>
+            <span class="n">remote_host</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">remote_host</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">password</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span>
+            <span class="c1"># Re-resolve key_file when pkey is set to avoid the key_file/private_key guard.</span>
+            <span class="n">key_file</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pkey</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_file</span><span class="p">,</span>
+            <span class="n">port</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+            <span class="n">conn_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn_timeout</span><span class="p">,</span>
+            <span class="n">cmd_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cmd_timeout</span><span class="p">,</span>
+            <span class="n">keepalive_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">keepalive_interval</span><span class="p">,</span>
+            <span class="n">banner_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">banner_timeout</span><span class="p">,</span>
+            <span class="n">disabled_algorithms</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">disabled_algorithms</span><span class="p">,</span>
+            <span class="n">ciphers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ciphers</span><span class="p">,</span>
+            <span class="n">auth_timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">auth_timeout</span><span class="p">,</span>
+            <span class="n">host_proxy_cmd</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">host_proxy_cmd</span><span class="p">,</span>
+            <span class="n">conn_retry_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn_retry_attempts</span><span class="p">,</span>
+            <span class="n">no_host_key_check</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="c1"># These have no constructor parameter and are only ever resolved from the</span>
+        <span class="c1"># connection's `extra` field or left at their class default, so copy the</span>
+        <span class="c1"># parent's already-resolved values across explicitly.</span>
+        <span class="n">worker_hook</span><span class="o">.</span><span class="n">allow_host_key_change</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_host_key_change</span>
+        <span class="n">worker_hook</span><span class="o">.</span><span class="n">host_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_key</span>
+        <span class="n">worker_hook</span><span class="o">.</span><span class="n">look_for_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">look_for_keys</span>
+        <span class="n">worker_hook</span><span class="o">.</span><span class="n">compress</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compress</span>
+        <span class="n">worker_hook</span><span class="o">.</span><span class="n">pkey</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pkey</span>
+        <span class="k">return</span> <span class="n">worker_hook</span>
+
     <span class="nd">@handle_connection_management</span>
 <div class="viewcode-block" id="SFTPHook.describe_directory">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/sftp/hooks/sftp/index.html#airflow.providers.sftp.hooks.sftp.SFTPHook.describe_directory">[docs]</a>
@@ -1223,7 +1263,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">remote_file_chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">remote_file_paths</span><span class="p">[</span><span class="n">i</span><span class="p">::</span><span class="n">workers</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="n">local_file_chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_local_file_paths</span><span class="p">[</span><span class="n">i</span><span class="p">::</span><span class="n">workers</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Opening </span><span class="si">%s</span><span class="s2"> new SFTP connections"</span><span class="p">,</span> <span class="n">workers</span><span class="p">)</span>
-        <span class="n">conns</span> <span class="o">=</span> <span class="p">[</span><span class="n">SFTPHook</span><span class="p">(</span><span class="n">ssh_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh_conn_id</span><span class="p">)</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
+        <span class="n">conns</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_worker_hook</span><span class="p">()</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Retrieving files concurrently with </span><span class="si">%s</span><span class="s2"> threads"</span><span class="p">,</span> <span class="n">workers</span><span class="p">)</span>
             <span class="k">with</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
@@ -1322,7 +1362,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">remote_file_chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_remote_file_paths</span><span class="p">[</span><span class="n">i</span><span class="p">::</span><span class="n">workers</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="n">local_file_chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">local_file_paths</span><span class="p">[</span><span class="n">i</span><span class="p">::</span><span class="n">workers</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Opening </span><span class="si">%s</span><span class="s2"> new SFTP connections"</span><span class="p">,</span> <span class="n">workers</span><span class="p">)</span>
-        <span class="n">conns</span> <span class="o">=</span> <span class="p">[</span><span class="n">SFTPHook</span><span class="p">(</span><span class="n">ssh_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh_conn_id</span><span class="p">)</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
+        <span class="n">conns</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_worker_hook</span><span class="p">()</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">)]</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Storing files concurrently with </span><span class="si">%s</span><span class="s2"> threads"</span><span class="p">,</span> <span class="n">workers</span><span class="p">)</span>
             <span class="k">with</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
@@ -1618,6 +1658,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param known_hosts: path to the known_hosts file on the local file system. Defaults to ``~/.ssh/known_hosts``.</span>
 <span class="sd">    :param key_file: path to the client key file used for authentication to SFTP server</span>
 <span class="sd">    :param passphrase: passphrase used with the key_file for authentication to SFTP server</span>
+<span class="sd">    :param no_host_key_check: Set to ``True`` to skip host key verification. Overrides the</span>
+<span class="sd">        connection's ``no_host_key_check`` extra. Defaults to ``None``, meaning the value is</span>
+<span class="sd">        taken from the connection (and host keys are verified when the connection does not set it).</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="SFTPHookAsync.conn_name_attr">
@@ -1652,6 +1695,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">key_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">passphrase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">private_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
+        <span class="n">no_host_key_check</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <div class="viewcode-block" id="SFTPHookAsync.sftp_conn_id">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/sftp/hooks/sftp/index.html#airflow.providers.sftp.hooks.sftp.SFTPHookAsync.sftp_conn_id">[docs]</a>
@@ -1689,6 +1733,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/sftp/hooks/sftp/index.html#airflow.providers.sftp.hooks.sftp.SFTPHookAsync.private_key">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">private_key</span> <span class="o">=</span> <span class="n">private_key</span></div>
 
+<div class="viewcode-block" id="SFTPHookAsync.no_host_key_check">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/sftp/hooks/sftp/index.html#airflow.providers.sftp.hooks.sftp.SFTPHookAsync.no_host_key_check">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">no_host_key_check</span></div>
+
 <div class="viewcode-block" id="SFTPHookAsync.conn">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/sftp/hooks/sftp/index.html#airflow.providers.sftp.hooks.sftp.SFTPHookAsync.conn">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="p">:</span> <span class="n">asyncssh</span><span class="o">.</span><span class="n">SFTPClient</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
@@ -1715,8 +1763,20 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="n">host_key</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"host_key"</span><span class="p">)</span>
         <span class="n">nhkc_raw</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"no_host_key_check"</span><span class="p">)</span>
-        <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="kc">True</span> <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">nhkc_raw</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">"ignore_hostkey_verification"</span> <span class="ow">in</span> <span class="n">extra_options</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">"The `ignore_hostkey_verification` connection extra is deprecated; "</span>
+                <span class="s2">"use `no_host_key_check` instead."</span><span class="p">,</span>
+                <span class="n">AirflowProviderDeprecationWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">nhkc_raw</span> <span class="o">=</span> <span class="n">extra_options</span><span class="p">[</span><span class="s2">"ignore_hostkey_verification"</span><span class="p">]</span>
+        <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="kc">False</span> <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">nhkc_raw</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span>
 
+        <span class="c1"># Validated on the effective value, so the constructor argument can resolve a connection</span>
+        <span class="c1"># that sets both `host_key` and `no_host_key_check` -- the same rule as `SSHHook`.</span>
         <span class="k">if</span> <span class="n">host_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">no_host_key_check</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Host key check was skipped, but `host_key` value was given"</span><span class="p">)</span>
 
@@ -1733,7 +1793,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">host_key_parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">host_key</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">host_key_parts</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">conn</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># A bare key is RSA, as on the sync hook; asyncssh needs the type spelled out.</span>
+                <span class="n">host_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"ssh-rsa </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">conn</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_should_use_known_hosts</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Leave a missing default file unset so AsyncSSH reports an untrusted host."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">==</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_known_hosts</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">asyncssh</span><span class="o">.</span><span class="n">SSHClientConnection</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -1747,8 +1816,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        - passphrase</span>
 <span class="sd">        """</span>
         <span class="n">conn</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_async_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sftp_conn_id</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_parse_extras</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+        <span class="c1"># Parsed even without extras: a constructor `no_host_key_check` still has to be applied.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parse_extras</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_get_value</span><span class="p">(</span><span class="n">self_val</span><span class="p">,</span> <span class="n">conn_val</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">            </span><span class="sd">"""Return the first non-None value among self, conn, default."""</span>
@@ -1769,7 +1838,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"none"</span><span class="p">:</span>
                 <span class="n">conn_config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">known_hosts</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_should_use_known_hosts</span><span class="p">():</span>
                 <span class="n">conn_config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">known_hosts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">private_key</span><span class="p">:</span>
             <span class="n">_private_key</span> <span class="o">=</span> <span class="n">asyncssh</span><span class="o">.</span><span class="n">import_private_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">private_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">passphrase</span><span class="p">)</span>
@@ -2663,9 +2732,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=6340cb70"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=efe5be6f"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

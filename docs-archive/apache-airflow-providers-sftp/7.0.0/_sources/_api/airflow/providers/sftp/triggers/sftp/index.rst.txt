@@ -1,0 +1,176 @@
+airflow.providers.sftp.triggers.sftp
+====================================
+
+.. py:module:: airflow.providers.sftp.triggers.sftp
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.sftp.triggers.sftp.BaseSFTPTrigger
+   airflow.providers.sftp.triggers.sftp.SFTPTrigger
+   airflow.providers.sftp.triggers.sftp.SFTPTransferTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: BaseSFTPTrigger(sftp_conn_id = 'sftp_default', remote_host = None, no_host_key_check = None)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Base class for SFTP triggers, providing shared async hook construction.
+
+
+   .. py:attribute:: sftp_conn_id
+      :value: 'sftp_default'
+
+
+
+   .. py:attribute:: remote_host
+      :value: None
+
+
+
+   .. py:attribute:: no_host_key_check
+      :value: None
+
+
+
+.. py:class:: SFTPTrigger(path, file_pattern = '', sftp_conn_id = 'sftp_default', newer_than = None, poke_interval = 5)
+
+   Bases: :py:obj:`BaseSFTPTrigger`
+
+
+   SFTPTrigger that fires in below listed scenarios.
+
+   1. The path on the SFTP server does not exist
+   2. The pattern do not match
+
+   :param path: The path on the SFTP server to search for a file matching the file pattern.
+               Authentication method used in the SFTP connection must have access to this path
+   :param file_pattern: Pattern to be used for matching against the list of files at the path above.
+               Uses the fnmatch module from std library to perform the matching.
+
+   :param sftp_conn_id: SFTP connection ID to be used for connecting to SFTP server
+   :param poke_interval: How often, in seconds, to check for the existence of the file on the SFTP server
+
+
+   .. py:attribute:: path
+
+
+   .. py:attribute:: file_pattern
+      :value: ''
+
+
+
+   .. py:attribute:: newer_than
+      :value: None
+
+
+
+   .. py:attribute:: poke_interval
+      :value: 5
+
+
+
+   .. py:method:: serialize()
+
+      Serialize SFTPTrigger arguments and classpath.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Make a series of asynchronous calls to sftp servers via async sftp hook. It yields a Trigger.
+
+      - If file matching file pattern exists at the specified path return it,
+      - If file pattern was not provided, it looks directly into the specific path which was provided.
+      - If newer then datetime was provided it looks for the file path last modified time and
+        check whether the last modified time is greater, if true return file if false it polls again.
+
+
+
+   .. py:property:: newer_than_utc
+      :type: datetime.datetime | None
+
+
+      Parse and convert ``newer_than`` to a UTC datetime once, without mutating the original value.
+
+
+
+.. py:class:: SFTPTransferTrigger(sftp_conn_id = 'sftp_default', local_filepath = None, remote_filepath = '', operation = SFTPOperation.PUT, confirm = True, create_intermediate_dirs = False, remote_host = None, concurrency = 1, prefetch = True, no_host_key_check = None)
+
+   Bases: :py:obj:`BaseSFTPTrigger`
+
+
+   Trigger for SFTPOperator deferrable mode.
+
+   Fires when a file transfer (PUT, GET, or DELETE) completes
+   on the SFTP server, freeing the worker slot during the transfer.
+
+   :param sftp_conn_id: The SFTP connection ID to use.
+   :param local_filepath: Local file path(s) to transfer.
+   :param remote_filepath: Remote file path(s) on the SFTP server.
+   :param operation: The SFTP operation - put, get, or delete.
+   :param confirm: Whether to confirm the file transfer.
+   :param create_intermediate_dirs: Whether to create intermediate dirs.
+   :param remote_host: Remote host to connect to (overrides connection).
+   :param concurrency: Number of threads for directory transfers.
+   :param prefetch: Whether to prefetch during file retrieval.
+   :param no_host_key_check: Host key verification setting of the operator's hook, so that a
+       constructor override on that hook survives deferral. ``None`` defers to the connection.
+
+
+   .. py:attribute:: local_filepath
+      :value: None
+
+
+
+   .. py:attribute:: remote_filepath
+      :value: ''
+
+
+
+   .. py:attribute:: operation
+
+
+   .. py:attribute:: confirm
+      :value: True
+
+
+
+   .. py:attribute:: create_intermediate_dirs
+      :value: False
+
+
+
+   .. py:attribute:: concurrency
+      :value: 1
+
+
+
+   .. py:attribute:: prefetch
+      :value: True
+
+
+
+   .. py:method:: serialize()
+
+      Serialize the trigger for storage in the database.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the file transfer asynchronously and yield a TriggerEvent when done.
+
+
+

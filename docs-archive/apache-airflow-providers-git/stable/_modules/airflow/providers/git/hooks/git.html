@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -477,7 +477,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -670,7 +670,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">UTC</span><span class="p">,</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">unquote</span>
 
@@ -681,6 +681,25 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/git/hooks/git/index.html#airflow.providers.git.hooks.git.log">[docs]</a>
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
 
+
+
+<span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_executable_script</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Write ``content`` to a private temporary file and yield its path.</span>
+
+<span class="sd">    git and ssh execute the askpass helpers, so the file must be closed before</span>
+<span class="sd">    they run: Linux refuses to exec a file that is still open for writing</span>
+<span class="sd">    (``ETXTBSY``, "Text file busy").</span>
+<span class="sd">    """</span>
+    <span class="n">fd</span><span class="p">,</span> <span class="n">path</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkstemp</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s2">".sh"</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">os</span><span class="o">.</span><span class="n">fdopen</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">script</span><span class="p">:</span>
+            <span class="n">script</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRWXU</span><span class="p">)</span>
+        <span class="k">yield</span> <span class="n">path</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="GitHook">
@@ -924,6 +943,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="k">return</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
 
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="GitHook.uses_github_app_auth">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/git/hooks/git/index.html#airflow.providers.git.hooks.git.GitHook.uses_github_app_auth">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">uses_github_app_auth</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Whether the connection authenticates as a GitHub App and mints its own installation tokens."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_app_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_installation_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_github_app_token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">github</span><span class="w"> </span><span class="kn">import</span> <span class="n">Auth</span><span class="p">,</span> <span class="n">GithubIntegration</span>
@@ -947,7 +974,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">TOKEN_REFRESH_BUFFER</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
         <span class="k">if</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">github_app_token_exp</span> <span class="ow">is</span> <span class="kc">None</span>
-            <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_app_token_exp</span> <span class="o">&lt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span> <span class="o">+</span> <span class="n">TOKEN_REFRESH_BUFFER</span>
+            <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_app_token_exp</span> <span class="o">&lt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span> <span class="o">+</span> <span class="n">TOKEN_REFRESH_BUFFER</span>
         <span class="p">):</span>
             <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">"GitHub App token is missing or near expiry (expires at: </span><span class="si">%s</span><span class="s2">). Refreshing token."</span><span class="p">,</span>
@@ -1056,20 +1083,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">yield</span>
             <span class="k">return</span>
 
-        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"w"</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">".sh"</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">as</span> <span class="n">askpass_script</span><span class="p">:</span>
-            <span class="n">askpass_script</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"#!/bin/sh</span><span class="se">\n</span><span class="s2">echo </span><span class="si">{</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">private_key_passphrase</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
-            <span class="n">askpass_script</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">askpass_script</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IRWXU</span><span class="p">)</span>
-
+        <span class="k">with</span> <span class="n">_executable_script</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"#!/bin/sh</span><span class="se">\n</span><span class="s2">echo </span><span class="si">{</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">private_key_passphrase</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">askpass_path</span><span class="p">:</span>
             <span class="n">old_askpass</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"SSH_ASKPASS"</span><span class="p">)</span>
             <span class="n">old_display</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"DISPLAY"</span><span class="p">)</span>
             <span class="n">old_askpass_require</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"SSH_ASKPASS_REQUIRE"</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"SSH_ASKPASS"</span><span class="p">]</span> <span class="o">=</span> <span class="n">askpass_script</span><span class="o">.</span><span class="n">name</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"SSH_ASKPASS"</span><span class="p">]</span> <span class="o">=</span> <span class="n">askpass_path</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"SSH_ASKPASS_REQUIRE"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"force"</span>
                 <span class="c1"># DISPLAY must be set for SSH_ASKPASS to be used</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"DISPLAY"</span><span class="p">,</span> <span class="s2">":"</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">[</span><span class="s2">"SSH_ASKPASS"</span><span class="p">]</span> <span class="o">=</span> <span class="n">askpass_script</span><span class="o">.</span><span class="n">name</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">[</span><span class="s2">"SSH_ASKPASS"</span><span class="p">]</span> <span class="o">=</span> <span class="n">askpass_path</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">[</span><span class="s2">"SSH_ASKPASS_REQUIRE"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"force"</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"DISPLAY"</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"DISPLAY"</span><span class="p">])</span>
                 <span class="k">yield</span>
@@ -1088,7 +1113,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="GitHook.configure_hook_env">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/git/hooks/git/index.html#airflow.providers.git.hooks.git.GitHook.configure_hook_env">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">configure_hook_env</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_app_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">github_installation_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">uses_github_app_auth</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_github_app_token</span><span class="p">()</span>
             <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token_credential_env</span><span class="p">():</span>
                 <span class="k">yield</span>
@@ -1376,9 +1401,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=8d563738"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=292eb321"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

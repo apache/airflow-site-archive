@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.11.0</span>
+        <span class="version-label">Version: </span><span class="version">0.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.11.0</span>
+        <span class="version-label">Version: </span><span class="version">0.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -748,6 +748,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="RESOURCE_ID_ATTRIBUTE_NAME">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/keycloak/auth_manager/keycloak_auth_manager/index.html#airflow.providers.keycloak.auth_manager.keycloak_auth_manager.RESOURCE_ID_ATTRIBUTE_NAME">[docs]</a>
 <span class="n">RESOURCE_ID_ATTRIBUTE_NAME</span> <span class="o">=</span> <span class="s2">"resource_id"</span></div>
+
+
+<span class="c1"># ``AccessView`` values covering records that carry no per-Dag or per-team key to authorize on. They</span>
+<span class="c1"># are admin-by-default in core. Compared by value because older Airflow versions lack some members.</span>
+<div class="viewcode-block" id="ADMIN_ACCESS_VIEW_NAMES">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/keycloak/auth_manager/keycloak_auth_manager/index.html#airflow.providers.keycloak.auth_manager.keycloak_auth_manager.ADMIN_ACCESS_VIEW_NAMES">[docs]</a>
+<span class="n">ADMIN_ACCESS_VIEW_NAMES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"AUDIT_LOGS_ALL"</span><span class="p">,</span> <span class="s2">"IMPORT_ERRORS_ALL"</span><span class="p">,</span> <span class="s2">"REPARSE_ALL"</span><span class="p">})</span></div>
 
 
 
@@ -1114,9 +1121,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">is_authorized_view</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">access_view</span><span class="p">:</span> <span class="n">AccessView</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">KeycloakAuthManagerUser</span><span class="p">,</span> <span class="n">team_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="n">KeycloakResource</span><span class="o">.</span><span class="n">VIEW</span>
+        <span class="k">if</span> <span class="n">access_view</span><span class="o">.</span><span class="n">value</span> <span class="ow">in</span> <span class="n">ADMIN_ACCESS_VIEW_NAMES</span> <span class="ow">and</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span>
+            <span class="s2">"core"</span><span class="p">,</span> <span class="s2">"multi_team"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span>
+        <span class="p">):</span>
+            <span class="c1"># Every team role can read ``VIEW`` in multi-team mode, so these views are checked</span>
+            <span class="c1"># against a separate resource that the CLI grants to ``SuperAdmin`` only.</span>
+            <span class="n">resource_type</span> <span class="o">=</span> <span class="n">KeycloakResource</span><span class="o">.</span><span class="n">ADMIN_VIEW</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_authorized</span><span class="p">(</span>
             <span class="n">method</span><span class="o">=</span><span class="s2">"GET"</span><span class="p">,</span>
-            <span class="n">resource_type</span><span class="o">=</span><span class="n">KeycloakResource</span><span class="o">.</span><span class="n">VIEW</span><span class="p">,</span>
+            <span class="n">resource_type</span><span class="o">=</span><span class="n">resource_type</span><span class="p">,</span>
             <span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span>
             <span class="n">resource_id</span><span class="o">=</span><span class="n">access_view</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
             <span class="n">team_name</span><span class="o">=</span><span class="n">team_name</span><span class="p">,</span>
@@ -1267,8 +1281,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">if</span> <span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"error"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"invalid_grant"</span><span class="p">:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Received invalid_grant from Keycloak: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
                 <span class="k">return</span> <span class="kc">False</span>
-            <span class="k">if</span> <span class="n">is_team_resource</span> <span class="ow">and</span> <span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"error"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"invalid_resource"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">is_team_resource</span> <span class="ow">or</span> <span class="n">resource_type</span> <span class="o">==</span> <span class="n">KeycloakResource</span><span class="o">.</span><span class="n">ADMIN_VIEW</span><span class="p">)</span> <span class="ow">and</span> <span class="n">error</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s2">"error"</span>
+            <span class="p">)</span> <span class="o">==</span> <span class="s2">"invalid_resource"</span><span class="p">:</span>
                 <span class="c1"># filter_authorized_dag_ids will return this error if team resources have not been added to the Keycloak Client.</span>
+                <span class="c1"># The same applies to the ``AdminView`` resource on a client provisioned by an older CLI.</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                     <span class="s2">"Keycloak authorization resource is missing; denying access. Response: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span>
                 <span class="p">)</span>
@@ -1962,9 +1979,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=f3b36f1a"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=57cbeb03"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

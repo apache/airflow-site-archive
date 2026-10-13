@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -674,13 +674,45 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">ValidationError</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">conf</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIBatchJobException</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openai.hooks.openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIHook</span><span class="p">,</span> <span class="n">validate_execute_complete_event</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openai.hooks.openai</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">OpenAIHook</span><span class="p">,</span>
+    <span class="n">TerminationReason</span><span class="p">,</span>
+    <span class="n">build_batch_error</span><span class="p">,</span>
+    <span class="n">validate_execute_complete_event</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openai.triggers.openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIBatchTrigger</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParsedResponse</span><span class="p">,</span> <span class="n">Response</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_structured_response_details</span><span class="p">(</span><span class="n">response</span><span class="p">:</span> <span class="n">ParsedResponse</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return API-reported context for a structured-response failure."""</span>
+    <span class="n">details</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"status=</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status</span><span class="si">!r}</span><span class="s2">"</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">error</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">details</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"error=</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">error</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">incomplete_details</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">details</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"incomplete_details=</span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">incomplete_details</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">refusals</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">content</span><span class="o">.</span><span class="n">refusal</span>
+        <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">output</span>
+        <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"message"</span>
+        <span class="k">for</span> <span class="n">content</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">content</span>
+        <span class="k">if</span> <span class="n">content</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"refusal"</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">refusals</span><span class="p">:</span>
+        <span class="n">details</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"refusal=</span><span class="si">{</span><span class="s1">'; '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">refusals</span><span class="p">)</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">output_types</span> <span class="o">=</span> <span class="p">[</span><span class="n">output</span><span class="o">.</span><span class="n">type</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">output</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">output_types</span><span class="p">:</span>
+            <span class="n">details</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"output_types=</span><span class="si">{</span><span class="n">output_types</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">details</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="OpenAIEmbeddingOperator">
@@ -767,10 +799,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Operator that generates a model response using the OpenAI Responses API.</span>
 
-<span class="sd">    The operator is synchronous and returns the response's aggregated output text; the</span>
-<span class="sd">    response id is also pushed to XCom (see below), so a downstream task can pick it up</span>
-<span class="sd">    for ``previous_response_id`` chaining without going through the hook. For</span>
-<span class="sd">    ``background=True`` responses, or access to the full structured response, use</span>
+<span class="sd">    The operator is synchronous and returns the response's aggregated output text, or, when</span>
+<span class="sd">    ``text_format`` is set, the structured output parsed into that Pydantic model (see</span>
+<span class="sd">    ``text_format`` below). The response id is also pushed to XCom (see below), so a downstream</span>
+<span class="sd">    task can pick it up for ``previous_response_id`` chaining without going through the hook. For</span>
+<span class="sd">    ``background=True`` responses, or access to the full response object, use</span>
 <span class="sd">    :class:`~airflow.providers.openai.hooks.openai.OpenAIHook` directly.</span>
 
 <span class="sd">    ``max_output_tokens`` caps the number of tokens generated for the response; ``max_tool_calls``</span>
@@ -790,10 +823,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        input items.</span>
 <span class="sd">    :param model: The OpenAI model to use.</span>
 <span class="sd">    :param response_kwargs: Additional keyword arguments to pass to the OpenAI ``create_response``</span>
-<span class="sd">        method (for example ``instructions``, ``tools``, ``conversation`` or ``previous_response_id``).</span>
-<span class="sd">        Templated, so values (e.g. ``previous_response_id``) may reference upstream XCom.</span>
+<span class="sd">        method, or ``parse_response`` when ``text_format`` is set (for example ``instructions``,</span>
+<span class="sd">        ``tools``, ``conversation`` or ``previous_response_id``). Templated, so values (e.g.</span>
+<span class="sd">        ``previous_response_id``) may reference upstream XCom.</span>
 <span class="sd">        Do not set ``background`` or ``stream`` here: ``background=True`` returns before the response</span>
-<span class="sd">        completes, so this operator logs a warning and the returned output text may be empty, while</span>
+<span class="sd">        completes, so this operator logs a warning and the returned output text may be empty (with</span>
+<span class="sd">        ``text_format`` set, the parsed response comes back ``queued`` or ``in_progress``, so the task</span>
+<span class="sd">        raises ``ValueError`` and the background response is left running on OpenAI's side), while</span>
 <span class="sd">        ``stream=True`` returns an object without ``status`` or ``output_text``, so the task raises</span>
 <span class="sd">        ``AttributeError``. See :ref:`howto/operator:OpenAIResponseOperator` for these and other</span>
 <span class="sd">        options this operator can pass through, such as ``truncation`` and ``metadata``. ``max_output_tokens``</span>
@@ -823,6 +859,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param max_tool_calls: Optional upper bound on the number of built-in tool calls the model may</span>
 <span class="sd">        make while generating the response. Same templating, type, validation, blank-as-unset, and</span>
 <span class="sd">        mutual-exclusion rules as ``max_output_tokens``.</span>
+<span class="sd">    :param text_format: Optional Pydantic ``BaseModel`` subclass describing the expected structured</span>
+<span class="sd">        output. When set, the operator calls ``parse_response`` instead of ``create_response`` and</span>
+<span class="sd">        returns the parsed model's ``model_dump(mode="json")``, so enums, dates and other non-JSON</span>
+<span class="sd">        field types reach XCom as their JSON representations. The task fails with ``ValueError``</span>
+<span class="sd">        rather than returning partial data when the response did not complete (for example because</span>
+<span class="sd">        ``max_output_tokens`` was reached), when it carries no parsed output (for example a</span>
+<span class="sd">        refusal), or when the SDK cannot validate the output against the model. With</span>
+<span class="sd">        ``multiple_outputs=True`` each top-level field is pushed as its own XCom after ``execute``</span>
+<span class="sd">        returns, so ``response_id`` and ``usage`` are reserved field names: a field with either</span>
+<span class="sd">        name would overwrite the XCom this operator pushes under that key.</span>
 
 <span class="sd">    .. seealso::</span>
 <span class="sd">        For more information on how to use this operator, take a look at the guide:</span>
@@ -836,7 +882,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    not ``None`` it also carries a ``try_number`` key recording which attempt produced it --</span>
 <span class="sd">    XCom is cleared at the start of every attempt, so this makes it visible that the value</span>
 <span class="sd">    only reflects the current attempt rather than a silently under-reported total across</span>
-<span class="sd">    retries. Both XCom pushes are skipped when ``do_xcom_push=False``.</span>
+<span class="sd">    retries. With ``text_format`` set, both keys are pushed before the structured output is</span>
+<span class="sd">    checked, so a response that then fails the task still records its id and token usage.</span>
+<span class="sd">    Both XCom pushes are skipped when ``do_xcom_push=False``.</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="OpenAIResponseOperator.template_fields">
@@ -861,6 +909,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="o">*</span><span class="p">,</span>
         <span class="n">max_output_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">max_tool_calls</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">text_format</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -888,11 +937,32 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/operators/openai/index.html#airflow.providers.openai.operators.openai.OpenAIResponseOperator.max_tool_calls">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_tool_calls</span> <span class="o">=</span> <span class="n">max_tool_calls</span></div>
 
+<div class="viewcode-block" id="OpenAIResponseOperator.text_format">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/operators/openai/index.html#airflow.providers.openai.operators.openai.OpenAIResponseOperator.text_format">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_format</span> <span class="o">=</span> <span class="n">text_format</span></div>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_supplied_ceilings</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
             <span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_TOKEN_CEILING_PARAM_NAMES</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_validate_no_response_kwargs_conflict</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_validate_literal_ceiling_values</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_text_format</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_text_format</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Reject a ``text_format`` that is not a Pydantic ``BaseModel`` subclass.</span>
+
+<span class="sd">        The SDK also accepts other Pydantic-compatible types, such as a ``pydantic.dataclasses``</span>
+<span class="sd">        class, but those have no ``model_dump``: they would complete the billed API call and only</span>
+<span class="sd">        then fail. Checking when the operator is constructed rejects them before any request.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_format</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text_format</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text_format</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Task </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="si">!r}</span><span class="s2">: 'text_format' must be a Pydantic BaseModel subclass, "</span>
+                <span class="sa">f</span><span class="s2">"got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">text_format</span><span class="si">!r}</span><span class="s2">."</span>
+            <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_validate_no_response_kwargs_conflict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Reject a ceiling set both as an operator argument and in ``response_kwargs``."""</span>
@@ -996,12 +1066,58 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">response_kwargs</span><span class="p">[</span><span class="n">param_name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_coerce_token_ceiling</span><span class="p">(</span><span class="n">param_name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">response_kwargs</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_push_response_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Push the response id and token usage to XCom when ``do_xcom_push`` is enabled."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">"response_id"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">response</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="c1"># model_dump (not a hand-picked field list) keeps a token-usage dimension</span>
+            <span class="c1"># the API adds later from being silently dropped; mode="json" keeps the</span>
+            <span class="c1"># value XCom-serializable.</span>
+            <span class="c1">#</span>
+            <span class="c1"># XCom is cleared at the start of every attempt, so this key only ever holds</span>
+            <span class="c1"># the last one. Stamping the attempt makes that visible rather than silently</span>
+            <span class="c1"># under-reporting total spend across retries. Built as a new dict rather than</span>
+            <span class="c1"># mutating what model_dump() returned.</span>
+            <span class="n">usage</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="p">{</span><span class="o">**</span><span class="n">response</span><span class="o">.</span><span class="n">usage</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span> <span class="s2">"try_number"</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">try_number</span><span class="p">}</span>
+                <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">usage</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="k">else</span> <span class="kc">None</span>
+            <span class="p">)</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">"usage"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">usage</span><span class="p">)</span>
+
 <div class="viewcode-block" id="OpenAIResponseOperator.execute">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/operators/openai/index.html#airflow.providers.openai.operators.openai.OpenAIResponseOperator.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">create_response</span><span class="p">(</span>
-            <span class="nb">input</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">input_text</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_response_kwargs</span><span class="p">()</span>
-        <span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">response_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_response_kwargs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_format</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">parsed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">parse_response</span><span class="p">(</span>
+                    <span class="nb">input</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">input_text</span><span class="p">,</span>
+                    <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+                    <span class="n">text_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">text_format</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">response_kwargs</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="c1"># ``responses.parse`` raises ``ValidationError`` when the model's JSON output</span>
+                <span class="c1"># can't be coerced into ``text_format`` — most commonly because the response</span>
+                <span class="c1"># was truncated (e.g. ``max_output_tokens`` hit) mid-JSON. Convert to a clean</span>
+                <span class="c1"># ``ValueError`` so callers see a consistent shape across all parse failures.</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"OpenAI Responses API returned a payload that does not match "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">text_format</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. The response may have been truncated because "</span>
+                    <span class="sa">f</span><span class="s2">"max_output_tokens was reached: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Generated response </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">parsed</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="c1"># Pushed before the checks below: a response they reject was still billed.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_push_response_metadata</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">parsed</span><span class="p">)</span>
+            <span class="n">details</span> <span class="o">=</span> <span class="n">_get_structured_response_details</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">parsed</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="s2">"completed"</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Response </span><span class="si">{</span><span class="n">parsed</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> did not complete (</span><span class="si">{</span><span class="n">details</span><span class="si">}</span><span class="s2">)."</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">parsed</span><span class="o">.</span><span class="n">output_parsed</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Response </span><span class="si">{</span><span class="n">parsed</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> did not return a structured output (</span><span class="si">{</span><span class="n">details</span><span class="si">}</span><span class="s2">)."</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">parsed</span><span class="o">.</span><span class="n">output_parsed</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">create_response</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">input_text</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="o">**</span><span class="n">response_kwargs</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">"incomplete"</span><span class="p">:</span>
             <span class="n">reason</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">incomplete_details</span><span class="o">.</span><span class="n">reason</span> <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">incomplete_details</span> <span class="k">else</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">reason</span> <span class="ow">and</span> <span class="n">response</span><span class="o">.</span><span class="n">output_text</span><span class="p">:</span>
@@ -1034,22 +1150,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">response</span><span class="o">.</span><span class="n">status</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Generated response </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">response</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
-            <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">"response_id"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">response</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-            <span class="c1"># model_dump (not a hand-picked field list) keeps a token-usage dimension</span>
-            <span class="c1"># the API adds later from being silently dropped; mode="json" keeps the</span>
-            <span class="c1"># value XCom-serializable.</span>
-            <span class="c1">#</span>
-            <span class="c1"># XCom is cleared at the start of every attempt, so this key only ever holds</span>
-            <span class="c1"># the last one. Stamping the attempt makes that visible rather than silently</span>
-            <span class="c1"># under-reporting total spend across retries. Built as a new dict rather than</span>
-            <span class="c1"># mutating what model_dump() returned.</span>
-            <span class="n">usage</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="p">{</span><span class="o">**</span><span class="n">response</span><span class="o">.</span><span class="n">usage</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span> <span class="s2">"try_number"</span><span class="p">:</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">try_number</span><span class="p">}</span>
-                <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">usage</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-                <span class="k">else</span> <span class="kc">None</span>
-            <span class="p">)</span>
-            <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">"usage"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">usage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_push_response_metadata</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">output_text</span></div>
 </div>
 
@@ -1069,9 +1170,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param deferrable: Optional. Run operator in the deferrable mode.</span>
 <span class="sd">    :param wait_seconds: Optional. Number of seconds between checks. Only used when ``deferrable`` is False.</span>
 <span class="sd">        Defaults to 3 seconds.</span>
-<span class="sd">    :param timeout: Optional. The amount of time, in seconds, to wait for the request to complete.</span>
-<span class="sd">        Applies in both deferrable and non-deferrable mode. Defaults to 24 hours, which is the SLA for</span>
-<span class="sd">        OpenAI Batch API.</span>
+<span class="sd">    :param timeout: Optional. The number of seconds to wait for the batch to complete, in both</span>
+<span class="sd">        deferrable and non-deferrable mode. Defaults to 24 hours, the SLA for OpenAI Batch API.</span>
+<span class="sd">        In deferrable mode, if ``execution_timeout`` is set shorter than ``timeout``, the task is</span>
+<span class="sd">        failed with ``TaskDeferralTimeout`` before the trigger times out, and the batch is not cancelled.</span>
 <span class="sd">    :param wait_for_completion: Optional. Whether to wait for the batch to complete. If set to False, the operator</span>
 <span class="sd">        will return immediately after triggering the batch. Defaults to True.</span>
 <span class="sd">    :param metadata: Optional. A set of key-value pairs that can be attached to the batch. (templated)</span>
@@ -1211,15 +1313,57 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        Invoke this callback when the trigger fires; return immediately.</span>
 
 <span class="sd">        Relies on trigger to throw an exception, otherwise it assumes execution was</span>
-<span class="sd">        successful.</span>
+<span class="sd">        successful. The exception raised depends on the event's ``termination_reason``:</span>
+<span class="sd">        :class:`~airflow.providers.openai.exceptions.OpenAIBatchTimeout` for a timeout</span>
+<span class="sd">        (matching the exception the synchronous path raises for the same condition),</span>
+<span class="sd">        :class:`~airflow.providers.openai.exceptions.OpenAIBatchCancelled` for a cancellation</span>
+<span class="sd">        (a subclass of :class:`~airflow.providers.openai.exceptions.OpenAIBatchJobException`),</span>
+<span class="sd">        and :class:`~airflow.providers.openai.exceptions.OpenAIBatchJobException` for any</span>
+<span class="sd">        other failure (including events from a trigger serialized before</span>
+<span class="sd">        ``termination_reason`` existed).</span>
+
+<span class="sd">        On a timeout, cancellation of the batch is requested before the timeout is raised</span>
+<span class="sd">        (see :meth:`_cancel_batch_quietly`). No other termination reason triggers</span>
+<span class="sd">        cancellation: a ``polling_error`` may be a transient, Airflow-side failure rather than</span>
+<span class="sd">        a real batch problem, and cancellation is irreversible, so it is left alone to run to</span>
+<span class="sd">        its own 24-hour completion window instead.</span>
 <span class="sd">        """</span>
         <span class="n">event</span> <span class="o">=</span> <span class="n">validate_execute_complete_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"success"</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"termination_reason"</span><span class="p">)</span> <span class="o">==</span> <span class="n">TerminationReason</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span>
+                <span class="n">batch_id</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"batch_id"</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">"</span><span class="si">%s</span><span class="s2"> timed out waiting for batch </span><span class="si">%s</span><span class="s2">; requesting cancellation."</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
+                    <span class="n">batch_id</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_batch_quietly</span><span class="p">(</span><span class="n">batch_id</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">build_batch_error</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">],</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"termination_reason"</span><span class="p">))</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> completed successfully."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">event</span><span class="p">[</span><span class="s2">"batch_id"</span><span class="p">]</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_cancel_batch_quietly</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Best-effort request to cancel a batch; never raises.</span>
+
+<span class="sd">        Takes ``batch_id`` as a parameter rather than reading ``self.batch_id`` because it has</span>
+<span class="sd">        two callers with different sources for it: ``execute_complete``, after a deferred</span>
+<span class="sd">        timeout, passes the batch id carried by the trigger event, since it runs on a resumed</span>
+<span class="sd">        task instance where ``execute``'s assignment to ``self.batch_id`` never happened;</span>
+<span class="sd">        ``on_kill`` passes ``self.batch_id`` directly, already set by ``execute`` on this same</span>
+<span class="sd">        operator instance.</span>
+
+<span class="sd">        Cancellation on OpenAI's side is asynchronous: the batch reports ``cancelling`` for up</span>
+<span class="sd">        to 10 minutes before it settles as ``cancelled``, so this only requests cancellation. A</span>
+<span class="sd">        failure to cancel is logged, not raised, so it never masks the real failure reason</span>
+<span class="sd">        (the timeout, or the kill).</span>
+<span class="sd">        """</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">cancel_batch</span><span class="p">(</span><span class="n">batch_id</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to request cancellation of batch </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
 <div class="viewcode-block" id="OpenAITriggerBatchOperator.on_kill">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/operators/openai/index.html#airflow.providers.openai.operators.openai.OpenAITriggerBatchOperator.on_kill">[docs]</a>
@@ -1227,7 +1371,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="w">        </span><span class="sd">"""Cancel the batch if task is cancelled."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_id</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"on_kill: cancel the OpenAI Batch </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_id</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">cancel_batch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_id</span><span class="p">)</span></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_batch_quietly</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_id</span><span class="p">)</span></div>
 </div>
 
 </pre></div>
@@ -1489,9 +1633,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=51b770b3"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=20623aea"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

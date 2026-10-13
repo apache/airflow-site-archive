@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.1.0</span>
+        <span class="version-label">Version: </span><span class="version">7.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -476,7 +476,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.1.0</span>
+        <span class="version-label">Version: </span><span class="version">7.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -661,17 +661,19 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">selectors</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">base64</span><span class="w"> </span><span class="kn">import</span> <span class="n">decodebytes</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">StringIO</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">select</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">paramiko</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">paramiko.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSH_PORT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">tenacity</span><span class="w"> </span><span class="kn">import</span> <span class="n">Retrying</span><span class="p">,</span> <span class="n">stop_after_attempt</span><span class="p">,</span> <span class="n">wait_fixed</span><span class="p">,</span> <span class="n">wait_random</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.connection</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_async_connection</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.ssh.tunnel</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSSHTunnel</span><span class="p">,</span> <span class="n">SSHTunnel</span>
@@ -741,6 +743,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        lifetime of the transport</span>
 <span class="sd">    :param ciphers: list of ciphers to use in order of preference</span>
 <span class="sd">    :param auth_timeout: timeout (in seconds) for the attempt to authenticate with the remote_host</span>
+<span class="sd">    :param no_host_key_check: Set to ``True`` to skip host key verification. Overrides the</span>
+<span class="sd">        connection's ``no_host_key_check`` extra. Defaults to ``None``, meaning the value is</span>
+<span class="sd">        taken from the connection, or ``False`` when the connection does not set it.</span>
 <span class="sd">    :param conn_retry_attempts: number of times to attempt the initial SSH connection before</span>
 <span class="sd">        giving up (default 3). Raising this helps when many tasks target the same SSH server at</span>
 <span class="sd">        once and some connections are transiently refused (e.g. ``sshd`` ``MaxStartups`` throttling).</span>
@@ -810,6 +815,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">auth_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">host_proxy_cmd</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">conn_retry_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="n">no_host_key_check</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 <div class="viewcode-block" id="SSHHook.ssh_conn_id">
@@ -884,7 +890,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="SSHHook.no_host_key_check">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/hooks/ssh/index.html#airflow.providers.ssh.hooks.ssh.SSHHook.no_host_key_check">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="kc">True</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="SSHHook.allow_host_key_change">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/hooks/ssh/index.html#airflow.providers.ssh.hooks.ssh.SSHHook.allow_host_key_change">[docs]</a>
@@ -898,6 +904,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/hooks/ssh/index.html#airflow.providers.ssh.hooks.ssh.SSHHook.look_for_keys">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">look_for_keys</span> <span class="o">=</span> <span class="kc">True</span></div>
 
+
+        <span class="c1"># Captured before parsing the connection extras, which rebind the `no_host_key_check`</span>
+        <span class="c1"># name below. Without a separate binding the caller's value is silently discarded</span>
+        <span class="c1"># whenever the connection has extras that do not mention host key checking.</span>
+        <span class="n">constructor_no_host_key_check</span> <span class="o">=</span> <span class="n">no_host_key_check</span>
+
+        <span class="c1"># Parsing a `host_key` extra forces `self.no_host_key_check` to False, so what the</span>
+        <span class="c1"># connection actually asked for is kept here and re-applied once parsing is done.</span>
+        <span class="n">extra_no_host_key_check</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># Placeholder for future cached connection</span>
 <div class="viewcode-block" id="SSHHook.client">
@@ -943,12 +958,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">host_key</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"host_key"</span><span class="p">)</span>
                 <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"no_host_key_check"</span><span class="p">)</span>
 
-                <span class="k">if</span> <span class="n">no_host_key_check</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">no_host_key_check</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span>
-                    <span class="k">if</span> <span class="n">host_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">no_host_key_check</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Must check host key when provided"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">no_host_key_check</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">"ignore_hostkey_verification"</span> <span class="ow">in</span> <span class="n">extra_options</span><span class="p">:</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                        <span class="s2">"The `ignore_hostkey_verification` connection extra is deprecated; "</span>
+                        <span class="s2">"use `no_host_key_check` instead."</span><span class="p">,</span>
+                        <span class="n">AirflowProviderDeprecationWarning</span><span class="p">,</span>
+                        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">extra_options</span><span class="p">[</span><span class="s2">"ignore_hostkey_verification"</span><span class="p">]</span>
 
-                    <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">no_host_key_check</span>
+                <span class="k">if</span> <span class="n">no_host_key_check</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">extra_no_host_key_check</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">no_host_key_check</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">extra_no_host_key_check</span>
 
                 <span class="k">if</span> <span class="p">(</span>
                     <span class="s2">"allow_host_key_change"</span> <span class="ow">in</span> <span class="n">extra_options</span>
@@ -991,6 +1012,21 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                     <span class="n">decoded_host_key</span> <span class="o">=</span> <span class="n">decodebytes</span><span class="p">(</span><span class="n">host_key</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">host_key</span> <span class="o">=</span> <span class="n">key_constructor</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">decoded_host_key</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="c1"># An explicit constructor argument wins over the connection extra and the default.</span>
+        <span class="c1"># Without this there is no way to opt out of host key verification when the hook is</span>
+        <span class="c1"># built directly rather than from a Connection.</span>
+        <span class="k">if</span> <span class="n">constructor_no_host_key_check</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">constructor_no_host_key_check</span>
+        <span class="k">elif</span> <span class="n">extra_no_host_key_check</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span> <span class="o">=</span> <span class="n">extra_no_host_key_check</span>
+
+        <span class="c1"># Validated on the effective value rather than on the extras alone, so that an explicit</span>
+        <span class="c1"># constructor argument can resolve a connection that sets both `host_key` and</span>
+        <span class="c1"># `no_host_key_check`, and so that skipping the check while a host key is configured is</span>
+        <span class="c1"># rejected whichever source asked for it.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">host_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_host_key_check</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Must check host key when provided"</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cmd_timeout</span> <span class="ow">is</span> <span class="n">NOTSET</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">cmd_timeout</span> <span class="o">=</span> <span class="n">CMD_TIMEOUT</span>
@@ -1242,36 +1278,42 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="n">timedout</span> <span class="o">=</span> <span class="kc">False</span>
 
-        <span class="c1"># read from both stdout and stderr</span>
-        <span class="k">while</span> <span class="ow">not</span> <span class="n">channel</span><span class="o">.</span><span class="n">closed</span> <span class="ow">or</span> <span class="n">channel</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">()</span> <span class="ow">or</span> <span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">():</span>
-            <span class="n">readq</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">select</span><span class="p">([</span><span class="n">channel</span><span class="p">],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="n">cmd_timeout</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">cmd_timeout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">timedout</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">readq</span>
-            <span class="k">for</span> <span class="n">recv</span> <span class="ow">in</span> <span class="n">readq</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">recv</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">():</span>
-                    <span class="n">output</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">recv</span><span class="o">.</span><span class="n">in_buffer</span><span class="p">))</span>
-                    <span class="n">agg_stdout</span> <span class="o">+=</span> <span class="n">output</span>
-                    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">recv</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">():</span>
-                    <span class="n">output</span> <span class="o">=</span> <span class="n">stderr</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">recv</span><span class="o">.</span><span class="n">in_stderr_buffer</span><span class="p">))</span>
-                    <span class="n">agg_stderr</span> <span class="o">+=</span> <span class="n">output</span>
-                    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
-            <span class="k">if</span> <span class="p">(</span>
-                <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">exit_status_ready</span><span class="p">()</span>
-                <span class="ow">and</span> <span class="ow">not</span> <span class="n">stderr</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">()</span>
-                <span class="ow">and</span> <span class="ow">not</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">()</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="n">timedout</span><span class="p">:</span>
-                <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">shutdown_read</span><span class="p">()</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-                    <span class="c1"># there is a race that when shutdown_read has been called and when</span>
-                    <span class="c1"># you try to close the connection, the socket is already closed</span>
-                    <span class="c1"># We should ignore such errors (but we should log them with warning)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Ignoring exception on close"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-                <span class="k">break</span>
+        <span class="c1"># select.select() rejects descriptors numbered FD_SETSIZE (1024) or above, which a task</span>
+        <span class="c1"># process can reach; DefaultSelector uses epoll/kqueue/poll where available.</span>
+        <span class="k">with</span> <span class="n">selectors</span><span class="o">.</span><span class="n">DefaultSelector</span><span class="p">()</span> <span class="k">as</span> <span class="n">selector</span><span class="p">:</span>
+            <span class="n">selector</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">channel</span><span class="p">,</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_READ</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">channel</span><span class="p">)</span>
+
+            <span class="c1"># read from both stdout and stderr</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">channel</span><span class="o">.</span><span class="n">closed</span> <span class="ow">or</span> <span class="n">channel</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">()</span> <span class="ow">or</span> <span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">():</span>
+                <span class="n">events</span> <span class="o">=</span> <span class="n">selector</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cmd_timeout</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cmd_timeout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">timedout</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">events</span>
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+                    <span class="n">recv</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">data</span>
+                    <span class="k">if</span> <span class="n">recv</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">():</span>
+                        <span class="n">output</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">recv</span><span class="o">.</span><span class="n">in_buffer</span><span class="p">))</span>
+                        <span class="n">agg_stdout</span> <span class="o">+=</span> <span class="n">output</span>
+                        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">recv</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">():</span>
+                        <span class="n">output</span> <span class="o">=</span> <span class="n">stderr</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">recv</span><span class="o">.</span><span class="n">in_stderr_buffer</span><span class="p">))</span>
+                        <span class="n">agg_stderr</span> <span class="o">+=</span> <span class="n">output</span>
+                        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">output</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">exit_status_ready</span><span class="p">()</span>
+                    <span class="ow">and</span> <span class="ow">not</span> <span class="n">stderr</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_stderr_ready</span><span class="p">()</span>
+                    <span class="ow">and</span> <span class="ow">not</span> <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">recv_ready</span><span class="p">()</span>
+                <span class="p">)</span> <span class="ow">or</span> <span class="n">timedout</span><span class="p">:</span>
+                    <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">shutdown_read</span><span class="p">()</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">stdout</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                        <span class="c1"># there is a race that when shutdown_read has been called and when</span>
+                        <span class="c1"># you try to close the connection, the socket is already closed</span>
+                        <span class="c1"># We should ignore such errors (but we should log them with warning)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Ignoring exception on close"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="k">break</span>
 
         <span class="n">stdout</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
         <span class="n">stderr</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -1412,7 +1454,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="n">host_key</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"host_key"</span><span class="p">)</span>
         <span class="n">nhkc_raw</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"no_host_key_check"</span><span class="p">)</span>
-        <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">nhkc_raw</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span> <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">"ignore_hostkey_verification"</span> <span class="ow">in</span> <span class="n">extra_options</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">"The `ignore_hostkey_verification` connection extra is deprecated; "</span>
+                <span class="s2">"use `no_host_key_check` instead."</span><span class="p">,</span>
+                <span class="n">AirflowProviderDeprecationWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">nhkc_raw</span> <span class="o">=</span> <span class="n">extra_options</span><span class="p">[</span><span class="s2">"ignore_hostkey_verification"</span><span class="p">]</span>
+        <span class="n">no_host_key_check</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">nhkc_raw</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span> <span class="k">if</span> <span class="n">nhkc_raw</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">False</span>
 
         <span class="k">if</span> <span class="n">host_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">no_host_key_check</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Host key check was skipped, but `host_key` value was given"</span><span class="p">)</span>
@@ -1430,7 +1480,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">host_key_parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">host_key</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">host_key_parts</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">conn</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># A bare key is RSA, as on the sync hook; asyncssh needs the type spelled out.</span>
+                <span class="n">host_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"ssh-rsa </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">conn</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">host_key</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_should_use_known_hosts</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Leave a missing default file unset so AsyncSSH reports an untrusted host."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span> <span class="o">==</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_known_hosts</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -1462,7 +1521,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"none"</span><span class="p">:</span>
                 <span class="n">conn_config</span><span class="p">[</span><span class="s2">"known_hosts"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">else</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_should_use_known_hosts</span><span class="p">():</span>
                 <span class="n">conn_config</span><span class="p">[</span><span class="s2">"known_hosts"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">known_hosts</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">private_key</span><span class="p">:</span>
             <span class="n">_private_key</span> <span class="o">=</span> <span class="n">asyncssh</span><span class="o">.</span><span class="n">import_private_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">private_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">passphrase</span><span class="p">)</span>
@@ -1807,9 +1866,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=6340cb70"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=efe5be6f"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

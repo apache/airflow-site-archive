@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.0.0</span>
+        <span class="version-label">Version: </span><span class="version">2.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -673,7 +673,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">overload</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">overload</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">deprecated</span><span class="w"> </span><span class="kn">import</span> <span class="n">deprecated</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAI</span>
@@ -703,13 +703,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">ChatCompletionUserMessageParam</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.conversations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Conversation</span><span class="p">,</span> <span class="n">ConversationDeletedResource</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParsedResponse</span><span class="p">,</span> <span class="n">Response</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.vector_stores</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorStoreFile</span><span class="p">,</span> <span class="n">VectorStoreFileBatch</span><span class="p">,</span> <span class="n">VectorStoreFileDeleted</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.module_loading</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_string</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">OpenAIAgentSessionError</span><span class="p">,</span>
+    <span class="n">OpenAIBatchCancelled</span><span class="p">,</span>
     <span class="n">OpenAIBatchJobException</span><span class="p">,</span>
     <span class="n">OpenAIBatchTimeout</span><span class="p">,</span>
     <span class="n">OpenAITriggerEventError</span><span class="p">,</span>
@@ -723,6 +725,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="s2">"Use the Responses API (create_response) and Conversations API (create_conversation) instead. "</span>
     <span class="s2">"See https://platform.openai.com/docs/guides/migrate-to-responses."</span>
 <span class="p">)</span>
+
+<span class="c1">#: Generic type variable for the Pydantic model used as the ``text_format`` in structured-output</span>
+<span class="c1">#: Responses API calls. Mirrors the SDK's ``TextFormatT`` so ``parse_response`` returns a</span>
+<span class="c1">#: ``ParsedResponse[T]`` — callers get ``output_parsed`` typed as ``T | None``.</span>
+<span class="n">_TextFormatT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"_TextFormatT"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">"BaseModel"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="BatchStatus">
@@ -783,6 +790,69 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="TRIGGER_EVENT_STATUSES">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TRIGGER_EVENT_STATUSES">[docs]</a>
 <span class="n">TRIGGER_EVENT_STATUSES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"success"</span><span class="p">,</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"cancelled"</span><span class="p">})</span></div>
+
+
+
+<div class="viewcode-block" id="TerminationReason">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TerminationReason</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Enum for the ``termination_reason`` field of a trigger's terminal event."""</span>
+
+<div class="viewcode-block" id="TerminationReason.TIMEOUT">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.TIMEOUT">[docs]</a>
+    <span class="n">TIMEOUT</span> <span class="o">=</span> <span class="s2">"timeout"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.COMPLETED">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.COMPLETED">[docs]</a>
+    <span class="n">COMPLETED</span> <span class="o">=</span> <span class="s2">"completed"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.CANCELLED">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.CANCELLED">[docs]</a>
+    <span class="n">CANCELLED</span> <span class="o">=</span> <span class="s2">"cancelled"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.FAILED">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.FAILED">[docs]</a>
+    <span class="n">FAILED</span> <span class="o">=</span> <span class="s2">"failed"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.EXPIRED">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.EXPIRED">[docs]</a>
+    <span class="n">EXPIRED</span> <span class="o">=</span> <span class="s2">"expired"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.UNEXPECTED_STATUS">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.UNEXPECTED_STATUS">[docs]</a>
+    <span class="n">UNEXPECTED_STATUS</span> <span class="o">=</span> <span class="s2">"unexpected_status"</span></div>
+
+<div class="viewcode-block" id="TerminationReason.POLLING_ERROR">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.TerminationReason.POLLING_ERROR">[docs]</a>
+    <span class="n">POLLING_ERROR</span> <span class="o">=</span> <span class="s2">"polling_error"</span></div>
+</div>
+
+
+
+<span class="c1"># Maps the trigger's ``termination_reason`` field to the exception ``execute_complete``</span>
+<span class="c1"># should raise. Keyed on the reason field, never on the message text, so that a</span>
+<span class="c1"># rewording of the trigger's message never silently changes which exception a</span>
+<span class="c1"># downstream task can catch.</span>
+<span class="n">_TERMINATION_REASON_EXCEPTIONS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">[</span><span class="n">AirflowException</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">TerminationReason</span><span class="o">.</span><span class="n">TIMEOUT</span><span class="p">:</span> <span class="n">OpenAIBatchTimeout</span><span class="p">,</span>
+    <span class="n">TerminationReason</span><span class="o">.</span><span class="n">CANCELLED</span><span class="p">:</span> <span class="n">OpenAIBatchCancelled</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="build_batch_error">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.build_batch_error">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_batch_error</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">termination_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AirflowException</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Build (but do not raise) the exception matching a trigger event's termination reason.</span>
+
+<span class="sd">    ``termination_reason`` is ``None`` when the event was produced by a trigger</span>
+<span class="sd">    serialized before this field existed (a rolling upgrade in flight); that case</span>
+<span class="sd">    falls back to ``OpenAIBatchJobException``, matching today's behavior.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">termination_reason</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="n">exception_class</span> <span class="o">=</span> <span class="n">_TERMINATION_REASON_EXCEPTIONS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">termination_reason</span><span class="p">,</span> <span class="n">OpenAIBatchJobException</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">exception_class</span><span class="p">(</span><span class="n">message</span><span class="p">)</span></div>
 
 
 
@@ -998,6 +1068,34 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        :param model: ID of the model to use.</span>
 <span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">responses</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="nb">input</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="OpenAIHook.parse_response">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openai/hooks/openai/index.html#airflow.providers.openai.hooks.openai.OpenAIHook.parse_response">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_response</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="nb">input</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"gpt-4o-mini"</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">text_format</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">_TextFormatT</span><span class="p">],</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ParsedResponse</span><span class="p">[</span><span class="n">_TextFormatT</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Create a model response and parse it into a Pydantic model via the Responses API.</span>
+
+<span class="sd">        Wraps :py:meth:`openai.resources.responses.Responses.parse`. The SDK converts</span>
+<span class="sd">        ``text_format`` into a JSON schema, sends it as a structured-output request, and</span>
+<span class="sd">        returns a :class:`~openai.types.responses.ParsedResponse` whose ``output_parsed``</span>
+<span class="sd">        attribute is an instance of ``text_format``, or ``None`` when the response carries no</span>
+<span class="sd">        parsed output (for example a refusal).</span>
+
+<span class="sd">        :param input: Text, image, or file input(s) to the model.</span>
+<span class="sd">        :param model: ID of the model to use.</span>
+<span class="sd">        :param text_format: A Pydantic ``BaseModel`` subclass describing the expected</span>
+<span class="sd">            structured output. Keyword-only, as in the SDK. The SDK converts it to a JSON schema</span>
+<span class="sd">            and sends the structured-output request.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">responses</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="nb">input</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">text_format</span><span class="o">=</span><span class="n">text_format</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="OpenAIHook.get_response">
@@ -1528,7 +1626,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
         <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">start</span> <span class="o">+</span> <span class="n">timeout</span> <span class="o">&lt;</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">():</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">cancel_batch</span><span class="p">(</span><span class="n">batch_id</span><span class="o">=</span><span class="n">batch_id</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">cancel_batch</span><span class="p">(</span><span class="n">batch_id</span><span class="o">=</span><span class="n">batch_id</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">"Failed to request cancellation of batch </span><span class="si">%s</span><span class="s2"> after timeout: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">,</span> <span class="n">e</span>
+                    <span class="p">)</span>
                 <span class="k">raise</span> <span class="n">OpenAIBatchTimeout</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Timeout: OpenAI Batch </span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2"> is not ready after </span><span class="si">{</span><span class="n">timeout</span><span class="si">}</span><span class="s2">s"</span><span class="p">)</span>
             <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_batch</span><span class="p">(</span><span class="n">batch_id</span><span class="o">=</span><span class="n">batch_id</span><span class="p">)</span>
 
@@ -1540,10 +1643,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">if</span> <span class="n">batch</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">BatchStatus</span><span class="o">.</span><span class="n">FAILED</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Batch failed - </span><span class="se">\n</span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">batch</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="p">(</span><span class="n">BatchStatus</span><span class="o">.</span><span class="n">CANCELLED</span><span class="p">,</span> <span class="n">BatchStatus</span><span class="o">.</span><span class="n">CANCELLING</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Batch failed - batch was cancelled:</span><span class="se">\n</span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">OpenAIBatchCancelled</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Batch failed - batch was cancelled:</span><span class="se">\n</span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">batch</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">BatchStatus</span><span class="o">.</span><span class="n">EXPIRED</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">"Batch failed - batch couldn't be completed within the hour time window :</span><span class="se">\n</span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2">"</span>
+                    <span class="sa">f</span><span class="s2">"Batch failed - batch couldn't be completed within its completion window:</span><span class="se">\n</span><span class="si">{</span><span class="n">batch_id</span><span class="si">}</span><span class="s2">"</span>
                 <span class="p">)</span>
 
             <span class="k">raise</span> <span class="n">OpenAIBatchJobException</span><span class="p">(</span>
@@ -1906,9 +2009,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=51b770b3"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=20623aea"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

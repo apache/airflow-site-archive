@@ -683,6 +683,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
@@ -691,6 +692,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">quote</span><span class="p">,</span> <span class="n">urljoin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">aiohttp</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientConnectionError</span><span class="p">,</span> <span class="n">ClientResponseError</span><span class="p">,</span> <span class="n">ServerTimeoutError</span><span class="p">,</span> <span class="n">request</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">retryhttp</span><span class="w"> </span><span class="kn">import</span> <span class="n">retry</span><span class="p">,</span> <span class="n">wait_retry_after</span>
@@ -864,13 +866,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">queues</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">free_concurrency</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">team_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">supports_task_instance_uuid</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EdgeJobFetched</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fetch a job to execute on the edge worker."""</span>
     <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">_make_generic_request</span><span class="p">(</span>
         <span class="s2">"POST"</span><span class="p">,</span>
         <span class="sa">f</span><span class="s2">"jobs/fetch/</span><span class="si">{</span><span class="n">quote</span><span class="p">(</span><span class="n">hostname</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
         <span class="n">WorkerQueuesBody</span><span class="p">(</span>
-            <span class="n">queues</span><span class="o">=</span><span class="n">queues</span><span class="p">,</span> <span class="n">free_concurrency</span><span class="o">=</span><span class="n">free_concurrency</span><span class="p">,</span> <span class="n">team_name</span><span class="o">=</span><span class="n">team_name</span>
+            <span class="n">queues</span><span class="o">=</span><span class="n">queues</span><span class="p">,</span>
+            <span class="n">free_concurrency</span><span class="o">=</span><span class="n">free_concurrency</span><span class="p">,</span>
+            <span class="n">team_name</span><span class="o">=</span><span class="n">team_name</span><span class="p">,</span>
+            <span class="n">supports_task_instance_uuid</span><span class="o">=</span><span class="n">supports_task_instance_uuid</span><span class="p">,</span>
         <span class="p">)</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span><span class="n">exclude_unset</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
     <span class="p">)</span>
     <span class="k">if</span> <span class="n">result</span><span class="p">:</span>
@@ -881,11 +888,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="jobs_set_state">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/cli/api_client/index.html#airflow.providers.edge3.cli.api_client.jobs_set_state">[docs]</a>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">jobs_set_state</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">TaskInstanceState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">jobs_set_state</span><span class="p">(</span>
+    <span class="n">key</span><span class="p">:</span> <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">TaskInstanceState</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">task_instance_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Set the state of a job."""</span>
     <span class="k">await</span> <span class="n">_make_generic_request</span><span class="p">(</span>
         <span class="s2">"PATCH"</span><span class="p">,</span>
         <span class="sa">f</span><span class="s2">"jobs/state/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">dag_id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">run_id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">try_number</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="o">.</span><span class="n">map_index</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">state</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">"task_instance_id"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">task_instance_id</span><span class="p">)})</span> <span class="k">if</span> <span class="n">task_instance_id</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -1179,8 +1189,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../../../../../_static/documentation_options.js?v=ce74c6a2"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

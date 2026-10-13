@@ -1,0 +1,199 @@
+tests.system.openlineage.operator
+=================================
+
+.. py:module:: tests.system.openlineage.operator
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   tests.system.openlineage.operator.NoVariableError
+   tests.system.openlineage.operator.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   tests.system.openlineage.operator.OpenLineageTestOperator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tests.system.openlineage.operator.any
+   tests.system.openlineage.operator.is_numeric
+   tests.system.openlineage.operator.is_datetime
+   tests.system.openlineage.operator.is_uuid
+   tests.system.openlineage.operator.regex_match
+   tests.system.openlineage.operator.env_var
+   tests.system.openlineage.operator.not_match
+   tests.system.openlineage.operator.url_scheme_authority
+   tests.system.openlineage.operator.url_path
+   tests.system.openlineage.operator.setup_jinja
+   tests.system.openlineage.operator.match
+
+
+Module Contents
+---------------
+
+.. py:data:: NoVariableError
+
+.. py:data:: log
+
+.. py:function:: any(result)
+
+.. py:function:: is_numeric(result)
+
+.. py:function:: is_datetime(result)
+
+.. py:function:: is_uuid(result)
+
+.. py:function:: regex_match(result, pattern)
+
+.. py:function:: env_var(var, default = None)
+
+   Use this jinja method to access the environment variable named 'var'.
+
+   If there is no such environment variable set, return the default.
+   If the default is None, raise an exception for an undefined variable.
+
+
+.. py:function:: not_match(result, pattern)
+
+.. py:function:: url_scheme_authority(url)
+
+.. py:function:: url_path(url)
+
+.. py:function:: setup_jinja()
+
+.. py:function:: match(expected, result, env, path = None)
+
+   Check if result is "equal" to expected value.
+
+   Omits keys not specified in expected value and resolves any jinja templates found.
+
+   Special sentinel values in expected dicts:
+
+   ``None`` (JSON ``null``) means the key must not be present in the result.
+
+   ``{"$optional": "<reason>", ...}`` means the key is optional. When the key is
+   present, the remaining template keys are validated. When the key is absent,
+   validation passes silently and the reason is logged.
+
+   ``{"$optional": "<reason>", "$value": <list_template>}`` is the list-template
+   form of the optional sentinel. It behaves the same way, but also skips validation
+   when the actual value is an empty list. Use this form when the template value is a
+   list rather than a dict. Dict templates embed their keys directly alongside
+   ``"$optional"``.
+
+
+
+.. py:class:: OpenLineageTestOperator(event_templates = None, file_path = None, env = None, event_count_assertions = None, clear_variables = True, fail_fast = False, event_sort_fn = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   This operator is added for system testing purposes.
+
+   It compares expected event templates set on initialization with ones emitted by OpenLineage integration
+   and stored in Variables by VariableTransport.
+
+   Note:
+       If `clear_variables` is True, only the Airflow Variables listed in `event_templates`
+       (or derived from `file_path`) will be deleted - those that are supposed to be checked by the Operator.
+       We won't remove all Airflow Variables to avoid interfering with other instances of this Operator
+       running in parallel on different DAGs. Running continuous system tests without clearing Variables
+       may lead to leftover or growing Variables size. We recommend implementing a process to remove all
+       Airflow Variables after all system tests have run to ensure a clean environment for each test run.
+
+   :param event_templates: Dictionary where each key is the key used by VariableTransport,
+       in the format ``<DAG_ID>.<TASK_ID>.event.<EVENT_TYPE>``. Each value may be one of
+       the following: a single event template dict, matched against the last received event;
+       a list of event template dicts, matched pairwise against all received events after
+       sorting with ``event_sort_fn`` when provided; or ``{"$absent": "<reason>"}``, which
+       asserts that no events exist for that key. The ``"$absent"`` reason is logged and
+       included in the error if events are unexpectedly found.
+   :param file_path: alternatively, a path to a JSON file containing an array of event templates.
+       Multiple events sharing the same ``job.name`` + ``eventType`` key are accumulated into a list.
+       An event with ``"$absent": "<reason>"`` asserts the variable must not exist.
+   :param env: jinja environment used to render event templates.
+   :param event_count_assertions: dict mapping a regex pattern (matched against variable keys) to a
+       count expression. Supported expressions: ``"N"``, ``"==N"``, ``">=N"``, ``"<=N"``.
+       Applied to single-template keys only; list-template keys derive their count from the list length.
+       Example: ``{".*\.event\.start": ">=2"}``.
+   :param clear_variables: if True, deletes only the checked variables after all checks run (or on
+       failure). Default True.
+   :param fail_fast: if True, raise on the first failure. If False (default), collect all failures
+       and raise a combined error at the end.
+   :param event_sort_fn: optional callable ``(event: dict) -> Any`` used to sort actual events
+       ascending before comparison. Useful for mapped tasks whose events arrive in non-deterministic
+       order. When the template for a key is a list, sorting is required for pairwise comparison to
+       be meaningful.
+
+   Special sentinel values in expected dicts:
+
+   ``None`` (JSON ``null``) means the key must not be present in the result.
+
+   ``{"$optional": "<reason>", ...}`` means the key is optional. When the key is
+   present, the remaining template keys are validated. When the key is absent,
+   validation passes silently and the reason is logged.
+
+   ``{"$optional": "<reason>", "$value": <list_template>}`` is the list-template
+   form of the optional sentinel. It behaves the same way, but also skips validation
+   when the actual value is an empty list. Use this form when the template value is a
+   list rather than a dict. Dict templates embed their keys directly alongside
+   ``"$optional"``.
+
+   :raises: ValueError if the received events do not match with expected ones.
+
+
+   .. py:attribute:: event_templates
+      :value: None
+
+
+
+   .. py:attribute:: file_path
+      :value: None
+
+
+
+   .. py:attribute:: env
+
+
+   .. py:attribute:: event_count_assertions
+      :value: None
+
+
+
+   .. py:attribute:: clear_variables
+      :value: True
+
+
+
+   .. py:attribute:: fail_fast
+      :value: False
+
+
+
+   .. py:attribute:: event_sort_fn
+      :value: None
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+

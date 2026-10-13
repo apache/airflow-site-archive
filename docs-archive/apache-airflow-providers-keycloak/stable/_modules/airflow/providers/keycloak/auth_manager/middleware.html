@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.11.0</span>
+        <span class="version-label">Version: </span><span class="version">0.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.11.0</span>
+        <span class="version-label">Version: </span><span class="version">0.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -735,6 +735,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">user</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">new_token</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">new_user</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">session_invalidated</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">new_user</span><span class="p">,</span> <span class="n">current_user</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_refresh_user</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
@@ -761,7 +762,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">if</span> <span class="n">new_token</span> <span class="o">==</span> <span class="s2">""</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">"jwt_token_issued"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                 <span class="n">new_token</span> <span class="o">=</span> <span class="kc">None</span>
 
-            <span class="k">if</span> <span class="n">new_user</span> <span class="ow">or</span> <span class="n">new_token</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">new_user</span> <span class="ow">and</span> <span class="ow">not</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_jwt_still_valid</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+                <span class="c1"># The Airflow JWT sent with the request was invalidated while the request was</span>
+                <span class="c1"># handled (e.g. by the logout route). Do not replace it with a freshly signed</span>
+                <span class="c1"># one -- that would keep the session alive -- and clear the session cookies.</span>
+                <span class="n">new_user</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">session_invalidated</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="k">if</span> <span class="n">new_user</span> <span class="ow">or</span> <span class="n">new_token</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">session_invalidated</span><span class="p">:</span>
                 <span class="n">secure</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">base_url</span><span class="o">.</span><span class="n">scheme</span> <span class="o">==</span> <span class="s2">"https"</span> <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"ssl_cert"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">))</span>
                 <span class="n">cookie_path</span> <span class="o">=</span> <span class="n">get_cookie_path</span><span class="p">()</span>
                 <span class="k">if</span> <span class="n">new_token</span> <span class="o">==</span> <span class="s2">""</span><span class="p">:</span>
@@ -890,6 +898,31 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">max_age</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="n">response</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_is_jwt_still_valid</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Check whether the Airflow JWT sent with the request is still accepted.</span>
+
+<span class="sd">        It was valid when the request came in, so it is rejected now only if it was revoked</span>
+<span class="sd">        while the request was handled. Expiry in the meantime is not treated as revocation:</span>
+<span class="sd">        the refreshed session replaces the token anyway.</span>
+<span class="sd">        """</span>
+        <span class="n">jwt_token</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">COOKIE_NAME_JWT_TOKEN</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">jwt_token</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">auth_manager</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">"KeycloakAuthManager"</span><span class="p">,</span> <span class="n">get_auth_manager</span><span class="p">())</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">auth_manager</span><span class="o">.</span><span class="n">get_user_from_token</span><span class="p">(</span>
+                <span class="n">jwt_token</span><span class="p">,</span>
+                <span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">COOKIE_NAME_ACCESS_TOKEN</span><span class="p">),</span>
+                <span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">COOKIE_NAME_REFRESH_TOKEN</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">ExpiredSignatureError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="n">InvalidTokenError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_refresh_user</span><span class="p">(</span>
@@ -1173,9 +1206,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=f3b36f1a"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=57cbeb03"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

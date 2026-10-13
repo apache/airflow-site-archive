@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.2.0</span>
+        <span class="version-label">Version: </span><span class="version">2.3.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -484,7 +484,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.2.0</span>
+        <span class="version-label">Version: </span><span class="version">2.3.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -675,6 +675,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_qsl</span><span class="p">,</span> <span class="n">urlsplit</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">datafusion</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionContext</span>
 
@@ -835,6 +836,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="k">return</span> <span class="n">extra_dejson</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span>
             <span class="k">return</span> <span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"extra__google_cloud_platform__</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
+        <span class="k">def</span><span class="w"> </span><span class="nf">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">field_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="c1"># Older Airflow connection UIs wrote custom extra fields as</span>
+            <span class="c1"># extra__wasb__&lt;field_name&gt; instead of the bare key; WasbHook still reads that</span>
+            <span class="c1"># legacy spelling as a fallback, so this must too.</span>
+            <span class="k">return</span> <span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field_name</span><span class="p">,</span> <span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"extra__wasb__</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">"</span><span class="p">))</span>
+
         <span class="k">match</span> <span class="n">conn</span><span class="o">.</span><span class="n">conn_type</span><span class="p">:</span>
             <span class="k">case</span> <span class="s2">"aws"</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
@@ -878,6 +885,66 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">key_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"GOOGLE_APPLICATION_CREDENTIALS"</span><span class="p">)</span>
                 <span class="n">credentials</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remove_none_values</span><span class="p">({</span><span class="s2">"key_path"</span><span class="p">:</span> <span class="n">key_path</span><span class="p">,</span> <span class="s2">"keyfile_dict"</span><span class="p">:</span> <span class="n">keyfile_dict</span><span class="p">})</span>
 
+            <span class="k">case</span> <span class="s2">"wasb"</span><span class="p">:</span>
+                <span class="n">extra_dejson</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span>
+                <span class="k">for</span> <span class="n">unsupported_field</span> <span class="ow">in</span> <span class="p">(</span>
+                    <span class="s2">"connection_string"</span><span class="p">,</span>
+                    <span class="s2">"managed_identity_client_id"</span><span class="p">,</span>
+                    <span class="s2">"workload_identity_tenant_id"</span><span class="p">,</span>
+                <span class="p">):</span>
+                    <span class="k">if</span> <span class="n">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">,</span> <span class="n">unsupported_field</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">"Connection field </span><span class="si">{</span><span class="n">unsupported_field</span><span class="si">!r}</span><span class="s2"> is not supported for DataFusion "</span>
+                            <span class="s2">"Azure Blob Storage access; only tenant_id+login+password (service "</span>
+                            <span class="s2">"principal), sas_token, shared_access_key/account_key/password, or ambient "</span>
+                            <span class="s2">"credentials (AZURE_* environment variables, managed identity, workload "</span>
+                            <span class="s2">"identity, or az login) are used."</span>
+                        <span class="p">)</span>
+                <span class="n">credentials</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"account"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_wasb_account</span><span class="p">(</span><span class="n">conn</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">)}</span>
+                <span class="n">credential_tier</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="n">tenant_id</span> <span class="o">:=</span> <span class="n">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">,</span> <span class="s2">"tenant_id"</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">conn</span><span class="o">.</span><span class="n">password</span><span class="p">:</span>
+                        <span class="c1"># Falling through here would silently switch identity (ambient auth, or</span>
+                        <span class="c1"># the client secret sent as a shared key) instead of failing clearly.</span>
+                        <span class="n">missing</span> <span class="o">=</span> <span class="s2">"login (client_id)"</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span> <span class="k">else</span> <span class="s2">"password (client_secret)"</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">"Connection extra 'tenant_id' is set for DataFusion Azure Blob Storage "</span>
+                            <span class="sa">f</span><span class="s2">"service-principal auth, but </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2"> is not."</span>
+                        <span class="p">)</span>
+                    <span class="n">credentials</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">"client_id"</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">,</span> <span class="s2">"client_secret"</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="s2">"tenant_id"</span><span class="p">:</span> <span class="n">tenant_id</span><span class="p">}</span>
+                    <span class="p">)</span>
+                    <span class="n">credential_tier</span> <span class="o">=</span> <span class="s2">"client_secret"</span>
+                <span class="k">elif</span> <span class="n">shared_access_key</span> <span class="o">:=</span> <span class="n">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">,</span> <span class="s2">"shared_access_key"</span><span class="p">):</span>
+                    <span class="c1"># Checked ahead of sas_token to match WasbHook.get_conn's precedence.</span>
+                    <span class="n">credentials</span><span class="p">[</span><span class="s2">"access_key"</span><span class="p">]</span> <span class="o">=</span> <span class="n">shared_access_key</span>
+                    <span class="n">credential_tier</span> <span class="o">=</span> <span class="s2">"access_key"</span>
+                <span class="k">elif</span> <span class="n">sas_token</span> <span class="o">:=</span> <span class="n">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">,</span> <span class="s2">"sas_token"</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">sas_token</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"http"</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="s2">"A URL-form `sas_token` is not supported for DataFusion Azure Blob Storage "</span>
+                            <span class="s2">"access; provide the SAS token as a query string instead."</span>
+                        <span class="p">)</span>
+                    <span class="n">credentials</span><span class="p">[</span><span class="s2">"sas_query_pairs"</span><span class="p">]</span> <span class="o">=</span> <span class="n">parse_qsl</span><span class="p">(</span><span class="n">sas_token</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">"?"</span><span class="p">))</span>
+                    <span class="n">credential_tier</span> <span class="o">=</span> <span class="s2">"sas"</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">access_key</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">password</span> <span class="ow">or</span> <span class="n">_get_wasb_extra_field</span><span class="p">(</span><span class="n">extra_dejson</span><span class="p">,</span> <span class="s2">"account_key"</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">access_key</span><span class="p">:</span>
+                        <span class="n">credentials</span><span class="p">[</span><span class="s2">"access_key"</span><span class="p">]</span> <span class="o">=</span> <span class="n">access_key</span>
+                        <span class="n">credential_tier</span> <span class="o">=</span> <span class="s2">"access_key"</span>
+
+                <span class="k">if</span> <span class="n">credential_tier</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">conflicting_env_vars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_conflicting_azure_env_vars</span><span class="p">(</span><span class="n">credential_tier</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">conflicting_env_vars</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">"Worker environment variable(s) </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conflicting_env_vars</span><span class="p">)</span><span class="si">}</span><span class="s2"> would "</span>
+                            <span class="s2">"silently take precedence over this connection's explicit credential in "</span>
+                            <span class="s2">"DataFusion's Azure Blob Storage binding. Unset them on the worker, or "</span>
+                            <span class="s2">"remove the explicit credential from this connection to rely on the "</span>
+                            <span class="s2">"environment instead."</span>
+                        <span class="p">)</span>
+                <span class="n">credentials</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remove_none_values</span><span class="p">(</span><span class="n">credentials</span><span class="p">)</span>
+
             <span class="k">case</span><span class="w"> </span><span class="k">_</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown connection type </span><span class="si">{</span><span class="n">conn</span><span class="o">.</span><span class="n">conn_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">credentials</span><span class="p">,</span> <span class="n">extra_config</span>
@@ -886,6 +953,124 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">_remove_none_values</span><span class="p">(</span><span class="n">params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">"""Filter out None values from the dictionary."""</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+
+    <span class="n">_AZURE_PUBLIC_SUFFIX</span> <span class="o">=</span> <span class="s2">".blob.core.windows.net"</span>
+
+    <span class="c1"># object_store's build() precedence, high to low: bearer token &gt; access key &gt; workload</span>
+    <span class="c1"># identity (client_id+tenant_id+federated_token_file) &gt; client secret</span>
+    <span class="c1"># (client_id+client_secret+tenant_id) &gt; SAS. Used by _find_conflicting_azure_env_vars.</span>
+    <span class="n">_AZURE_ENV_BEARER_VARS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"AZURE_STORAGE_TOKEN"</span><span class="p">,)</span>
+    <span class="n">_AZURE_ENV_ACCESS_KEY_VARS</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">"AZURE_STORAGE_ACCOUNT_KEY"</span><span class="p">,</span>
+        <span class="s2">"AZURE_STORAGE_ACCESS_KEY"</span><span class="p">,</span>
+        <span class="s2">"AZURE_STORAGE_MASTER_KEY"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">_AZURE_ENV_CLIENT_ID_VARS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"AZURE_STORAGE_CLIENT_ID"</span><span class="p">,</span> <span class="s2">"AZURE_CLIENT_ID"</span><span class="p">)</span>
+    <span class="n">_AZURE_ENV_CLIENT_SECRET_VARS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"AZURE_STORAGE_CLIENT_SECRET"</span><span class="p">,</span> <span class="s2">"AZURE_CLIENT_SECRET"</span><span class="p">)</span>
+    <span class="n">_AZURE_ENV_TENANT_ID_VARS</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">"AZURE_STORAGE_TENANT_ID"</span><span class="p">,</span>
+        <span class="s2">"AZURE_STORAGE_AUTHORITY_ID"</span><span class="p">,</span>
+        <span class="s2">"AZURE_TENANT_ID"</span><span class="p">,</span>
+        <span class="s2">"AZURE_AUTHORITY_ID"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">_AZURE_ENV_FEDERATED_TOKEN_FILE_VAR</span> <span class="o">=</span> <span class="s2">"AZURE_FEDERATED_TOKEN_FILE"</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_find_conflicting_azure_env_vars</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">credential_tier</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return worker env vars that would silently outrank the connection's own credential.</span>
+
+<span class="sd">        The binding always calls `from_env()` with no way to skip it, so this can only be</span>
+<span class="sd">        caught here, not avoided. The connection's fields overwrite the same fields from</span>
+<span class="sd">        `from_env()`, so only a tier above the connection's own, or an unoccupied tier</span>
+<span class="sd">        (workload identity or client secret, for SAS) with *all* its fields present, can</span>
+<span class="sd">        actually take over.</span>
+<span class="sd">        """</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">env_set</span><span class="p">(</span><span class="o">*</span><span class="n">var_groups</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">var</span> <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">var_groups</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="n">group</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)]</span>
+
+        <span class="n">conflicting</span> <span class="o">=</span> <span class="n">env_set</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_BEARER_VARS</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">credential_tier</span> <span class="o">==</span> <span class="s2">"access_key"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">conflicting</span>
+        <span class="n">conflicting</span> <span class="o">+=</span> <span class="n">env_set</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_ACCESS_KEY_VARS</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">credential_tier</span> <span class="o">==</span> <span class="s2">"client_secret"</span><span class="p">:</span>
+            <span class="c1"># client_id and tenant_id are already the connection's own; only the federated</span>
+            <span class="c1"># token file is left for env to complete the workload-identity triple with.</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_FEDERATED_TOKEN_FILE_VAR</span><span class="p">):</span>
+                <span class="n">conflicting</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_FEDERATED_TOKEN_FILE_VAR</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">conflicting</span>
+        <span class="c1"># SAS occupies none of these fields, so each whole triple must come from env.</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="nb">any</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_ID_VARS</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_TENANT_ID_VARS</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_FEDERATED_TOKEN_FILE_VAR</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="n">conflicting</span> <span class="o">+=</span> <span class="n">env_set</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_ID_VARS</span><span class="p">,</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_TENANT_ID_VARS</span><span class="p">)</span>
+            <span class="n">conflicting</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_FEDERATED_TOKEN_FILE_VAR</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="nb">any</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_ID_VARS</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_SECRET_VARS</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">var</span><span class="p">)</span> <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_TENANT_ID_VARS</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="n">conflicting</span> <span class="o">+=</span> <span class="n">env_set</span><span class="p">(</span>
+                <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_ID_VARS</span><span class="p">,</span>
+                <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_CLIENT_SECRET_VARS</span><span class="p">,</span>
+                <span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_ENV_TENANT_ID_VARS</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">conflicting</span><span class="p">))</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_wasb_account</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">login</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the storage account name the way WasbHook resolves it.</span>
+
+<span class="sd">        From ``host`` (its netloc's first label) when set, falling back to ``login`` only when</span>
+<span class="sd">        ``host`` is empty -- login holds the service-principal client_id otherwise, not the</span>
+<span class="sd">        account name. Returns ``None`` when neither is set, so the binding falls back to</span>
+<span class="sd">        ``AZURE_STORAGE_ACCOUNT_NAME`` rather than the literal string ``"None"``. Reimplemented</span>
+<span class="sd">        locally instead of importing</span>
+<span class="sd">        ``airflow.providers.microsoft.azure.utils.parse_blob_account_url``, to avoid pulling in</span>
+<span class="sd">        the microsoft-azure provider's Azure SDK dependency for one stdlib string operation.</span>
+
+<span class="sd">        Only the public ``*.blob.core.windows.net`` cloud is supported, unless</span>
+<span class="sd">        ``AZURE_STORAGE_ENDPOINT``/``AZURE_ENDPOINT`` is set for a real sovereign-cloud hostname</span>
+<span class="sd">        (DataFusion's binding otherwise has no endpoint override). A ``host:port`` netloc (the</span>
+<span class="sd">        Azurite emulator's shape) is never a real hostname, so it always raises instead --</span>
+<span class="sd">        checked before the dotless-host fallback below, which would otherwise mask it.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">login</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">netloc</span> <span class="o">=</span> <span class="n">urlsplit</span><span class="p">(</span><span class="n">host</span> <span class="k">if</span> <span class="n">host</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">login</span><span class="si">}</span><span class="s2">.blob.core.windows.net/"</span><span class="p">)</span><span class="o">.</span><span class="n">netloc</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">netloc</span><span class="p">:</span>
+            <span class="c1"># No scheme was given (e.g. a bare DNS name); urlsplit put it all in the path instead.</span>
+            <span class="n">netloc</span> <span class="o">=</span> <span class="n">urlsplit</span><span class="p">(</span><span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">netloc</span>
+        <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="s2">":"</span> <span class="ow">in</span> <span class="n">netloc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Connection host </span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2"> looks like an emulator address (host:port), which "</span>
+                <span class="s2">"DataFusion's Azure Blob Storage binding cannot resolve an account name from -- "</span>
+                <span class="s2">"even with AZURE_STORAGE_ENDPOINT set. Put the account name in `login` with "</span>
+                <span class="s2">"`host` empty instead, alongside AZURE_STORAGE_ENDPOINT and AZURE_ALLOW_HTTP=true."</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="s2">"."</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">netloc</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">login</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Connection host </span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2"> is not a full URL or DNS name, and no `login` was "</span>
+                    <span class="s2">"given to resolve it as an Active Directory ID instead."</span>
+                <span class="p">)</span>
+            <span class="c1"># Only an Active Directory ID was given, not a full URL or DNS name.</span>
+            <span class="n">netloc</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">login</span><span class="si">}</span><span class="s2">.blob.core.windows.net"</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">netloc</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_PUBLIC_SUFFIX</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"AZURE_STORAGE_ENDPOINT"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"AZURE_ENDPOINT"</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Connection host </span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2"> does not resolve to the public </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="n">_AZURE_PUBLIC_SUFFIX</span><span class="si">}</span><span class="s2"> "</span>
+                <span class="s2">"cloud, which is the only one DataFusion's Azure Blob Storage binding can target (it "</span>
+                <span class="s2">"has no endpoint override). A sovereign cloud is supported once the "</span>
+                <span class="s2">"AZURE_STORAGE_ENDPOINT environment variable is set."</span>
+            <span class="p">)</span>
+        <span class="c1"># Azure storage account names are capped at 24 characters.</span>
+        <span class="k">return</span> <span class="n">netloc</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"."</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">][:</span><span class="mi">24</span><span class="p">]</span>
 
 <div class="viewcode-block" id="DataFusionEngine.get_schema">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/datafusion/engine/index.html#airflow.providers.common.sql.datafusion.engine.DataFusionEngine.get_schema">[docs]</a>
@@ -1154,9 +1339,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=b21de401"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=c3c8ae58"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

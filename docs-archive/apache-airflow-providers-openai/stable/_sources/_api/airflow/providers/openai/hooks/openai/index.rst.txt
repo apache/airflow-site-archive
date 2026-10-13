@@ -18,6 +18,7 @@ Classes
 .. autoapisummary::
 
    airflow.providers.openai.hooks.openai.BatchStatus
+   airflow.providers.openai.hooks.openai.TerminationReason
    airflow.providers.openai.hooks.openai.OpenAIHook
 
 
@@ -26,6 +27,7 @@ Functions
 
 .. autoapisummary::
 
+   airflow.providers.openai.hooks.openai.build_batch_error
    airflow.providers.openai.hooks.openai.validate_execute_complete_event
 
 
@@ -95,6 +97,58 @@ Module Contents
 
 
 .. py:data:: TRIGGER_EVENT_STATUSES
+
+.. py:class:: TerminationReason
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Enum for the ``termination_reason`` field of a trigger's terminal event.
+
+
+   .. py:attribute:: TIMEOUT
+      :value: 'timeout'
+
+
+
+   .. py:attribute:: COMPLETED
+      :value: 'completed'
+
+
+
+   .. py:attribute:: CANCELLED
+      :value: 'cancelled'
+
+
+
+   .. py:attribute:: FAILED
+      :value: 'failed'
+
+
+
+   .. py:attribute:: EXPIRED
+      :value: 'expired'
+
+
+
+   .. py:attribute:: UNEXPECTED_STATUS
+      :value: 'unexpected_status'
+
+
+
+   .. py:attribute:: POLLING_ERROR
+      :value: 'polling_error'
+
+
+
+.. py:function:: build_batch_error(message, termination_reason)
+
+   Build (but do not raise) the exception matching a trigger event's termination reason.
+
+   ``termination_reason`` is ``None`` when the event was produced by a trigger
+   serialized before this field existed (a rolling upgrade in flight); that case
+   falls back to ``OpenAIBatchJobException``, matching today's behavior.
+
 
 .. py:function:: validate_execute_complete_event(event = None)
 
@@ -190,6 +244,24 @@ Module Contents
 
       :param input: Text, image, or file input(s) to the model.
       :param model: ID of the model to use.
+
+
+
+   .. py:method:: parse_response(input, model = 'gpt-4o-mini', *, text_format, **kwargs)
+
+      Create a model response and parse it into a Pydantic model via the Responses API.
+
+      Wraps :py:meth:`openai.resources.responses.Responses.parse`. The SDK converts
+      ``text_format`` into a JSON schema, sends it as a structured-output request, and
+      returns a :class:`~openai.types.responses.ParsedResponse` whose ``output_parsed``
+      attribute is an instance of ``text_format``, or ``None`` when the response carries no
+      parsed output (for example a refusal).
+
+      :param input: Text, image, or file input(s) to the model.
+      :param model: ID of the model to use.
+      :param text_format: A Pydantic ``BaseModel`` subclass describing the expected
+          structured output. Keyword-only, as in the SDK. The SDK converts it to a JSON schema
+          and sends the structured-output request.
 
 
 

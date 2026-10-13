@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.3.2</span>
+        <span class="version-label">Version: </span><span class="version">6.3.3</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -425,7 +425,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-spark/6.3.2/providers/apache/spark/tests/system/apache/spark">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-spark/6.3.3/providers/apache/spark/tests/system/apache/spark">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-apache-spark/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -482,7 +482,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">6.3.2</span>
+        <span class="version-label">Version: </span><span class="version">6.3.3</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -541,7 +541,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-spark/6.3.2/providers/apache/spark/tests/system/apache/spark">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-apache-spark/6.3.3/providers/apache/spark/tests/system/apache/spark">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-apache-spark/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -713,6 +713,81 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 
 <span class="n">_K8S_WAIT_APP_COMPLETION_CONF</span> <span class="o">=</span> <span class="s2">"spark.kubernetes.submission.waitAppCompletion"</span>
+
+<span class="n">_SENSITIVE_KEYWORD_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"secret|password"</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
+<span class="n">_WHITESPACE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\s"</span><span class="p">)</span>
+<span class="n">_NON_WHITESPACE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\S"</span><span class="p">)</span>
+<span class="c1"># Where a quoted value may stop at the latest: the quote followed by whitespace, or a newline.</span>
+<span class="n">_QUOTED_VALUE_LIMIT_RE</span> <span class="o">=</span> <span class="p">{</span><span class="n">quote</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rf</span><span class="s2">"\n|</span><span class="si">{</span><span class="n">quote</span><span class="si">}</span><span class="s2">(?=\s)"</span><span class="p">)</span> <span class="k">for</span> <span class="n">quote</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s1">'"'</span><span class="p">)}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_mask_sensitive_values</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Mask the value of every ``key=value`` / ``key value`` pair whose key contains ``secret`` or ``password``.</span>
+
+<span class="sd">    Produces the same output as the single regular expression used previously::</span>
+
+<span class="sd">        (\S*?(?:secret|password)\S*?(?:=|\s+)(['"]?))(?:(?!\2\s).)*(\2)  -&gt;  \1******\3</span>
+
+<span class="sd">    but scans the input in linear time. That pattern backtracked quadratically or worse on long tokens,</span>
+<span class="sd">    and it runs over arbitrary spark-submit output, so a single long log line could stall the worker.</span>
+
+<span class="sd">    - The key starts where scanning resumed within the current token and ends at the first ``=``</span>
+<span class="sd">      after the keyword, or at the whitespace ending the token.</span>
+<span class="sd">    - A value opening with a quote extends to the last matching quote before either that quote</span>
+<span class="sd">      followed by whitespace or a newline; the value is then masked between the quotes.</span>
+<span class="sd">    - Any other value, including an unterminated quoted one, is masked up to the next whitespace.</span>
+<span class="sd">    """</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+    <span class="n">masked</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">copied</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">_NON_WHITESPACE_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">pos</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">token</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="n">token_start</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="n">token_end_match</span> <span class="o">=</span> <span class="n">_WHITESPACE_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">token_start</span><span class="p">)</span>
+        <span class="n">token_end</span> <span class="o">=</span> <span class="n">token_end_match</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">if</span> <span class="n">token_end_match</span> <span class="k">else</span> <span class="n">length</span>
+        <span class="n">keyword</span> <span class="o">=</span> <span class="n">_SENSITIVE_KEYWORD_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">token_start</span><span class="p">,</span> <span class="n">token_end</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">keyword</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="n">token_end</span>
+            <span class="k">continue</span>
+        <span class="n">equals</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"="</span><span class="p">,</span> <span class="n">keyword</span><span class="o">.</span><span class="n">end</span><span class="p">(),</span> <span class="n">token_end</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">equals</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">value_start</span> <span class="o">=</span> <span class="n">equals</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">token_end</span> <span class="o">&lt;</span> <span class="n">length</span><span class="p">:</span>
+            <span class="n">next_token</span> <span class="o">=</span> <span class="n">_NON_WHITESPACE_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">token_end</span><span class="p">)</span>
+            <span class="n">value_start</span> <span class="o">=</span> <span class="n">next_token</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">if</span> <span class="n">next_token</span> <span class="k">else</span> <span class="n">length</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Last token and nothing separates the key from a value.</span>
+            <span class="k">break</span>
+
+        <span class="k">if</span> <span class="n">value_start</span> <span class="o">&lt;</span> <span class="n">length</span> <span class="ow">and</span> <span class="n">text</span><span class="p">[</span><span class="n">value_start</span><span class="p">]</span> <span class="ow">in</span> <span class="s2">"'</span><span class="se">\"</span><span class="s2">"</span><span class="p">:</span>
+            <span class="n">quote</span> <span class="o">=</span> <span class="n">text</span><span class="p">[</span><span class="n">value_start</span><span class="p">]</span>
+            <span class="n">limit</span> <span class="o">=</span> <span class="n">_QUOTED_VALUE_LIMIT_RE</span><span class="p">[</span><span class="n">quote</span><span class="p">]</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">value_start</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">limit_end</span> <span class="o">=</span> <span class="n">length</span>
+            <span class="k">elif</span> <span class="n">limit</span><span class="o">.</span><span class="n">group</span><span class="p">()</span> <span class="o">==</span> <span class="n">quote</span><span class="p">:</span>
+                <span class="n">limit_end</span> <span class="o">=</span> <span class="n">limit</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">limit_end</span> <span class="o">=</span> <span class="n">limit</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="n">closing</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="n">quote</span><span class="p">,</span> <span class="n">value_start</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">limit_end</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">closing</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">masked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="n">copied</span> <span class="p">:</span> <span class="n">value_start</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+                <span class="n">masked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"******"</span><span class="p">)</span>
+                <span class="n">copied</span> <span class="o">=</span> <span class="n">closing</span>
+                <span class="n">pos</span> <span class="o">=</span> <span class="n">closing</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="k">continue</span>
+
+        <span class="n">value_end_match</span> <span class="o">=</span> <span class="n">_WHITESPACE_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">value_start</span><span class="p">)</span>
+        <span class="n">value_end</span> <span class="o">=</span> <span class="n">value_end_match</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">if</span> <span class="n">value_end_match</span> <span class="k">else</span> <span class="n">length</span>
+        <span class="n">masked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="n">copied</span><span class="p">:</span><span class="n">value_start</span><span class="p">])</span>
+        <span class="n">masked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"******"</span><span class="p">)</span>
+        <span class="n">copied</span> <span class="o">=</span> <span class="n">pos</span> <span class="o">=</span> <span class="n">value_end</span>
+    <span class="n">masked</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="n">copied</span><span class="p">:])</span>
+    <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">masked</span><span class="p">)</span>
+
 
 <span class="c1"># The JVM's default uncaught-exception handler always prints this exact shape.</span>
 <span class="n">_EXCEPTION_START_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">'Exception in thread "[^"]*"'</span><span class="p">)</span>
@@ -1201,26 +1276,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">_mask_cmd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection_cmd</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="c1"># Mask any password related fields in application args with key value pair</span>
         <span class="c1"># where key contains password (case insensitive), e.g. HivePassword='abc'</span>
-        <span class="n">connection_cmd_masked</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
-            <span class="sa">r</span><span class="s2">"("</span>
-            <span class="sa">r</span><span class="s2">"\S*?"</span>  <span class="c1"># Match all non-whitespace characters before...</span>
-            <span class="sa">r</span><span class="s2">"(?:secret|password)"</span>  <span class="c1"># ...literally a "secret" or "password"</span>
-            <span class="c1"># word (not capturing them).</span>
-            <span class="sa">r</span><span class="s2">"\S*?"</span>  <span class="c1"># All non-whitespace characters before either...</span>
-            <span class="sa">r</span><span class="s2">"(?:=|\s+)"</span>  <span class="c1"># ...an equal sign or whitespace characters</span>
-            <span class="c1"># (not capturing them).</span>
-            <span class="sa">r</span><span class="s2">"(['</span><span class="se">\"</span><span class="s2">]?)"</span>  <span class="c1"># An optional single or double quote.</span>
-            <span class="sa">r</span><span class="s2">")"</span>  <span class="c1"># This is the end of the first capturing group.</span>
-            <span class="sa">r</span><span class="s2">"(?:(?!\2\s).)*"</span>  <span class="c1"># All characters between optional quotes</span>
-            <span class="c1"># (matched above); if the value is quoted,</span>
-            <span class="c1"># it may contain whitespace.</span>
-            <span class="sa">r</span><span class="s2">"(\2)"</span><span class="p">,</span>  <span class="c1"># Optional matching quote.</span>
-            <span class="sa">r</span><span class="s2">"\1******\3"</span><span class="p">,</span>
-            <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">connection_cmd</span><span class="p">),</span>
-            <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">I</span><span class="p">,</span>
-        <span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">connection_cmd_masked</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">connection_cmd</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">connection_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="n">connection_cmd</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">_mask_sensitive_values</span><span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">connection_cmd</span><span class="p">))</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_submit_log_tail</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
@@ -2359,9 +2417,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=136a51b1"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=b712d5a8"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>
