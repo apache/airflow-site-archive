@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -430,6 +427,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Workload</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#impersonation">Impersonation</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#default-impersonation">Default Impersonation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#what-impersonation-does-not-cover">What impersonation does not cover</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#workload-isolation-and-current-limitations">Workload Isolation and Current Limitations</a><ul>
@@ -583,6 +581,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Workload</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#impersonation">Impersonation</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#default-impersonation">Default Impersonation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#what-impersonation-does-not-cover">What impersonation does not cover</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#workload-isolation-and-current-limitations">Workload Isolation and Current Limitations</a><ul>
@@ -757,6 +756,20 @@ not set.</p>
 </pre></div>
 </div>
 </section>
+<section id="what-impersonation-does-not-cover">
+<h3>What impersonation does not cover<a class="headerlink" href="#what-impersonation-does-not-cover" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Impersonation applies to task <strong>execution</strong>. It does not apply to Dag file <strong>parsing</strong>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">run_as_user</span></code> can be set on the Dag or on the task, so it overrides <code class="docutils literal notranslate"><span class="pre">default_impersonation</span></code>.
+Airflow cannot know which user to switch to until it has parsed the Dag file, and parsing a Dag file
+executes its module-level code. That code therefore runs as the worker’s own unix user, before any
+<code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">-u</span></code> takes place; the file is parsed a second time after the switch, as the impersonated user.</p>
+<p>So <code class="docutils literal notranslate"><span class="pre">run_as_user</span></code> and <code class="docutils literal notranslate"><span class="pre">default_impersonation</span></code> constrain what a task does once it runs. Neither
+isolates the Dag file itself, and neither can be made to without moving the setting somewhere the
+worker can read before parsing. If module-level Dag code also has to be confined, isolate the worker
+— for example by running untrusted Dag authors’ workloads on separate workers — rather than relying
+on impersonation within a shared one.</p>
+<p>See <a class="reference internal" href="security_model.html"><span class="doc">Airflow Security Model</span></a> for how this fits the overall trust boundaries.</p>
+</section>
 </section>
 <section id="workload-isolation-and-current-limitations">
 <span id="workload-isolation"></span><h2>Workload Isolation and Current Limitations<a class="headerlink" href="#workload-isolation-and-current-limitations" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -768,8 +781,11 @@ For details on the JWT authentication flows used by workers and internal compone
 <section id="worker-process-memory-protection-linux">
 <h3>Worker process memory protection (Linux)<a class="headerlink" href="#worker-process-memory-protection-linux" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <p>On Linux, the supervisor process calls <code class="docutils literal notranslate"><span class="pre">prctl(PR_SET_DUMPABLE,</span> <span class="pre">0)</span></code> at the start of
-<code class="docutils literal notranslate"><span class="pre">supervise_task()</span></code> before forking the task process. This flag is inherited by the forked
-child. Marking processes as non-dumpable prevents same-UID sibling processes from reading
+<code class="docutils literal notranslate"><span class="pre">supervise_task()</span></code> before forking the task process. A bare-forked child inherits the flag;
+a child started through <code class="docutils literal notranslate"><span class="pre">exec</span></code> (macOS, or <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">execute_tasks_new_python_interpreter</span></code>)
+restores it in its bootstrap, before importing Airflow, because <code class="docutils literal notranslate"><span class="pre">execve</span></code> resets it; for the remaining
+interpreter-start window, <code class="docutils literal notranslate"><span class="pre">kernel.yama.ptrace_scope</span> <span class="pre">&gt;=</span> <span class="pre">1</span></code> covers <code class="docutils literal notranslate"><span class="pre">/proc/&lt;pid&gt;/mem</span></code> and <code class="docutils literal notranslate"><span class="pre">ptrace</span></code>
+attach. Marking processes as non-dumpable prevents same-UID sibling processes from reading
 <code class="docutils literal notranslate"><span class="pre">/proc/&lt;pid&gt;/mem</span></code>, <code class="docutils literal notranslate"><span class="pre">/proc/&lt;pid&gt;/environ</span></code>, or <code class="docutils literal notranslate"><span class="pre">/proc/&lt;pid&gt;/maps</span></code>, and blocks
 <code class="docutils literal notranslate"><span class="pre">ptrace(PTRACE_ATTACH)</span></code>. This is critical because each supervisor holds a distinct JWT
 token in memory — without this protection, a malicious task process running as the same
@@ -911,6 +927,7 @@ configuration available to each instance.</p>
 <li><a class="reference internal" href="#">Workload</a><ul>
 <li><a class="reference internal" href="#impersonation">Impersonation</a><ul>
 <li><a class="reference internal" href="#default-impersonation">Default Impersonation</a></li>
+<li><a class="reference internal" href="#what-impersonation-does-not-cover">What impersonation does not cover</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#workload-isolation-and-current-limitations">Workload Isolation and Current Limitations</a><ul>
@@ -1143,8 +1160,8 @@ configuration available to each instance.</p>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

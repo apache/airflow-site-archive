@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -781,7 +778,7 @@ Each Dag Run is run separately from one another, meaning that you can have many 
 <span id="dag-run-dag-run-status"></span><h2>Dag Run Status<a class="headerlink" href="#dag-run-status" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>A Dag Run status is determined when the execution of the Dag is finished.
 The execution of the Dag depends on its containing tasks and their dependencies.
-The status is assigned to the Dag Run when all of the tasks are in the one of the terminal states (i.e. if there is no possible transition to another state) like <code class="docutils literal notranslate"><span class="pre">success</span></code>, <code class="docutils literal notranslate"><span class="pre">failed</span></code> or <code class="docutils literal notranslate"><span class="pre">skipped</span></code>.
+The status is assigned to the Dag Run when all of the tasks are in one of the terminal states (i.e. if there is no possible transition to another state) like <code class="docutils literal notranslate"><span class="pre">success</span></code>, <code class="docutils literal notranslate"><span class="pre">failed</span></code> or <code class="docutils literal notranslate"><span class="pre">skipped</span></code>.
 The Dag Run is having the status assigned based on the so-called “leaf nodes” or simply “leaves”. Leaf nodes are the tasks with no children.</p>
 <p>There are two possible terminal states for the Dag Run:</p>
 <ul class="simple">
@@ -798,21 +795,35 @@ These can lead to some unexpected behavior, e.g. if you have a leaf task with tr
 <section id="data-interval">
 <span id="id1"></span><h3>Data Interval<a class="headerlink" href="#data-interval" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <p>Each Dag run in Airflow has an assigned “data interval” that represents the time
-range it operates in. For a Dag scheduled with <code class="docutils literal notranslate"><span class="pre">&#64;daily</span></code>, for example, each of
-its data interval would start each day at midnight (00:00) and end at midnight
-(24:00).</p>
-<p>A Dag run is usually scheduled <em>after</em> its associated data interval has ended,
-to ensure the run is able to collect all the data within the time period. In
-other words, a run covering the data period of 2020-01-01 generally does not
-start to run until 2020-01-01 has ended, i.e. after 2020-01-02 00:00:00.</p>
+range it operates in. How that interval is defined depends on the Dag’s
+timetable.</p>
+<p>In Airflow 3, a Dag scheduled with a bare cron string such as <code class="docutils literal notranslate"><span class="pre">&#64;daily</span></code> uses
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#crontriggertimetable"><span class="std std-ref">CronTriggerTimetable</span></a> by default (<code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">create_cron_data_intervals</span></code>
+is <code class="docutils literal notranslate"><span class="pre">False</span></code>). For that timetable, <code class="docutils literal notranslate"><span class="pre">data_interval_start</span></code> and
+<code class="docutils literal notranslate"><span class="pre">data_interval_end</span></code> are the same — the trigger time (for <code class="docutils literal notranslate"><span class="pre">&#64;daily</span></code>, midnight
+each day). The run is created to execute <em>at</em> that time.</p>
+<p>If you need a contiguous full-day window instead — for example each run covering
+from midnight to the next midnight — use a data-interval timetable such as
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#crondataintervaltimetable"><span class="std std-ref">CronDataIntervalTimetable</span></a>, or set <code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">create_cron_data_intervals</span></code>
+to <code class="docutils literal notranslate"><span class="pre">True</span></code>. With that setup, a Dag run is usually scheduled <em>after</em> its
+associated data interval has ended, so a run covering 2020-01-01 generally does
+not start until after 2020-01-02 00:00:00.</p>
+<p>See <a class="reference internal" href="../authoring-and-scheduling/timetable.html#differences-between-trigger-and-data-interval-timetables"><span class="std std-ref">timetables comparison</span></a> for a
+side-by-side comparison, including how <code class="docutils literal notranslate"><span class="pre">logical_date</span></code> and <code class="docutils literal notranslate"><span class="pre">run_id</span></code> differ.</p>
 <p>All dates in Airflow are tied to the data interval concept in some way. The
 “logical date” (also called <code class="docutils literal notranslate"><span class="pre">execution_date</span></code> in Airflow versions prior to 2.2)
-of a Dag run, for example, denotes the start of the data interval, not when the
-Dag is actually executed.</p>
-<p>Similarly, since the <code class="docutils literal notranslate"><span class="pre">start_date</span></code> argument for the Dag and its tasks points to
-the same logical date, it marks the start of <em>the Dag’s first data interval</em>, not
-when tasks in the Dag will start running. In other words, a Dag run will only be
-scheduled one interval after <code class="docutils literal notranslate"><span class="pre">start_date</span></code>.</p>
+of a Dag run is defined by the timetable: for both timetable kinds it is
+<code class="docutils literal notranslate"><span class="pre">data_interval_start</span></code>. For the default (zero-width) trigger timetable that
+equals the trigger time. With a non-zero <code class="docutils literal notranslate"><span class="pre">interval=</span></code> on a trigger timetable
+it is <code class="docutils literal notranslate"><span class="pre">trigger_time</span> <span class="pre">-</span> <span class="pre">interval</span></code>. For a data-interval timetable it is the
+start of the contiguous window, not when the Dag is actually executed.</p>
+<p>Similarly, the <code class="docutils literal notranslate"><span class="pre">start_date</span></code> argument for the Dag and its tasks marks the
+earliest <em>trigger time</em> (<code class="docutils literal notranslate"><span class="pre">run_after</span></code>) the scheduler will create, not when
+tasks start running, and not necessarily the first logical date (see the
+non-zero <code class="docutils literal notranslate"><span class="pre">interval=</span></code> case above). A run is only created once the timetable
+reaches that bound. For a data-interval timetable, <code class="docutils literal notranslate"><span class="pre">start_date</span></code> is also the
+start of the first data interval, so that first run does not execute until the
+window closes, one schedule period after <code class="docutils literal notranslate"><span class="pre">start_date</span></code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>If a cron expression or timedelta object is not enough to express your Dag’s schedule,
@@ -842,15 +853,15 @@ timetable and the trigger path, and may differ from the run’s
 Dag run fails.</p>
 <section id="catchup">
 <span id="dag-catchup"></span><h3>Catchup<a class="headerlink" href="#catchup" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
-<p>An Airflow Dag defined with a <code class="docutils literal notranslate"><span class="pre">start_date</span></code>, possibly an <code class="docutils literal notranslate"><span class="pre">end_date</span></code>, and a non-asset schedule, defines a series of intervals which the scheduler turns into individual Dag runs and executes.
-By default, Dag runs that have not been run since the last data interval are not created by the scheduler upon activation of a Dag ( Airflow config <code class="docutils literal notranslate"><span class="pre">scheduler.catchup_by_default=False</span></code>). The scheduler creates a Dag run only for the latest interval.</p>
-<p>If you set <code class="docutils literal notranslate"><span class="pre">catchup=True</span></code> in the Dag, the scheduler will kick off a Dag Run for any data interval that has not been run since the last data interval (or has been cleared). This concept is called Catchup.</p>
+<p>An Airflow Dag defined with a <code class="docutils literal notranslate"><span class="pre">start_date</span></code>, possibly an <code class="docutils literal notranslate"><span class="pre">end_date</span></code>, and a non-asset schedule, defines a series of scheduled run times which the scheduler turns into individual Dag runs and executes.
+By default, missed scheduled run times between <code class="docutils literal notranslate"><span class="pre">start_date</span></code> and “now” are not backfilled when a Dag is activated (Airflow config <code class="docutils literal notranslate"><span class="pre">scheduler.catchup_by_default=False</span></code>). The timetable instead selects the most recently applicable scheduled run time (for a trigger timetable, typically the latest cron tick that is not after “now” and not before <code class="docutils literal notranslate"><span class="pre">start_date</span></code>).</p>
+<p>If you set <code class="docutils literal notranslate"><span class="pre">catchup=True</span></code> in the Dag, the scheduler will kick off a Dag Run for any scheduled run time that has not been run since the last run (or has been cleared). This concept is called Catchup.</p>
 <p>If your Dag is not written to handle its catchup (i.e., not limited to the interval, but instead to <code class="docutils literal notranslate"><span class="pre">Now</span></code> for instance.),
 then you will want to turn catchup off, which is the default setting or can be done explicitly by setting <code class="docutils literal notranslate"><span class="pre">catchup=False</span></code> in the Dag definition, if the default config has been changed for your Airflow environment.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">"""</span>
 <span class="sd">Code that goes along with the Airflow tutorial located at:</span>
 <span class="sd">https://github.com/apache/airflow/blob/main/airflow/example_dags/tutorial.py</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.bash</span><span class="w"> </span><span class="kn">import</span> <span class="n">BashOperator</span>
@@ -859,31 +870,50 @@ then you will want to turn catchup off, which is the default setting or can be d
 <span class="kn">import</span><span class="w"> </span><span class="nn">pendulum</span>
 
 <span class="n">dag</span> <span class="o">=</span> <span class="n">DAG</span><span class="p">(</span>
-    <span class="s2">&quot;tutorial&quot;</span><span class="p">,</span>
+    <span class="s2">"tutorial"</span><span class="p">,</span>
     <span class="n">default_args</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;depends_on_past&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="s2">&quot;retries&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-        <span class="s2">&quot;retry_delay&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>
+        <span class="s2">"depends_on_past"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">"retries"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">"retry_delay"</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>
     <span class="p">},</span>
-    <span class="n">start_date</span><span class="o">=</span><span class="n">pendulum</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2015</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
-    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;A simple tutorial Dag&quot;</span><span class="p">,</span>
-    <span class="n">schedule</span><span class="o">=</span><span class="s2">&quot;@daily&quot;</span><span class="p">,</span>
+    <span class="n">start_date</span><span class="o">=</span><span class="n">pendulum</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2015</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">"UTC"</span><span class="p">),</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"A simple tutorial Dag"</span><span class="p">,</span>
+    <span class="n">schedule</span><span class="o">=</span><span class="s2">"@daily"</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>In the example above, if the Dag is picked up by the scheduler daemon on
-2016-01-02 at 6 AM, (or from the command line), a single Dag Run will be created
-with a data between 2016-01-01 and 2016-01-02, and the next one will be created
-just after midnight on the morning of 2016-01-03 with a data interval between
-2016-01-02 and 2016-01-03.</p>
-<p>Be aware that using a <code class="docutils literal notranslate"><span class="pre">datetime.timedelta</span></code> object as schedule can lead to a different behavior.
-In such a case, the single Dag Run created will cover data between 2016-01-01 06:00 and
-2016-01-02 06:00 (one schedule interval ending now). For a more detailed description of the
-differences between a cron and a delta based schedule, take a look at the
-<a class="reference internal" href="../authoring-and-scheduling/timetable.html#differences-between-the-cron-and-delta-data-interval-timetables"><span class="std std-ref">timetables comparison</span></a></p>
-<p>If the <code class="docutils literal notranslate"><span class="pre">dag.catchup</span></code> value had been <code class="docutils literal notranslate"><span class="pre">True</span></code> instead, the scheduler would have created a Dag Run
-for each completed interval between 2015-12-01 and 2016-01-02 (but not yet one for 2016-01-02,
-as that interval hasn’t completed) and the scheduler will execute them sequentially.</p>
+2016-01-02 at 6 AM (or from the command line), with the Airflow 3 default of
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#crontriggertimetable"><span class="std std-ref">CronTriggerTimetable</span></a> for <code class="docutils literal notranslate"><span class="pre">&#64;daily</span></code> and <code class="docutils literal notranslate"><span class="pre">catchup=False</span></code>, the scheduler
+does <strong>not</strong> create runs for every midnight since <code class="docutils literal notranslate"><span class="pre">start_date</span></code>. Instead it
+creates a single Dag run for the most recent applicable tick — midnight on
+<strong>2016-01-02</strong> — with <code class="docutils literal notranslate"><span class="pre">data_interval_start</span></code> and <code class="docutils literal notranslate"><span class="pre">data_interval_end</span></code> both
+equal to that trigger time. Because that <code class="docutils literal notranslate"><span class="pre">run_after</span></code> is already in the past,
+the run can start immediately. The following tick (midnight on 2016-01-03) is
+only created once that schedule time is reached.</p>
+<p>If instead the Dag used a data-interval timetable (for example
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#crondataintervaltimetable"><span class="std std-ref">CronDataIntervalTimetable</span></a>, or <code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">create_cron_data_intervals=True</span></code>),
+the scheduler would immediately create a run for the most recently completed
+interval (2016-01-01 through 2016-01-02), and the next run would cover
+2016-01-02 through 2016-01-03 after that interval ends.</p>
+<p>Be aware that using a <code class="docutils literal notranslate"><span class="pre">datetime.timedelta</span></code> object as <code class="docutils literal notranslate"><span class="pre">schedule</span></code> is not the
+same as a cron string, even though Airflow 3 also defaults timedelta schedules
+to a trigger timetable (<a class="reference internal" href="../authoring-and-scheduling/timetable.html#deltatriggertimetable"><span class="std std-ref">DeltaTriggerTimetable</span></a>, via
+<code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">create_delta_data_intervals</span></code>). A delta has no wall-clock boundary
+to snap to, so with <code class="docutils literal notranslate"><span class="pre">catchup=False</span></code> the first run lands at pickup time
+(<strong>2016-01-02 06:00</strong> in this example), with <code class="docutils literal notranslate"><span class="pre">data_interval_start</span></code> and
+<code class="docutils literal notranslate"><span class="pre">data_interval_end</span></code> both equal to that moment. If instead you enable the data-interval delta
+timetable (<code class="docutils literal notranslate"><span class="pre">create_delta_data_intervals=True</span></code>), the first run covers one
+schedule interval ending now (2016-01-01 06:00 through 2016-01-02 06:00). For a
+more detailed description of the differences, see
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#differences-between-trigger-and-data-interval-timetables"><span class="std std-ref">timetables comparison</span></a> and
+<a class="reference internal" href="../authoring-and-scheduling/timetable.html#differences-between-the-cron-and-delta-data-interval-timetables"><span class="std std-ref">cron vs delta data intervals</span></a>.</p>
+<p>If the <code class="docutils literal notranslate"><span class="pre">dag.catchup</span></code> value had been <code class="docutils literal notranslate"><span class="pre">True</span></code> instead, the scheduler would have
+created a Dag Run for each scheduled run time between <code class="docutils literal notranslate"><span class="pre">start_date</span></code> and “now”
+that had not yet run (or had been cleared).
+With the default trigger timetable that means every midnight from 2015-12-01
+through 2016-01-02 inclusive. With a data-interval timetable, the still-open
+interval that ends at the next midnight is not created yet.</p>
 <p>Catchup is also triggered when you turn off a Dag for a specified period and then re-enable it.</p>
 <p>This behavior is great for atomic assets that can easily be split into periods. Leaving catchup off is great
 if your Dag performs catchup internally.</p>
@@ -912,7 +942,7 @@ behavior, max active runs, optional backwards ordering, and Advanced Config.</p>
 <span class="w">    </span>--reprocess-behavior<span class="w"> </span>failed<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--max-active-runs<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--run-backwards<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--dag-run-conf<span class="w"> </span><span class="s1">&#39;{&quot;my&quot;: &quot;param&quot;}&#39;</span>
+<span class="w">    </span>--dag-run-conf<span class="w"> </span><span class="s1">'{"my": "param"}'</span>
 </pre></div>
 </div>
 <p>The <a class="reference external" href="../cli-and-env-variables-ref.html#backfill">backfill command</a> will
@@ -935,8 +965,16 @@ The executor will re-run it.</p>
 <li><p><strong>Downstream</strong> - The downstream tasks in the current Dag</p></li>
 <li><p><strong>Recursive</strong> - All the tasks in the child Dags and parent Dags</p></li>
 <li><p><strong>Failed</strong> - Only the failed tasks in the Dag’s most recent run</p></li>
+<li><p><strong>Keep task state and resume</strong> - Preserve the task’s <code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> entries instead of
+discarding them, so the next attempt resumes from a checkpoint or reconnects to an external job
+instead of starting over. See <a class="reference internal" href="resumable-tasks.html"><span class="doc">Resumable Tasks</span></a> for details.</p></li>
 </ul>
-<p>You can also clear the task through CLI using the command:</p>
+<p>Clearing an individual task instance discards its task state store entries by default, so the next
+attempt starts from the beginning instead of resuming a checkpoint or reconnecting to an external
+job. See <a class="reference internal" href="resumable-tasks.html"><span class="doc">Resumable Tasks</span></a> for when to keep it instead.</p>
+<p>You can also clear the task through CLI using <code class="docutils literal notranslate"><span class="pre">airflowctl</span> <span class="pre">tasks</span> <span class="pre">clear</span></code>, which discards task state
+the same way and accepts <code class="docutils literal notranslate"><span class="pre">--keep-task-state</span></code> to opt back in. The legacy, deprecated
+<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">tasks</span> <span class="pre">clear</span></code> command below always keeps task state:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>airflow<span class="w"> </span>tasks<span class="w"> </span>clear<span class="w"> </span>dag_id<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--task-regex<span class="w"> </span>task_regex<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--start-date<span class="w"> </span>START_DATE<span class="w"> </span><span class="se">\</span>
@@ -987,16 +1025,16 @@ a JSON blob.</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.bash</span><span class="w"> </span><span class="kn">import</span> <span class="n">BashOperator</span>
 
 <span class="n">dag</span> <span class="o">=</span> <span class="n">DAG</span><span class="p">(</span>
-    <span class="s2">&quot;example_parameterized_dag&quot;</span><span class="p">,</span>
+    <span class="s2">"example_parameterized_dag"</span><span class="p">,</span>
     <span class="n">schedule</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">start_date</span><span class="o">=</span><span class="n">pendulum</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">&quot;UTC&quot;</span><span class="p">),</span>
+    <span class="n">start_date</span><span class="o">=</span><span class="n">pendulum</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="s2">"UTC"</span><span class="p">),</span>
     <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">parameterized_task</span> <span class="o">=</span> <span class="n">BashOperator</span><span class="p">(</span>
-    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;parameterized_task&quot;</span><span class="p">,</span>
-    <span class="n">bash_command</span><span class="o">=</span><span class="s2">&quot;echo </span><span class="se">\&quot;</span><span class="s2">here is the message: &#39;$message&#39;</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">,</span>
-    <span class="n">env</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s1">&#39;{{ dag_run.conf[&quot;message&quot;] if dag_run else &quot;&quot; }}&#39;</span><span class="p">},</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"parameterized_task"</span><span class="p">,</span>
+    <span class="n">bash_command</span><span class="o">=</span><span class="s2">"echo </span><span class="se">\"</span><span class="s2">here is the message: '$message'</span><span class="se">\"</span><span class="s2">"</span><span class="p">,</span>
+    <span class="n">env</span><span class="o">=</span><span class="p">{</span><span class="s2">"message"</span><span class="p">:</span> <span class="s1">'{{ dag_run.conf["message"] if dag_run else "" }}'</span><span class="p">},</span>
     <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
@@ -1009,8 +1047,8 @@ a JSON blob.</p>
 <p>The endpoint blocks (by polling) until the specified Dag run reaches a terminal state: <code class="docutils literal notranslate"><span class="pre">success</span></code>, <code class="docutils literal notranslate"><span class="pre">failed</span></code>, or <code class="docutils literal notranslate"><span class="pre">canceled</span></code>.</p>
 <p>This endpoint streams responses using the <strong>NDJSON (Newline-Delimited JSON)</strong> format. Each line in the response is a JSON object representing the state of the Dag run at that moment.</p>
 <p>For example:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>{&quot;state&quot;: &quot;running&quot;}
-{&quot;state&quot;: &quot;success&quot;, &quot;results&quot;: {&quot;op&quot;: 42}}
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>{"state": "running"}
+{"state": "success", "results": {"op": 42}}
 </pre></div>
 </div>
 <p>This allows clients to monitor the run in real time and optionally collect XCom results from specific tasks.</p>
@@ -1020,7 +1058,7 @@ a JSON blob.</p>
 </div>
 <section id="using-cli">
 <h4>Using CLI<a class="headerlink" href="#using-cli" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>airflow<span class="w"> </span>dags<span class="w"> </span>trigger<span class="w"> </span>--conf<span class="w"> </span><span class="s1">&#39;{&quot;conf1&quot;: &quot;value1&quot;}&#39;</span><span class="w"> </span>example_parameterized_dag
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>airflow<span class="w"> </span>dags<span class="w"> </span>trigger<span class="w"> </span>--conf<span class="w"> </span><span class="s1">'{"conf1": "value1"}'</span><span class="w"> </span>example_parameterized_dag
 </pre></div>
 </div>
 </section>
@@ -1359,8 +1397,8 @@ for instance, when the fix has been applied outside of Airflow.</p></li>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

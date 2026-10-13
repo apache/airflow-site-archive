@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -425,6 +422,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Tasks</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#relationships">Relationships</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#task-instances">Task Instances</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#marking-a-task-instance-as-skipped">Marking a Task Instance as skipped</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#relationship-terminology">Relationship Terminology</a></li>
 </ul>
 </li>
@@ -437,6 +435,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#composition-with-existing-parameters">Composition with existing parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#reusable-policies">Reusable policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#mapped-tasks">Mapped tasks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#chaining-policies">Chaining policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#custom-retry-policies">Custom retry policies</a></li>
 </ul>
 </li>
@@ -596,6 +595,7 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Tasks</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#relationships">Relationships</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#task-instances">Task Instances</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#marking-a-task-instance-as-skipped">Marking a Task Instance as skipped</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#relationship-terminology">Relationship Terminology</a></li>
 </ul>
 </li>
@@ -608,6 +608,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#composition-with-existing-parameters">Composition with existing parameters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#reusable-policies">Reusable policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#mapped-tasks">Mapped tasks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#chaining-policies">Chaining policies</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#custom-retry-policies">Custom retry policies</a></li>
 </ul>
 </li>
@@ -811,7 +812,7 @@ Same definition applies to <em>downstream</em> task, which needs to be a direct 
 <li><p><code class="docutils literal notranslate"><span class="pre">success</span></code>: The task finished running without errors</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">restarting</span></code>: The task was externally requested to restart when it was running</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">failed</span></code>: The task had an error during execution and failed to run</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">skipped</span></code>: The task was skipped due to branching, LatestOnly, or similar.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">skipped</span></code>: The task was skipped due to branching, LatestOnly, or similar, or was <a class="reference internal" href="#concepts-task-mark-as-skipped"><span class="std std-ref">marked as skipped manually</span></a>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">upstream_failed</span></code>: An upstream task failed and the <a class="reference internal" href="dags.html#concepts-trigger-rules"><span class="std std-ref">Trigger Rule</span></a> says we needed it</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">up_for_retry</span></code>: The task failed, but has retry attempts left and will be rescheduled.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">up_for_reschedule</span></code>: The task is a <a class="reference internal" href="sensors.html"><span class="doc">Sensor</span></a> that is in <code class="docutils literal notranslate"><span class="pre">reschedule</span></code> mode</p></li>
@@ -821,7 +822,25 @@ Same definition applies to <em>downstream</em> task, which needs to be a direct 
 </ul>
 <img alt="../_images/diagram_task_lifecycle.png" src="../_images/diagram_task_lifecycle.png" />
 <p>Ideally, a task should flow from <code class="docutils literal notranslate"><span class="pre">none</span></code>, to <code class="docutils literal notranslate"><span class="pre">scheduled</span></code>, to <code class="docutils literal notranslate"><span class="pre">queued</span></code>, to <code class="docutils literal notranslate"><span class="pre">running</span></code>, and finally to <code class="docutils literal notranslate"><span class="pre">success</span></code>.</p>
+<section id="marking-a-task-instance-as-skipped">
+<span id="concepts-task-mark-as-skipped"></span><h3>Marking a Task Instance as skipped<a class="headerlink" href="#marking-a-task-instance-as-skipped" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>From the UI, an operator can mark a Task Instance as <code class="docutils literal notranslate"><span class="pre">skipped</span></code> to record that it was intentionally not
+run for a Dag Run, for example during incident recovery when an input it waits for is known to never
+arrive. Unlike marking it as <code class="docutils literal notranslate"><span class="pre">success</span></code>, this does not suggest the task’s work was done.</p>
+<p>Keep the following in mind:</p>
+<ul class="simple">
+<li><p>Only Task Instances that have not started running can be marked as skipped: those with no state, or in
+the <code class="docutils literal notranslate"><span class="pre">scheduled</span></code>, <code class="docutils literal notranslate"><span class="pre">up_for_retry</span></code> or <code class="docutils literal notranslate"><span class="pre">up_for_reschedule</span></code> state.</p></li>
+<li><p>Only the selected Task Instance is affected; upstream, downstream, past and future Task Instances are
+not changed.</p></li>
+<li><p>Marking a task as skipped does not bypass the Dag’s dependencies. Downstream tasks are still evaluated
+according to their <a class="reference internal" href="dags.html#concepts-trigger-rules"><span class="std std-ref">trigger rules</span></a>. With the default <code class="docutils literal notranslate"><span class="pre">all_success</span></code> rule,
+the skip cascades and downstream tasks are skipped as well. For downstream tasks to still run, they need
+a trigger rule that tolerates skipped upstream tasks, such as <code class="docutils literal notranslate"><span class="pre">none_failed</span></code> or
+<code class="docutils literal notranslate"><span class="pre">none_failed_min_one_success</span></code>.</p></li>
+</ul>
 <p>When any custom Task (Operator) is running, it will get a copy of the task instance passed to it; as well as being able to inspect task metadata, it also contains methods for things like <a class="reference internal" href="xcoms.html"><span class="doc">XComs</span></a>.</p>
+</section>
 <section id="relationship-terminology">
 <h3>Relationship Terminology<a class="headerlink" href="#relationship-terminology" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <p>For any given Task Instance, there are two types of relationships it has with other instances.</p>
@@ -842,7 +861,10 @@ Same definition applies to <em>downstream</em> task, which needs to be a direct 
 <p>If you want a task to have a maximum runtime, set its <code class="docutils literal notranslate"><span class="pre">execution_timeout</span></code> attribute to a <code class="docutils literal notranslate"><span class="pre">datetime.timedelta</span></code> value
 that is the maximum permissible runtime. This applies to all Airflow tasks, including sensors. <code class="docutils literal notranslate"><span class="pre">execution_timeout</span></code> controls the
 maximum time allowed for every execution. If <code class="docutils literal notranslate"><span class="pre">execution_timeout</span></code> is breached, the task times out and
-<code class="docutils literal notranslate"><span class="pre">AirflowTaskTimeout</span></code> is raised.</p>
+<code class="docutils literal notranslate"><span class="pre">AirflowTaskTimeout</span></code> is raised. For tasks executed by the Python task runner, the task supervisor enforces
+the timeout from outside the task process too: if the task has not stopped within <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">killed_task_cleanup_time</span></code>
+seconds after <code class="docutils literal notranslate"><span class="pre">execution_timeout</span></code> elapses (for example because it is blocked in native code that never returns
+control to Python), the supervisor sends it SIGTERM, and SIGKILL after the same period again.</p>
 <p>In addition, sensors have a <code class="docutils literal notranslate"><span class="pre">timeout</span></code> parameter. This only matters for sensors in <code class="docutils literal notranslate"><span class="pre">reschedule</span></code> mode. <code class="docutils literal notranslate"><span class="pre">timeout</span></code> controls the maximum
 time allowed for the sensor to succeed. If <code class="docutils literal notranslate"><span class="pre">timeout</span></code> is breached, <code class="docutils literal notranslate"><span class="pre">AirflowSensorTimeout</span></code> will be raised and the sensor fails immediately
 without retrying.</p>
@@ -861,12 +883,12 @@ it can retry up to 2 times as defined by <code class="docutils literal notransla
 still have up to 3600 seconds in total for it to succeed.</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sensor</span> <span class="o">=</span> <span class="n">SFTPSensor</span><span class="p">(</span>
-    <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;sensor&quot;</span><span class="p">,</span>
-    <span class="n">path</span><span class="o">=</span><span class="s2">&quot;/root/test&quot;</span><span class="p">,</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"sensor"</span><span class="p">,</span>
+    <span class="n">path</span><span class="o">=</span><span class="s2">"/root/test"</span><span class="p">,</span>
     <span class="n">execution_timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">60</span><span class="p">),</span>
     <span class="n">timeout</span><span class="o">=</span><span class="mi">3600</span><span class="p">,</span>
     <span class="n">retries</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;reschedule&quot;</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">"reschedule"</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -892,20 +914,20 @@ without modifying task code.</p>
 <p>Define a policy with rules that map exception types to actions, then apply it to a task:</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/example_retry_policy.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/example_retry_policy.html"><span class="viewcode-link">[source]</span></a></p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">ExceptionRetryPolicy</span><span class="p">,</span> <span class="n">RetryAction</span><span class="p">,</span> <span class="n">RetryRule</span><span class="p">,</span> <span class="n">task</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">ChainRetryPolicy</span><span class="p">,</span> <span class="n">ExceptionRetryPolicy</span><span class="p">,</span> <span class="n">RetryAction</span><span class="p">,</span> <span class="n">RetryRule</span><span class="p">,</span> <span class="n">task</span>
 
 <span class="n">API_RETRY_POLICY</span> <span class="o">=</span> <span class="n">ExceptionRetryPolicy</span><span class="p">(</span>
     <span class="n">rules</span><span class="o">=</span><span class="p">[</span>
         <span class="n">RetryRule</span><span class="p">(</span>
-            <span class="n">exception</span><span class="o">=</span><span class="s2">&quot;requests.exceptions.HTTPError&quot;</span><span class="p">,</span>
+            <span class="n">exception</span><span class="o">=</span><span class="s2">"requests.exceptions.HTTPError"</span><span class="p">,</span>
             <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">RETRY</span><span class="p">,</span>
             <span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span>
-            <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;Rate limit, backing off&quot;</span><span class="p">,</span>
+            <span class="n">reason</span><span class="o">=</span><span class="s2">"Rate limit, backing off"</span><span class="p">,</span>
         <span class="p">),</span>
         <span class="n">RetryRule</span><span class="p">(</span>
-            <span class="n">exception</span><span class="o">=</span><span class="s2">&quot;google.auth.exceptions.RefreshError&quot;</span><span class="p">,</span>
+            <span class="n">exception</span><span class="o">=</span><span class="s2">"google.auth.exceptions.RefreshError"</span><span class="p">,</span>
             <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">FAIL</span><span class="p">,</span>
-            <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;Auth failure, not retryable&quot;</span><span class="p">,</span>
+            <span class="n">reason</span><span class="o">=</span><span class="s2">"Auth failure, not retryable"</span><span class="p">,</span>
         <span class="p">),</span>
         <span class="n">RetryRule</span><span class="p">(</span>
             <span class="n">exception</span><span class="o">=</span><span class="ne">ConnectionError</span><span class="p">,</span>
@@ -920,17 +942,17 @@ without modifying task code.</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/example_retry_policy.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/example_retry_policy.html"><span class="viewcode-link">[source]</span></a></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
-    <span class="n">dag_id</span><span class="o">=</span><span class="s2">&quot;example_retry_policy&quot;</span><span class="p">,</span>
+    <span class="n">dag_id</span><span class="o">=</span><span class="s2">"example_retry_policy"</span><span class="p">,</span>
     <span class="n">schedule</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;retry_policy&quot;</span><span class="p">],</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">,</span> <span class="s2">"retry_policy"</span><span class="p">],</span>
 <span class="p">):</span>
 
     <span class="nd">@task</span><span class="p">(</span><span class="n">retries</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">retry_policy</span><span class="o">=</span><span class="n">API_RETRY_POLICY</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">call_external_api</span><span class="p">():</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://api.example.com/data&quot;</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"https://api.example.com/data"</span><span class="p">)</span>
         <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
 
@@ -1002,7 +1024,7 @@ produce a warning.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># policies.py -- import in any DAG</span>
 <span class="n">STANDARD_RETRY_POLICY</span> <span class="o">=</span> <span class="n">ExceptionRetryPolicy</span><span class="p">(</span>
     <span class="n">rules</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="s2">&quot;requests.exceptions.HTTPError&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">FAIL</span><span class="p">),</span>
+        <span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="s2">"requests.exceptions.HTTPError"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">FAIL</span><span class="p">),</span>
         <span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="ne">ConnectionError</span><span class="p">,</span> <span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">10</span><span class="p">)),</span>
     <span class="p">],</span>
 <span class="p">)</span>
@@ -1012,17 +1034,74 @@ produce a warning.</p>
 </section>
 <section id="mapped-tasks">
 <h3>Mapped tasks<a class="headerlink" href="#mapped-tasks" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
-<p>Policies work with dynamic task mapping via <code class="docutils literal notranslate"><span class="pre">.partial()</span></code>. The policy applies
-per mapped task instance – if instance 2 of 10 hits FAIL, the other 9 continue
-independently:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@task</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">retry_policy</span><span class="o">=</span><span class="n">my_policy</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<p>Policies work with task mapping. The policy applies per mapped task
+instance – if instance 2 of 10 hits FAIL, the other 9 continue independently:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@task</span><span class="p">(</span><span class="n">retry_policy</span><span class="o">=</span><span class="n">my_policy</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">my_mapped_task</span><span class="p">(</span><span class="nb">input</span><span class="p">):</span> <span class="o">...</span>
+
+
+<span class="n">my_mapped_task</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="nb">input</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
 </pre></div>
 </div>
-<p>The policy is set at the task level via <code class="docutils literal notranslate"><span class="pre">.partial()</span></code>; all mapped instances
-share one policy. Per-index variation is not supported on <code class="docutils literal notranslate"><span class="pre">.expand()</span></code>, but the
-policy’s <code class="docutils literal notranslate"><span class="pre">evaluate()</span></code> method receives the exception, <code class="docutils literal notranslate"><span class="pre">try_number</span></code>, and full
-context, so per-index branching can be done inside the policy if needed.</p>
+<p>For a classic operator, pass the policy to <code class="docutils literal notranslate"><span class="pre">.partial()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">BashOperator</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"run"</span><span class="p">,</span> <span class="n">retry_policy</span><span class="o">=</span><span class="n">my_policy</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span>
+    <span class="n">bash_command</span><span class="o">=</span><span class="p">[</span><span class="s2">"echo 1"</span><span class="p">,</span> <span class="s2">"echo 2"</span><span class="p">,</span> <span class="s2">"echo 3"</span><span class="p">],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>The policy is set once on the task, in <code class="docutils literal notranslate"><span class="pre">&#64;task(...)</span></code> or <code class="docutils literal notranslate"><span class="pre">.partial()</span></code>; all
+mapped instances share one policy. Per-index variation is not supported on
+<code class="docutils literal notranslate"><span class="pre">.expand()</span></code>, but the policy’s <code class="docutils literal notranslate"><span class="pre">evaluate()</span></code> method receives the exception,
+<code class="docutils literal notranslate"><span class="pre">try_number</span></code>, and full context, so per-index branching can be done inside the
+policy if needed.</p>
+</section>
+<section id="chaining-policies">
+<h3>Chaining policies<a class="headerlink" href="#chaining-policies" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.4.0.</span></p>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">ChainRetryPolicy</span></code> consults policies in order. The first RETRY or FAIL wins; a
+policy that returns DEFAULT has nothing to add and the next one is asked. When every
+policy returns DEFAULT, the task’s own <code class="docutils literal notranslate"><span class="pre">retries</span></code> and <code class="docutils literal notranslate"><span class="pre">retry_delay</span></code> apply. Every
+policy sees the original task exception.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/example_dags/example_retry_policy.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/example_dags/example_retry_policy.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Cheap, deterministic rules first, so a slower policy (a model-backed one from a provider,</span>
+<span class="c1"># in practice; a second rule set stands in for it here) only sees what they did not settle.</span>
+<span class="c1"># The last rung is the floor for when that policy has no answer.</span>
+<span class="n">CHAINED_RETRY_POLICY</span> <span class="o">=</span> <span class="n">ChainRetryPolicy</span><span class="p">(</span>
+    <span class="p">[</span>
+        <span class="n">ExceptionRetryPolicy</span><span class="p">(</span>
+            <span class="n">rules</span><span class="o">=</span><span class="p">[</span><span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="s2">"google.auth.exceptions.RefreshError"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">FAIL</span><span class="p">)],</span>
+        <span class="p">),</span>
+        <span class="n">STANDARD_RETRY_POLICY</span><span class="p">,</span>
+        <span class="n">ExceptionRetryPolicy</span><span class="p">(</span>
+            <span class="n">rules</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="ne">TimeoutError</span><span class="p">,</span> <span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">reason</span><span class="o">=</span><span class="s2">"timeout floor"</span><span class="p">)</span>
+            <span class="p">],</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>This is how to put a cheap, deterministic policy in front of a slow or costly one, or
+to give a policy that can fail on its own (one that calls a model, for instance) a
+deterministic floor behind it. The policies need not know about each other, and they can
+come from different packages.</p>
+<p>Two consequences of “DEFAULT means next” to keep in mind:</p>
+<ul class="simple">
+<li><p>A <code class="docutils literal notranslate"><span class="pre">RetryRule</span></code> with <code class="docutils literal notranslate"><span class="pre">action=RetryAction.DEFAULT</span></code> passes control on rather than
+ending the chain. Its <code class="docutils literal notranslate"><span class="pre">retry_delay</span></code> is dropped, as it is on any DEFAULT.</p></li>
+<li><p>An <code class="docutils literal notranslate"><span class="pre">ExceptionRetryPolicy</span></code> with <code class="docutils literal notranslate"><span class="pre">default=RetryAction.FAIL</span></code> fails every exception
+its rules do not match, so it ends the chain wherever it sits.</p></li>
+</ul>
+<p>A policy that raises an ordinary exception, or returns something other than a
+<code class="docutils literal notranslate"><span class="pre">RetryDecision</span></code>, is logged and treated as DEFAULT, so one broken policy does not take the
+rules after it down with it. The winning decision’s reason names the policy that decided and
+then what the earlier ones said (<code class="docutils literal notranslate"><span class="pre">HTTPStatusRetryPolicy:</span> <span class="pre">HTTP</span> <span class="pre">503</span> <span class="pre">(after</span> <span class="pre">ExceptionRetryPolicy:</span>
+<span class="pre">no</span> <span class="pre">decision)</span></code>). That string is the task’s <code class="docutils literal notranslate"><span class="pre">retry_reason</span></code> on a FAIL as well as a RETRY; when
+no policy decided, it appears only in the task log as the <code class="docutils literal notranslate"><span class="pre">Retry</span> <span class="pre">policy</span> <span class="pre">decision</span></code> line.</p>
 </section>
 <section id="custom-retry-policies">
 <h3>Custom retry policies<a class="headerlink" href="#custom-retry-policies" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
@@ -1039,18 +1118,18 @@ number, max tries, and the full Airflow context (<code class="docutils literal n
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">HTTPStatusRetryPolicy</span><span class="p">(</span><span class="n">RetryPolicy</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Route retry decisions by HTTP status code, honouring Retry-After on 429s.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Route retry decisions by HTTP status code, honouring Retry-After on 429s."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">,</span> <span class="n">try_number</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exception</span><span class="p">,</span> <span class="n">requests</span><span class="o">.</span><span class="n">HTTPError</span><span class="p">)</span> <span class="ow">and</span> <span class="n">exception</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">status</span> <span class="o">=</span> <span class="n">exception</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span>
             <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="mi">429</span><span class="p">:</span>  <span class="c1"># rate limited -- honour Retry-After header</span>
-                <span class="n">retry_after</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">exception</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Retry-After&quot;</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
-                <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">retry_after</span><span class="p">))</span>
+                <span class="n">retry_after</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">exception</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Retry-After"</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
+                <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">retry_after</span><span class="p">))</span>
             <span class="k">if</span> <span class="mi">500</span> <span class="o">&lt;=</span> <span class="n">status</span> <span class="o">&lt;</span> <span class="mi">600</span><span class="p">:</span>  <span class="c1"># server error -- worth retrying</span>
                 <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">retry</span><span class="p">()</span>
             <span class="k">if</span> <span class="mi">400</span> <span class="o">&lt;=</span> <span class="n">status</span> <span class="o">&lt;</span> <span class="mi">500</span><span class="p">:</span>  <span class="c1"># client error -- not retryable</span>
-                <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;HTTP </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="sa">f</span><span class="s2">"HTTP </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">default</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -1060,14 +1139,21 @@ DAG was triggered:</p>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">BackfillAwareRetryPolicy</span><span class="p">(</span><span class="n">RetryPolicy</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fail fast during backfills so historical errors surface immediately.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Fail fast during backfills so historical errors surface immediately."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">,</span> <span class="n">try_number</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">context</span> <span class="ow">and</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;dag_run&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">run_type</span> <span class="o">==</span> <span class="s2">&quot;backfill&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">&quot;Backfill run -- not retrying&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">context</span> <span class="ow">and</span> <span class="n">context</span><span class="p">[</span><span class="s2">"dag_run"</span><span class="p">]</span><span class="o">.</span><span class="n">run_type</span> <span class="o">==</span> <span class="s2">"backfill"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">"Backfill run -- not retrying"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">default</span><span class="p">()</span>
 </pre></div>
 </div>
+<p>A retry policy only decides whether and when a task gets another attempt. It
+receives the full run <code class="docutils literal notranslate"><span class="pre">context</span></code>, so it can inspect checkpointed progress
+through <code class="docutils literal notranslate"><span class="pre">context[&quot;task_state_store&quot;]</span></code> when making that decision, but it
+never persists or restores that progress itself – resuming from a checkpoint
+is the task’s own work. For a task that also needs to resume from where it
+left off, pair a retry policy with the task state store described in
+<a class="reference internal" href="resumable-tasks.html#concepts-resumable-tasks-retry-policies"><span class="std std-ref">Retry policies and durable execution</span></a>.</p>
 </section>
 </section>
 <section id="task-instance-heartbeat-timeout">
@@ -1101,11 +1187,11 @@ many reasons, including:</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
 
 
-<span class="nd">@dag</span><span class="p">(</span><span class="n">start_date</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">schedule</span><span class="o">=</span><span class="s2">&quot;@once&quot;</span><span class="p">,</span> <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="nd">@dag</span><span class="p">(</span><span class="n">start_date</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">schedule</span><span class="o">=</span><span class="s2">"@once"</span><span class="p">,</span> <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">sleep_dag</span><span class="p">():</span>
     <span class="n">t1</span> <span class="o">=</span> <span class="n">BashOperator</span><span class="p">(</span>
-        <span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;sleep_10_minutes&quot;</span><span class="p">,</span>
-        <span class="n">bash_command</span><span class="o">=</span><span class="s2">&quot;sleep 600&quot;</span><span class="p">,</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"sleep_10_minutes"</span><span class="p">,</span>
+        <span class="n">bash_command</span><span class="o">=</span><span class="s2">"sleep 600"</span><span class="p">,</span>
     <span class="p">)</span>
 
 
@@ -1121,8 +1207,8 @@ many reasons, including:</p>
 <p>This is achieved via the <code class="docutils literal notranslate"><span class="pre">executor_config</span></code> argument to a Task or Operator. Here’s an example of setting the Docker image for a task that will run on the <code class="docutils literal notranslate"><span class="pre">KubernetesExecutor</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MyOperator</span><span class="p">(</span><span class="o">...</span><span class="p">,</span>
     <span class="n">executor_config</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;KubernetesExecutor&quot;</span><span class="p">:</span>
-            <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="s2">&quot;myCustomDockerImage&quot;</span><span class="p">}</span>
+        <span class="s2">"KubernetesExecutor"</span><span class="p">:</span>
+            <span class="p">{</span><span class="s2">"image"</span><span class="p">:</span> <span class="s2">"myCustomDockerImage"</span><span class="p">}</span>
     <span class="p">}</span>
 <span class="p">)</span>
 </pre></div>
@@ -1209,6 +1295,7 @@ many reasons, including:</p>
 <li><a class="reference internal" href="#">Tasks</a><ul>
 <li><a class="reference internal" href="#relationships">Relationships</a></li>
 <li><a class="reference internal" href="#task-instances">Task Instances</a><ul>
+<li><a class="reference internal" href="#marking-a-task-instance-as-skipped">Marking a Task Instance as skipped</a></li>
 <li><a class="reference internal" href="#relationship-terminology">Relationship Terminology</a></li>
 </ul>
 </li>
@@ -1221,6 +1308,7 @@ many reasons, including:</p>
 <li><a class="reference internal" href="#composition-with-existing-parameters">Composition with existing parameters</a></li>
 <li><a class="reference internal" href="#reusable-policies">Reusable policies</a></li>
 <li><a class="reference internal" href="#mapped-tasks">Mapped tasks</a></li>
+<li><a class="reference internal" href="#chaining-policies">Chaining policies</a></li>
 <li><a class="reference internal" href="#custom-retry-policies">Custom retry policies</a></li>
 </ul>
 </li>
@@ -1451,8 +1539,8 @@ many reasons, including:</p>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

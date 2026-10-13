@@ -10,7 +10,7 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title data-pagefind-weight="10.0">Checking Airflow Health Status &mdash; Airflow 3.3.2 Documentation</title>
+        <title data-pagefind-weight="10.0">Checking Airflow Health Status &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -443,6 +443,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../lineage.html">Lineage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../listeners.html">Listeners</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../dag-bundles.html">Dag Bundles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dag-importers.html">Dag Importers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../dag-serialization.html">Dag Serialization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../modules_management.html">Modules Management</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../scheduler.html">Scheduler</a></li>
@@ -531,7 +532,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -605,6 +606,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../lineage.html">Lineage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../listeners.html">Listeners</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../dag-bundles.html">Dag Bundles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dag-importers.html">Dag Importers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../dag-serialization.html">Dag Serialization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../modules_management.html">Modules Management</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../scheduler.html">Scheduler</a></li>
@@ -752,53 +754,112 @@ window.PAGEFIND_PATH = '../../_pagefind/pagefind.js';
 <p>Airflow has two methods to check the health of components - HTTP checks and CLI checks. All available checks are
 accessible through the CLI, but only some are accessible through HTTP due to the role of the component being checked
 and the tools being used to monitor the deployment.</p>
-<p>For example, when running on Kubernetes, use <a class="reference external" href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/">a Liveness probes</a> (<code class="docutils literal notranslate"><span class="pre">livenessProbe</span></code> property)
+<p>For example, when running on Kubernetes, use <a class="reference external" href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/">a Liveness probe</a> (<code class="docutils literal notranslate"><span class="pre">livenessProbe</span></code> property)
 with <a class="reference internal" href="#check-health-cli-checks-for-scheduler"><span class="std std-ref">CLI checks</span></a> on the scheduler deployment to restart it when it fails.
 For the webserver, you can configure the readiness probe (<code class="docutils literal notranslate"><span class="pre">readinessProbe</span></code> property) using <a class="reference internal" href="#check-health-http-endpoint"><span class="std std-ref">Webserver Health Check Endpoint</span></a>.</p>
 <p>For an example for a Docker Compose environment, see the <code class="docutils literal notranslate"><span class="pre">docker-compose.yaml</span></code> file available in the <a class="reference internal" href="../../howto/docker-compose/index.html"><span class="doc">Running Airflow in Docker</span></a>.</p>
 <section id="webserver-health-check-endpoint">
 <span id="check-health-http-endpoint"></span><h2>Webserver Health Check Endpoint<a class="headerlink" href="#webserver-health-check-endpoint" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>To check the health status of your Airflow instance, you can simply access the endpoint
-<code class="docutils literal notranslate"><span class="pre">/api/v2/monitor/health</span></code>. It will return a JSON object that provides a high-level glance at the health status across multiple Airflow components.</p>
+<code class="docutils literal notranslate"><span class="pre">/api/v2/monitor/health</span></code>. It will return a JSON object that provides a high-level glance at the health status across multiple Airflow components,
+including per-instance details when multiple schedulers, triggerers, or Dag processors are running.</p>
 <div class="highlight-JSON notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
-<span class="w">  </span><span class="nt">"metadatabase"</span><span class="p">:{</span>
-<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"healthy"</span>
+<span class="w">  </span><span class="nt">"metadatabase"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span>
 <span class="w">  </span><span class="p">},</span>
-<span class="w">  </span><span class="nt">"scheduler"</span><span class="p">:{</span>
-<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"healthy"</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"latest_scheduler_heartbeat"</span><span class="p">:</span><span class="s2">"2018-12-26 17:15:11+00:00"</span>
+<span class="w">  </span><span class="nt">"scheduler"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"latest_scheduler_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:15:11+00:00"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"detailed_status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"instances"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"hostname"</span><span class="p">:</span><span class="w"> </span><span class="s2">"scheduler-1.example.com"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"latest_scheduler_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:15:11+00:00"</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
 <span class="w">  </span><span class="p">},</span>
-<span class="w">  </span><span class="nt">"triggerer"</span><span class="p">:{</span>
-<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"healthy"</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"latest_triggerer_heartbeat"</span><span class="p">:</span><span class="s2">"2018-12-26 17:16:12+00:00"</span>
+<span class="w">  </span><span class="nt">"triggerer"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"latest_triggerer_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:16:12+00:00"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"detailed_status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"degraded"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"instances"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"hostname"</span><span class="p">:</span><span class="w"> </span><span class="s2">"triggerer-1.example.com"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"latest_triggerer_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:16:12+00:00"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"team_names"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"team-a"</span><span class="p">]</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
 <span class="w">  </span><span class="p">},</span>
-<span class="w">  </span><span class="nt">"dag_processor"</span><span class="p">:{</span>
-<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"healthy"</span><span class="p">,</span>
-<span class="w">    </span><span class="nt">"latest_dag_processor_heartbeat"</span><span class="p">:</span><span class="s2">"2018-12-26 17:16:12+00:00"</span>
+<span class="w">  </span><span class="nt">"dag_processor"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"latest_dag_processor_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:16:12+00:00"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"detailed_status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"instances"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">"hostname"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dag-processor-1.example.com"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"latest_dag_processor_heartbeat"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2018-12-26T17:16:12+00:00"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"bundle_names"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"dags-team-a"</span><span class="p">]</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 </pre></div>
 </div>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">metadatabase</span></code></p>
 <ul class="simple">
-<li><p>The <code class="docutils literal notranslate"><span class="pre">status</span></code> of each component can be either “healthy” or “unhealthy”</p>
-<ul>
-<li><p>The status of <code class="docutils literal notranslate"><span class="pre">metadatabase</span></code> depends on whether a valid connection can be initiated with the database</p></li>
-<li><p>The status of <code class="docutils literal notranslate"><span class="pre">scheduler</span></code> depends on when the latest scheduler heartbeat was received</p>
-<ul>
-<li><p>If the last heartbeat was received more than 30 seconds (default value) earlier than the current time, the scheduler is
-considered unhealthy</p></li>
-<li><p>This threshold value can be specified using the option <code class="docutils literal notranslate"><span class="pre">scheduler_health_check_threshold</span></code> within the
-<code class="docutils literal notranslate"><span class="pre">[scheduler]</span></code> section in <code class="docutils literal notranslate"><span class="pre">airflow.cfg</span></code></p></li>
-<li><p>If you run more than one scheduler, only the state of one scheduler will be reported, i.e. only one working scheduler is enough
-for the scheduler state to be considered healthy</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">status</span></code> is <code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> when a valid connection can be initiated with the database, otherwise <code class="docutils literal notranslate"><span class="pre">&quot;unhealthy&quot;</span></code>.</p></li>
 </ul>
 </li>
-<li><p>The status of the <code class="docutils literal notranslate"><span class="pre">triggerer</span></code> behaves exactly like that of the <code class="docutils literal notranslate"><span class="pre">scheduler</span></code> as described above.
-Note that the <code class="docutils literal notranslate"><span class="pre">status</span></code> and <code class="docutils literal notranslate"><span class="pre">latest_triggerer_heartbeat</span></code> fields in the health check response will be null for
-deployments that do not include a <code class="docutils literal notranslate"><span class="pre">triggerer</span></code> component.</p></li>
-<li><p>The status of the <code class="docutils literal notranslate"><span class="pre">dag_processor</span></code> behaves exactly like that of the <code class="docutils literal notranslate"><span class="pre">scheduler</span></code> as described above.
-Note that the <code class="docutils literal notranslate"><span class="pre">status</span></code> and <code class="docutils literal notranslate"><span class="pre">latest_dag_processor_heartbeat</span></code> fields in the health check response will be null for
-deployments that do not include a <code class="docutils literal notranslate"><span class="pre">dag_processor</span></code> component.</p></li>
+<li><p>Component-level fields for <code class="docutils literal notranslate"><span class="pre">scheduler</span></code>, <code class="docutils literal notranslate"><span class="pre">triggerer</span></code>, and <code class="docutils literal notranslate"><span class="pre">dag_processor</span></code></p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">status</span></code> (legacy aggregate): <code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> if <strong>any</strong> running instance is alive, otherwise <code class="docutils literal notranslate"><span class="pre">&quot;unhealthy&quot;</span></code>
+(including when no running jobs exist for that component).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">detailed_status</span></code>: whether every part of that component’s work is being covered by a live instance.
+What counts as “every part” differs per component, because only some of them divide their work up:</p>
+<ul class="simple">
+<li><p><strong>Dag processor</strong> — the parts are the Dag bundles in <code class="docutils literal notranslate"><span class="pre">[dag_processor]</span> <span class="pre">dag_bundle_config_list</span></code>.
+A processor started without <code class="docutils literal notranslate"><span class="pre">--bundle-name</span></code> covers every configured bundle;
+one started with it covers only the bundles it was given.
+<code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> when every configured bundle has a live processor, <code class="docutils literal notranslate"><span class="pre">&quot;degraded&quot;</span></code> when only some do,
+<code class="docutils literal notranslate"><span class="pre">&quot;down&quot;</span></code> when none do.</p></li>
+<li><p><strong>Triggerer</strong> — with <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">multi_team</span></code> enabled, the parts are the teams those bundles are scoped to
+(plus the unscoped bundles), because a triggerer only picks up triggers for its own team.
+<code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> when every team scope has a live triggerer, <code class="docutils literal notranslate"><span class="pre">&quot;degraded&quot;</span></code> when only some do,
+<code class="docutils literal notranslate"><span class="pre">&quot;down&quot;</span></code> when none do. With multi-team disabled, no team filtering applies, so any live triggerer
+covers everything: <code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> if one is alive, <code class="docutils literal notranslate"><span class="pre">&quot;down&quot;</span></code> if none is.</p></li>
+<li><p><strong>Scheduler</strong> — schedulers are symmetric and share no partitioned work, so there is nothing partial
+to report: <code class="docutils literal notranslate"><span class="pre">&quot;healthy&quot;</span></code> if at least one is alive, <code class="docutils literal notranslate"><span class="pre">&quot;down&quot;</span></code> if none is. <code class="docutils literal notranslate"><span class="pre">&quot;degraded&quot;</span></code> is never
+returned for the scheduler. Use <code class="docutils literal notranslate"><span class="pre">instances</span></code> to see how many replicas are up, and your orchestrator
+or the <code class="docutils literal notranslate"><span class="pre">scheduler_heartbeat</span></code> metric to alert on reduced scheduling throughput.</p></li>
+</ul>
+<p>Because the expected set of work comes from configuration rather than from the job table,
+<code class="docutils literal notranslate"><span class="pre">detailed_status</span></code> is unaffected by how instances come and go. Restarting an instance — including after
+a <code class="docutils literal notranslate"><span class="pre">SIGKILL</span></code>, an out-of-memory kill, or a node eviction, none of which let Airflow mark the old job row
+as finished — does not report the component as <code class="docutils literal notranslate"><span class="pre">&quot;degraded&quot;</span></code>.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">latest_*_heartbeat</span></code>: the most recent heartbeat among running jobs of that type (ordered by heartbeat descending),
+or <code class="docutils literal notranslate"><span class="pre">null</span></code> when there are none.
+An instance is considered alive when its latest heartbeat is within the component health-check threshold
+(defaults and config options: <code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">scheduler_health_check_threshold</span></code>,
+<code class="docutils literal notranslate"><span class="pre">[triggerer]</span> <span class="pre">triggerer_health_check_threshold</span></code>,
+<code class="docutils literal notranslate"><span class="pre">[dag_processor]</span> <span class="pre">health_check_threshold</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">instances</span></code>: one entry per <strong>live</strong> instance of that type — <code class="docutils literal notranslate"><span class="pre">null</span></code> when none is live. Airflow cannot
+mark a job as finished when its process is killed abruptly (<code class="docutils literal notranslate"><span class="pre">SIGKILL</span></code>, an out-of-memory kill, a node
+eviction), so the job row of such an instance is never closed; listing it would show a host that is gone
+and, under an orchestrator that assigns a fresh hostname on each restart, will never come back.
+<code class="docutils literal notranslate"><span class="pre">status</span></code> and <code class="docutils literal notranslate"><span class="pre">latest_*_heartbeat</span></code> are still derived from every unfinished job, so how long a dead
+component has been silent stays visible after it drops out of <code class="docutils literal notranslate"><span class="pre">instances</span></code>. Each entry includes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">hostname</span></code>: host where the component is running</p></li>
+<li><p>the corresponding <code class="docutils literal notranslate"><span class="pre">latest_*_heartbeat</span></code> for that instance</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">team_names</span></code> (triggerer only): teams the triggerer is scoped to, empty when unscoped</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bundle_names</span></code> (Dag processor only): Dag bundles that processor is configured to parse, or <code class="docutils literal notranslate"><span class="pre">null</span></code> when unset</p></li>
+</ul>
+</li>
+<li><p>For HA deployments, prefer <code class="docutils literal notranslate"><span class="pre">detailed_status</span></code> and <code class="docutils literal notranslate"><span class="pre">instances</span></code> when you need to see every scheduler,
+triggerer, or Dag processor. The top-level <code class="docutils literal notranslate"><span class="pre">status</span></code> remains useful for simple probes that only care
+whether at least one instance is healthy.</p></li>
 </ul>
 </li>
 </ul>
@@ -851,7 +912,7 @@ with a non-zero error code.</p>
 <section id="http-monitoring-for-celery-cluster">
 <h2>HTTP monitoring for Celery Cluster<a class="headerlink" href="#http-monitoring-for-celery-cluster" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>You can optionally use Flower to monitor the health of the Celery cluster. It also provides an HTTP API that you can use to build a health check for your environment.</p>
-<p>For details about installation, see: <a class="reference external" href="/docs/apache-airflow-providers-celery/stable/celery_executor.html" title="(in apache-airflow-providers-celery v3.24.0)"><span>Celery Executor</span></a>. For details about usage, see: <a class="reference external" href="https://flower.readthedocs.io/">The Flower project documentation</a>.</p>
+<p>For details about installation, see: <a class="reference external" href="/docs/apache-airflow-providers-celery/stable/celery_executor.html" title="(in apache-airflow-providers-celery v3.25.0)"><span>Celery Executor</span></a>. For details about usage, see: <a class="reference external" href="https://flower.readthedocs.io/">The Flower project documentation</a>.</p>
 </section>
 <section id="cli-check-for-celery-workers">
 <h2>CLI Check for Celery Workers<a class="headerlink" href="#cli-check-for-celery-workers" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -1177,9 +1238,9 @@ If the parameter is set to <code class="docutils literal notranslate"><span clas
     <script src="../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../_static/js/globaltoc.js?v=32f50df6"></script>

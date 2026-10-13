@@ -10,7 +10,7 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title data-pagefind-weight="10.0">Task and Asset State Store Overview &mdash; Airflow 3.3.2 Documentation</title>
+        <title data-pagefind-weight="10.0">Task and Asset State Store Overview &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -521,7 +521,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -730,10 +730,10 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.3.</span></p>
 </div>
-<p>Airflow has always modeled tasks as stateless, idempotent units of work. A growing class of workloads, however, require some amount of data to be persisted outside of a task’s return value, like a submitted job ID that must survive a worker crash, a watermark that advances run-by-run, or a row counter exposed for observability. Task store and Asset store fill that gap without touching the XCom or Variable systems.</p>
+<p>Airflow has always modeled tasks as stateless, idempotent units of work. A growing class of workloads, however, require some amount of data to be persisted outside of a task’s return value, like a submitted job ID that must survive a worker crash, a watermark that advances run-by-run, or a row counter exposed for observability. Task state store and Asset state store fill that gap without touching the XCom or Variable systems.</p>
 <section id="task-and-asset-state-store">
 <h2>Task and Asset State Store<a class="headerlink" href="#task-and-asset-state-store" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
-<p>Task and Asset store provide two key/value stores to persist data like a job ID, watermark, or row count. These two stores are differentiated by <em>what</em> they are scoped to:</p>
+<p>Task and Asset state store provide two key/value stores to persist data like a job ID, watermark, or row count. These two state stores are differentiated by <em>what</em> they are scoped to:</p>
 <table class="docutils align-default">
 <colgroup>
 <col style="width: 20.0%" />
@@ -749,12 +749,12 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><strong>Task store</strong></p></td>
-<td><p>A single task Instance (dag_id + run_id + task_id + map_index)</p></td>
+<tr class="row-even"><td><p><strong>Task state store</strong></p></td>
+<td><p>A single task Instance (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">run_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code> + <code class="docutils literal notranslate"><span class="pre">region_id</span></code> + <code class="docutils literal notranslate"><span class="pre">region_index</span></code>)</p></td>
 <td><p>Configurable retention; cleared on task success when <code class="docutils literal notranslate"><span class="pre">clear_on_success</span> <span class="pre">=</span> <span class="pre">True</span></code></p></td>
 <td><p>Survive retries, track in-flight jobs, checkpoint progress within a run, resume progress from checkpoint set by a past run</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Asset store</strong></p></td>
+<tr class="row-odd"><td><p><strong>Asset state store</strong></p></td>
 <td><p>An asset (independent of any particular run)</p></td>
 <td><p>Persists indefinitely; removed only when the asset is deactivated</p></td>
 <td><p>Cross-run watermarks, incremental-load cursors, per-asset metadata</p></td>
@@ -783,17 +783,17 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <tr class="row-odd"><td><p><strong>Variables</strong></p></td>
 <td><p>Deployment-wide or installation-wide configuration that changes infrequently and is set by operators rather than by tasks themselves.</p></td>
 </tr>
-<tr class="row-even"><td><p><strong>Task store</strong></p></td>
+<tr class="row-even"><td><p><strong>Task state store</strong></p></td>
 <td><p>Data that must survive a worker crash or data that must survive across retries within the <strong>same run</strong>. An external job ID written before a long-running job completes is a perfect use case for task state store.</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Asset store</strong></p></td>
+<tr class="row-odd"><td><p><strong>Asset state store</strong></p></td>
 <td><p>Data that must persist <strong>across asset events</strong> or while asset “watching” and is logically owned by an asset rather than a task. For example, a watermark that advances each time a file lands in an object store.</p></td>
 </tr>
 </tbody>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>If your current implementation already leverages an XCom-based pattern successfully, there’s <strong>no need to migrate</strong> to task state store. Task store is meant to solve problems that XCom was never designed for.</p>
+<p>If your current implementation already leverages an XCom-based pattern successfully, there’s <strong>no need to migrate</strong> to task state store. Task state store is meant to solve problems that XCom was never designed for.</p>
 </div>
 </section>
 <section id="further-reading">
@@ -1106,9 +1106,9 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

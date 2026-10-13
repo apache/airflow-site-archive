@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -427,6 +424,7 @@
 <li class="toctree-l2"><a class="reference internal" href="lineage.html">Lineage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="listeners.html">Listeners</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dag-bundles.html">Dag Bundles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dag-importers.html">Dag Importers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dag-serialization.html">Dag Serialization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="modules_management.html">Modules Management</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Scheduler</a><ul>
@@ -585,6 +583,7 @@
 <li class="toctree-l2"><a class="reference internal" href="lineage.html">Lineage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="listeners.html">Listeners</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dag-bundles.html">Dag Bundles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dag-importers.html">Dag Importers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dag-serialization.html">Dag Serialization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="modules_management.html">Modules Management</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Scheduler</a><ul>
@@ -774,13 +773,16 @@ In the UI, it appears as if Airflow is running your tasks a day <strong>late</st
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The scheduler is designed for high throughput. This is an informed design decision to achieve scheduling
-tasks as soon as possible. The scheduler checks how many free slots available in a pool and schedule at most that number of tasks instances in one iteration.
+tasks as soon as possible. The scheduler checks how many free slots are available in a pool and schedules at most that number of task instances in one iteration.
 This means that task priority will only come into effect when there are more scheduled tasks
 waiting than the queue slots. Thus there can be cases where low priority tasks will be scheduled before high priority tasks if they share the same batch.
 For more read about that you can reference <a class="reference external" href="https://github.com/apache/airflow/discussions/28809">this GitHub discussion</a>.</p>
 </div>
 <section id="running-more-than-one-scheduler">
 <span id="scheduler-ha"></span><h2>Running More Than One Scheduler<a class="headerlink" href="#running-more-than-one-scheduler" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 2.0.0.</span></p>
+</div>
 <p>Airflow supports running more than one scheduler concurrently – both for performance reasons and for
 resiliency.</p>
 <section id="overview">
@@ -977,18 +979,19 @@ running, so there is no harm in not detecting this for a while.</p>
 queued tasks that were launched by the dead process will be “adopted” and
 monitored by this scheduler instead.</p>
 </li>
-<li><p><a class="reference internal" href="../configurations-ref.html#config-scheduler-max-tis-per-query"><span class="std std-ref">max_tis_per_query</span></a>
-The batch size of queries in the scheduling main loop. This should not be greater than
+<li><p><a class="reference internal" href="../configurations-ref.html#config-scheduler-max-tis-per-query"><span class="std std-ref">max_tis_per_query</span></a></p>
+<p>The batch size of queries in the scheduling main loop. This should not be greater than
 <code class="docutils literal notranslate"><span class="pre">core.parallelism</span></code>. If this is too high then SQL query performance may be impacted by
 complexity of query predicate, and/or excessive locking.</p>
 <p>Additionally, you may hit the maximum allowable query length for your db.
 Set this to 0 to use the value of <code class="docutils literal notranslate"><span class="pre">core.parallelism</span></code>.</p>
 </li>
-<li><p><a class="reference internal" href="../configurations-ref.html#config-scheduler-scheduler-idle-sleep-time"><span class="std std-ref">scheduler_idle_sleep_time</span></a>
-Controls how long the scheduler will sleep between loops, but if there was nothing to do
+<li><p><a class="reference internal" href="../configurations-ref.html#config-scheduler-scheduler-idle-sleep-time"><span class="std std-ref">scheduler_idle_sleep_time</span></a></p>
+<p>Controls how long the scheduler will sleep between loops, but if there was nothing to do
 in the loop. i.e. if it scheduled something then it will start the next loop
 iteration straight away. This parameter is badly named (historical reasons) and it will be
-renamed in the future with deprecation of the current name.</p></li>
+renamed in the future with deprecation of the current name.</p>
+</li>
 </ul>
 </section>
 </section>
@@ -1305,8 +1308,8 @@ renamed in the future with deprecation of the current name.</p></li>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

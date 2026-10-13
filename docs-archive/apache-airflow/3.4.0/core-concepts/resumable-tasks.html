@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -427,10 +424,12 @@
 <li class="toctree-l2"><a class="reference internal" href="sensors.html">Sensors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="taskflow.html">TaskFlow</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Resumable Tasks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#durable-execution">Durable execution</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#deferrable-operators">Deferrable Operators</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#concepts-resumable-tasks-resumable">Resumable Tasks</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#asynchronous-tasks">Asynchronous Tasks</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#comparison">Comparison</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#retry-policies-and-durable-execution">Retry policies and durable execution</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="executor/index.html">Executor</a></li>
@@ -580,10 +579,12 @@
 <li class="toctree-l2"><a class="reference internal" href="sensors.html">Sensors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="taskflow.html">TaskFlow</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Resumable Tasks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#durable-execution">Durable execution</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#deferrable-operators">Deferrable Operators</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#concepts-resumable-tasks-resumable">Resumable Tasks</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#asynchronous-tasks">Asynchronous Tasks</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#comparison">Comparison</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#retry-policies-and-durable-execution">Retry policies and durable execution</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="executor/index.html">Executor</a></li>
@@ -743,8 +744,22 @@ poll, and collect the result.</p>
 entire polling duration, and if the worker process is restarted or the host is preempted, the task
 retries from scratch, losing all the progress made. Depending on the operator, that means the external
 job is submitted again, creating a duplicate run in context of the external system.</p>
-<p>Airflow recommends three approaches for handling long-running external work. Understanding the trade-offs
-between them helps you choose the right one for your situation.</p>
+<section id="durable-execution">
+<span id="concepts-durable-execution"></span><h2>Durable execution<a class="headerlink" href="#durable-execution" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p>Surviving that failure mode is what <strong>durable execution</strong> means: a task outlives the loss of the
+process running it and can continue / re-attach from where it stopped, rather than repeating work
+already done or submitting a duplicate job to an external system.</p>
+<p>The <a class="reference internal" href="task-state-store.html"><span class="doc">task state store</span></a> is the mechanism Airflow provides to achieve it. It
+is the only per-task-instance storage that outlives a worker crash and is still readable by the
+next attempt, which is what lets a retry recover a checkpoint or an external job identifier written
+by the attempt before it. Durable execution is the outcome; the task state store is how you get it.</p>
+<p>Operator documentation across the provider ecosystem uses the same term for the operator-level
+feature built on this mechanism, normally exposed as a <code class="docutils literal notranslate"><span class="pre">durable</span></code> parameter. Spark, Kubernetes,
+Databricks, Snowflake, BigQuery, Redshift and Glue operators each have a “Durable execution”
+section describing what they persist and how they reconnect on retry.</p>
+<p>Airflow recommends three approaches for achieving this with long-running external work.
+Understanding the trade-offs between them helps you choose the right one for your situation.</p>
+</section>
 <section id="deferrable-operators">
 <span id="concepts-resumable-tasks-deferrable"></span><h2>Deferrable Operators<a class="headerlink" href="#deferrable-operators" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>A deferrable operator pauses itself at the point where it would otherwise start polling, hands
@@ -791,17 +806,17 @@ crash or a deliberate reschedule), it reads the checkpoint again and picks up fr
 
     <span class="nd">@task</span><span class="p">(</span><span class="n">retries</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">process_files</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">task_state_store</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">&quot;task_state_store&quot;</span><span class="p">]</span>
-        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;a.csv&quot;</span><span class="p">,</span> <span class="s2">&quot;b.csv&quot;</span><span class="p">,</span> <span class="s2">&quot;c.csv&quot;</span><span class="p">,</span> <span class="s2">&quot;d.csv&quot;</span><span class="p">]</span>
+        <span class="n">task_state_store</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">]</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"a.csv"</span><span class="p">,</span> <span class="s2">"b.csv"</span><span class="p">,</span> <span class="s2">"c.csv"</span><span class="p">,</span> <span class="s2">"d.csv"</span><span class="p">]</span>
 
-        <span class="n">last_processed</span> <span class="o">=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;last_processed&quot;</span><span class="p">)</span>
+        <span class="n">last_processed</span> <span class="o">=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"last_processed"</span><span class="p">)</span>
         <span class="n">start_index</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">if</span> <span class="n">last_processed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">start_index</span> <span class="o">=</span> <span class="n">files</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">last_processed</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
 
         <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">files</span><span class="p">[</span><span class="n">start_index</span><span class="p">:]:</span>
             <span class="c1"># ... process the file ...</span>
-            <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;last_processed&quot;</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
+            <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">"last_processed"</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
 
     <span class="n">process_files</span><span class="p">()</span>
 
@@ -818,6 +833,53 @@ still be running. Instead of having to handle this manually, the <a class="refer
 solves this by persisting the external job identifier before polling starts, and reconnecting to the
 existing job on retry instead of submitting a new one.</p>
 <p>For more details and a working example, see <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.ResumableJobMixin" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ResumableJobMixin</span></code></a>.</p>
+<p><strong>Retries resume, clearing starts over</strong></p>
+<p>A retry keeps the task’s <code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> entries, which is what makes crash recovery work: the
+next attempt reads the checkpoint or the external job id written by the attempt before it.</p>
+<p>Clearing a task discards them. Clearing means “run this again”, and a checkpoint records how far a
+task got, not what it got there with. If you fixed the code or the upstream data and cleared the
+task, resuming would leave the work done before the fix in place and silently mix it with the
+corrected work. So by default a cleared task starts from the beginning.</p>
+<p>To resume from the checkpoint instead, set <code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> when clearing, or tick the
+corresponding box in the clear dialog. That is the right choice when nothing about the inputs or the
+code changed and you only want the task to carry on where it stopped.</p>
+<p>This applies to clearing individual task instances through the REST API, the UI, or
+<code class="docutils literal notranslate"><span class="pre">airflowctl</span> <span class="pre">dags</span> <span class="pre">clear</span></code> (which clears every task instance in the matched Dag run(s) through this
+same endpoint). Clearing an entire Dag run through the Clear Run dialog/API, marking a task as
+failed or success (which clears downstream tasks as a side effect), and the core CLI’s
+<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">tasks</span> <span class="pre">clear</span></code> / <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">clear</span></code> (which call <code class="docutils literal notranslate"><span class="pre">clear_task_instances()</span></code> directly and
+never reach the discard endpoint) all still keep task state unconditionally today; see
+<a class="reference external" href="https://github.com/apache/airflow/issues/72929">#72929</a>.</p>
+<p><strong>Clearing a task that submitted an external job</strong></p>
+<p>For an operator with durable execution the stored value is an external job id, so discarding it has
+a different consequence: the next attempt submits a new job rather than reconnecting to the existing
+one.</p>
+<p>Whether that matters depends on what happened to the job:</p>
+<ul class="simple">
+<li><p>Most operators cancel the external job in <code class="docutils literal notranslate"><span class="pre">on_kill</span></code>, so clearing a <em>running</em> task stops the job
+and there is nothing left to reconnect to. Submitting a fresh one is the only option anyway.</p></li>
+<li><p>An operator configured, or defaulting, to leave the job running on kill keeps it alive, so a
+fresh submission runs alongside it. Check the operator’s own docs — for example
+<code class="docutils literal notranslate"><span class="pre">GlueJobOperator</span></code> defaults <code class="docutils literal notranslate"><span class="pre">stop_job_run_on_kill</span></code> to <code class="docutils literal notranslate"><span class="pre">False</span></code> and so leaves the job running
+unless you turn it on.</p></li>
+<li><p>Clearing a <em>failed</em> task never runs <code class="docutils literal notranslate"><span class="pre">on_kill</span></code> at all, so an external job that outlived the
+worker is still running.</p></li>
+<li><p>A deferred task has no worker process to run <code class="docutils literal notranslate"><span class="pre">on_kill</span></code> on. Instead, the Triggerer cancels the
+orphaned trigger and runs the trigger’s <code class="docutils literal notranslate"><span class="pre">on_kill</span></code>, bounded by <code class="docutils literal notranslate"><span class="pre">[triggerer]</span> <span class="pre">on_kill_timeout</span></code>.
+Most triggers cancel the external job there too.
+<code class="docutils literal notranslate"><span class="pre">GlueJobCompleteTrigger</span></code> and <code class="docutils literal notranslate"><span class="pre">LivyTrigger</span></code> don’t implement <code class="docutils literal notranslate"><span class="pre">on_kill</span></code>, but neither writes a
+job id to the state store when deferred either, so <code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> will not help for them. For
+a deferred <code class="docutils literal notranslate"><span class="pre">GlueJobOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">durable</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>, so it reattaches to a still-running
+Glue run by default and clearing it does not start over; stop the Glue run before clearing, or set
+<code class="docutils literal notranslate"><span class="pre">durable=False</span></code>, to force a fresh one. For a deferred <code class="docutils literal notranslate"><span class="pre">LivyOperator</span></code>, cancel the batch yourself
+before clearing.</p></li>
+</ul>
+<p>In the cases where the job is left running (the second bullet or a failed task), pass
+<code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> so the next attempt reconnects to the job already in flight instead of paying
+for a second one.</p>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">clear_on_success</span></code> is a separate control: it discards a task’s entries as
+soon as it reaches <code class="docutils literal notranslate"><span class="pre">SUCCESS</span></code>, so nothing is left for a later clear to find either way (see
+<a class="reference internal" href="../administration-and-deployment/task-and-asset-state-store.html"><span class="doc">Task and Asset State Store Configuration</span></a>).</p>
 </section>
 <section id="asynchronous-tasks">
 <span id="concepts-resumable-tasks-async"></span><h2>Asynchronous Tasks<a class="headerlink" href="#asynchronous-tasks" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -832,8 +894,9 @@ function, Airflow runs it inside an event loop, which lets you fan out many conc
 operations (HTTP requests, database queries, file reads) within a single task execution without
 blocking the event loop while waiting for each one.</p>
 <p>The worker slot is held for the full duration of the task. Async tasks are not designed for
-long external waits or crash recovery; they are designed for high-throughput I/O work that
-completes within a single execution.</p>
+long external waits; they are designed for high-throughput I/O work that completes within a
+single execution. To survive a worker crash, an async task can checkpoint its progress to
+<a class="reference internal" href="task-state-store.html"><span class="doc">task state store</span></a> with <code class="docutils literal notranslate"><span class="pre">aget</span></code>/<code class="docutils literal notranslate"><span class="pre">aset</span></code> and resume from the checkpoint on retry.</p>
 <p>For guidance on when to use async tasks versus deferrable operators, see
 <a class="reference external" href="/docs/task-sdk/stable/deferred-vs-async-operators.html" title="(in Apache Airflow Task SDK v1.4.0)"><span>Deferred vs Async Operators</span></a>.</p>
 </section>
@@ -880,6 +943,38 @@ completes within a single execution.</p>
 </tr>
 </tbody>
 </table>
+</section>
+<section id="retry-policies-and-durable-execution">
+<span id="concepts-resumable-tasks-retry-policies"></span><h2>Retry policies and durable execution<a class="headerlink" href="#retry-policies-and-durable-execution" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p>Long-running tasks typically need two separate things together: a retry
+policy, and durable execution as defined above. Each is configurable per
+task, and together they let a workflow span days without losing progress.</p>
+<p>A <strong>retry policy</strong> decides whether a failed attempt gets another try, and
+how long to wait before it. This is <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RetryPolicy" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RetryPolicy</span></code></a> and
+<a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.RetryDecision" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">RetryDecision</span></code></a> (see <a class="reference internal" href="tasks.html#concepts-retry-policies"><span class="std std-ref">Retry Policies</span></a>), or
+the LLM-driven
+<a class="reference external" href="/docs/apache-airflow-providers-common-ai/stable/_api/airflow/providers/common/ai/policies/retry/index.html#airflow.providers.common.ai.policies.retry.LLMRetryPolicy" title="(in apache-airflow-providers-common-ai v0.11.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMRetryPolicy</span></code></a>, which
+uses a model to read the error and make that call. That policy adds its own
+<code class="docutils literal notranslate"><span class="pre">fallback_rules</span></code>, applied when the classification call itself fails, so
+the decision does not depend on the model being reachable (see
+<a class="reference external" href="/docs/apache-airflow-providers-common-ai/stable/retry_policies.html" title="(in apache-airflow-providers-common-ai v0.11.0)"><span>Retry policies</span></a>).</p>
+<p><strong>Durable execution</strong> is what that next attempt resumes from. Backed by the
+task state store described above, it is what lets a task recover a
+checkpoint written by the attempt before it, rather than starting over.</p>
+<p>Long-running tasks, or LLM-driven tasks like agentic workflows, benefit
+most from both: the retry policy decides whether the error is worth
+retrying at all, and the task state store is what the retry resumes from.</p>
+<p>Consider using both when a task:</p>
+<ul class="simple">
+<li><p>Runs long enough that a worker crash mid-run is a real risk, and</p></li>
+<li><p>Needs a retry decision more nuanced than “always retry” or “never
+retry”, for example retrying rate limits but failing outright on bad
+credentials.</p></li>
+</ul>
+<p>The two operate independently. A task with <code class="docutils literal notranslate"><span class="pre">retries=5</span></code> and a checkpoint
+still stops for good after six failed attempts (the initial attempt plus five
+retries), but each of those retries picks up from the last checkpoint instead of
+reprocessing files it already finished, or resubmitting a job that is still running.</p>
 </section>
 </section>
 
@@ -959,10 +1054,12 @@ completes within a single execution.</p>
         <div class="wy-menu-vertical">
             <ul>
 <li><a class="reference internal" href="#">Resumable Tasks</a><ul>
+<li><a class="reference internal" href="#durable-execution">Durable execution</a></li>
 <li><a class="reference internal" href="#deferrable-operators">Deferrable Operators</a></li>
 <li><a class="reference internal" href="#concepts-resumable-tasks-resumable">Resumable Tasks</a></li>
 <li><a class="reference internal" href="#asynchronous-tasks">Asynchronous Tasks</a></li>
 <li><a class="reference internal" href="#comparison">Comparison</a></li>
+<li><a class="reference internal" href="#retry-policies-and-durable-execution">Retry policies and durable execution</a></li>
 </ul>
 </li>
 </ul>
@@ -1185,8 +1282,8 @@ completes within a single execution.</p>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

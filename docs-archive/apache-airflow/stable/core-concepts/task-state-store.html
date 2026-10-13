@@ -10,7 +10,7 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title data-pagefind-weight="10.0">Task State Store &mdash; Airflow 3.3.2 Documentation</title>
+        <title data-pagefind-weight="10.0">Task State Store &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -444,11 +444,13 @@
 </li>
 <li class="toctree-l4"><a class="reference internal" href="#delete-key"><code class="docutils literal notranslate"><span class="pre">delete(key)</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#aget-aset-adelete-aclear"><code class="docutils literal notranslate"><span class="pre">aget</span></code>, <code class="docutils literal notranslate"><span class="pre">aset</span></code>, <code class="docutils literal notranslate"><span class="pre">adelete</span></code>, <code class="docutils literal notranslate"><span class="pre">aclear</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#some-example-use-cases">Some Example Use Cases</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#external-job-resumption">External job resumption</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#intra-task-checkpointing">Intra-task checkpointing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#checkpointing-from-an-async-task">Checkpointing from an async task</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#progress-metadata">Progress metadata</a></li>
 </ul>
 </li>
@@ -542,7 +544,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -617,11 +619,13 @@
 </li>
 <li class="toctree-l4"><a class="reference internal" href="#delete-key"><code class="docutils literal notranslate"><span class="pre">delete(key)</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#aget-aset-adelete-aclear"><code class="docutils literal notranslate"><span class="pre">aget</span></code>, <code class="docutils literal notranslate"><span class="pre">aset</span></code>, <code class="docutils literal notranslate"><span class="pre">adelete</span></code>, <code class="docutils literal notranslate"><span class="pre">aclear</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#some-example-use-cases">Some Example Use Cases</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#external-job-resumption">External job resumption</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#intra-task-checkpointing">Intra-task checkpointing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#checkpointing-from-an-async-task">Checkpointing from an async task</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#progress-metadata">Progress metadata</a></li>
 </ul>
 </li>
@@ -772,10 +776,11 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.3.</span></p>
 </div>
-<p>Task store is a persistent key/value store scoped to a single task instance (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">run_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code> + <code class="docutils literal notranslate"><span class="pre">map_index</span></code>). It survives worker crashes and task retries within the same Dag run, making it suitable for storing external job IDs, intra-task checkpoints, and progress metadata.</p>
+<p>Task store is a persistent key/value store scoped to a single task instance (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">run_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code> + <code class="docutils literal notranslate"><span class="pre">region_id</span></code> + <code class="docutils literal notranslate"><span class="pre">map_index</span></code>). It survives worker crashes and task retries within the same Dag run, making it suitable for storing external job IDs, intra-task checkpoints, and progress metadata.</p>
+<p><code class="docutils literal notranslate"><span class="pre">region_id</span></code> is the all-zero UUID for task instances outside any dynamic region. Task instances created by dynamically expanded work, such as a loop, belong to a region, and two of them can share the same <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">run_id</span></code>, <code class="docutils literal notranslate"><span class="pre">task_id</span></code> and <code class="docutils literal notranslate"><span class="pre">map_index</span></code>. A custom backend must therefore include <code class="docutils literal notranslate"><span class="pre">region_id</span></code> in its uniqueness key.</p>
 <p>Because it outlives a worker crash and stays readable by the next attempt, the task state store is the mechanism behind <a class="reference internal" href="resumable-tasks.html#concepts-durable-execution"><span class="std std-ref">durable execution</span></a>, where a task continues
 from where it stopped instead of repeating work or submitting a duplicate external job. Provider operators that advertise a <code class="docutils literal notranslate"><span class="pre">durable</span></code> parameter are built on the API described here.</p>
-<p>Data persisted via task state store is accessed through the task context via <code class="docutils literal notranslate"><span class="pre">context[&quot;task_state_store&quot;]</span></code> and exposes four methods: <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">set</span></code>, <code class="docutils literal notranslate"><span class="pre">delete</span></code>, and <code class="docutils literal notranslate"><span class="pre">clear</span></code>.</p>
+<p>Data persisted via task state store is accessed through the task context via <code class="docutils literal notranslate"><span class="pre">context[&quot;task_state_store&quot;]</span></code> and exposes the synchronous methods <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">set</span></code>, <code class="docutils literal notranslate"><span class="pre">delete</span></code>, and <code class="docutils literal notranslate"><span class="pre">clear</span></code>, plus the async counterparts <code class="docutils literal notranslate"><span class="pre">aget</span></code>, <code class="docutils literal notranslate"><span class="pre">aset</span></code>, <code class="docutils literal notranslate"><span class="pre">adelete</span></code>, and <code class="docutils literal notranslate"><span class="pre">aclear</span></code> for use inside <code class="docutils literal notranslate"><span class="pre">async</span></code> tasks.</p>
 <section id="accessing-task-state-store">
 <h2>Accessing task state store<a class="headerlink" href="#accessing-task-state-store" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>Inside any <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>-decorated function or <code class="docutils literal notranslate"><span class="pre">BaseOperator.execute()</span></code> method, task state store is available through the <code class="docutils literal notranslate"><span class="pre">context</span></code> dictionary via the <code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> key. From there, it can be used to retrieve, set, delete, or clear data for a specific key-value pair. In this example, the <code class="docutils literal notranslate"><span class="pre">job_id</span></code> is retrieved from task state store, then updated, before being deleted. All data for that task is then removed using the <code class="docutils literal notranslate"><span class="pre">clear</span></code> method.</p>
@@ -790,7 +795,7 @@ from where it stopped instead of repeating work or submitting a duplicate extern
     <span class="n">my_value</span> <span class="o">=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"my_key"</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">"my_default_key"</span><span class="p">)</span>
 
     <span class="c1"># Set the new value</span>
-    <span class="n">new_value</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"It is </span><span class="si">{</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="si">}</span><span class="s2"> o'clock"</span>
+    <span class="n">new_value</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"It is </span><span class="si">{</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">12</span><span class="p">)</span><span class="si">}</span><span class="s2"> o'clock"</span>
     <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">"my_key"</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span>
 
     <span class="c1"># Delete the value</span>
@@ -831,7 +836,7 @@ from where it stopped instead of repeating work or submitting a duplicate extern
 </ul>
 <div class="admonition important">
 <p class="admonition-title">Important</p>
-<p><code class="docutils literal notranslate"><span class="pre">retention</span></code> accepts only a <a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.timedelta" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">timedelta</span></code></a>, not a plain integer number of days. Passing an integer raises a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">retention</span></code> accepts only a <a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.timedelta" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">timedelta</span></code></a>, not a plain integer number of days. Passing an integer raises a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># correct</span>
 <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">"key"</span><span class="p">,</span> <span class="s2">"val"</span><span class="p">,</span> <span class="n">retention</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">7</span><span class="p">))</span>
 
@@ -864,6 +869,17 @@ from where it stopped instead of repeating work or submitting a duplicate extern
 </pre></div>
 </div>
 </section>
+<section id="aget-aset-adelete-aclear">
+<h3><code class="docutils literal notranslate"><span class="pre">aget</span></code>, <code class="docutils literal notranslate"><span class="pre">aset</span></code>, <code class="docutils literal notranslate"><span class="pre">adelete</span></code>, <code class="docutils literal notranslate"><span class="pre">aclear</span></code><a class="headerlink" href="#aget-aset-adelete-aclear" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>Async counterparts of <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">set</span></code>, <code class="docutils literal notranslate"><span class="pre">delete</span></code>, and <code class="docutils literal notranslate"><span class="pre">clear</span></code> for use inside <code class="docutils literal notranslate"><span class="pre">async</span></code> tasks. They take the same arguments and behave identically to their synchronous siblings, but <code class="docutils literal notranslate"><span class="pre">await</span></code> the round-trip to the API server instead of blocking the event loop, so a coroutine can checkpoint its progress without stalling other concurrent work.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">value</span> <span class="o">=</span> <span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">aget</span><span class="p">(</span><span class="s2">"job_id"</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">"123456789"</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">aset</span><span class="p">(</span><span class="s2">"job_id"</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">retention</span><span class="o">=</span><span class="n">NEVER_EXPIRE</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">adelete</span><span class="p">(</span><span class="s2">"job_id"</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">aclear</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Calling the synchronous <code class="docutils literal notranslate"><span class="pre">get</span></code>/<code class="docutils literal notranslate"><span class="pre">set</span></code>/<code class="docutils literal notranslate"><span class="pre">delete</span></code>/<code class="docutils literal notranslate"><span class="pre">clear</span></code> from inside an <code class="docutils literal notranslate"><span class="pre">async</span></code> task blocks the event loop and defeats the concurrency the coroutine was written for. Use the <code class="docutils literal notranslate"><span class="pre">a</span></code>-prefixed methods there instead.</p>
+</section>
 </section>
 <section id="some-example-use-cases">
 <h2>Some Example Use Cases<a class="headerlink" href="#some-example-use-cases" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -895,7 +911,7 @@ the default retention window.</p>
 </pre></div>
 </div>
 <p>On a retry, the task finds the stored <code class="docutils literal notranslate"><span class="pre">job_id</span></code> and reattaches instead of submitting a duplicate job. Another example of this sort of logic can be found in <a class="reference external" href="https://github.com/apache/airflow/blob/main/airflow-core/src/airflow/example_dags/example_task_state_store.py">example_task_state_store.py</a>.</p>
-<p>For <code class="docutils literal notranslate"><span class="pre">BaseOperator</span></code> subclasses, the <code class="xref py py-class docutils literal notranslate"><span class="pre">ResumableJobMixin</span></code> encapsulates this pattern. It persists the external job ID to task state store after submission and, on retry, reconnects to an active job or resubmits if the prior job reached a terminal failure state.</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">BaseOperator</span></code> subclasses, the <a class="reference external" href="/docs/task-sdk/stable/api.html#airflow.sdk.ResumableJobMixin" title="(in Apache Airflow Task SDK v1.4.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ResumableJobMixin</span></code></a> encapsulates this pattern. It persists the external job ID to task state store after submission and, on retry, reconnects to an active job or resubmits if the prior job reached a terminal failure state.</p>
 </section>
 <section id="intra-task-checkpointing">
 <h3>Intra-task checkpointing<a class="headerlink" href="#intra-task-checkpointing" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
@@ -918,6 +934,27 @@ the default retention window.</p>
 </pre></div>
 </div>
 <p>On a retry, the task reads <code class="docutils literal notranslate"><span class="pre">last_page</span></code> and skips pages that were already processed.</p>
+</section>
+<section id="checkpointing-from-an-async-task">
+<h3>Checkpointing from an async task<a class="headerlink" href="#checkpointing-from-an-async-task" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
+<p>An <code class="docutils literal notranslate"><span class="pre">async</span></code> task gains concurrency by awaiting I/O instead of blocking on it. To keep that benefit while checkpointing, use the async accessors <code class="docutils literal notranslate"><span class="pre">aget</span></code>/<code class="docutils literal notranslate"><span class="pre">aset</span></code> so the task store round-trip does not stall the event loop. This is the same paginated-ingest pattern as above, written for a coroutine that paginates through an external API.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">task</span>
+
+<span class="k">with</span> <span class="n">DAG</span><span class="p">(</span><span class="s2">"async_paginated_ingest"</span><span class="p">,</span> <span class="n">schedule</span><span class="o">=</span><span class="s2">"@daily"</span><span class="p">):</span>
+
+    <span class="nd">@task</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ingest_pages</span><span class="p">(</span><span class="o">**</span><span class="n">context</span><span class="p">):</span>
+        <span class="n">task_state_store</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">]</span>
+        <span class="n">last_page</span> <span class="o">=</span> <span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">aget</span><span class="p">(</span><span class="s2">"last_page"</span><span class="p">)</span>
+
+        <span class="n">start_page</span> <span class="o">=</span> <span class="n">last_page</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">last_page</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
+
+        <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start_page</span><span class="p">,</span> <span class="n">total_pages</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">await</span> <span class="n">fetch_and_load</span><span class="p">(</span><span class="n">page</span><span class="p">)</span>
+            <span class="k">await</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">aset</span><span class="p">(</span><span class="s2">"last_page"</span><span class="p">,</span> <span class="n">page</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After a crash the task resumes from the stored <code class="docutils literal notranslate"><span class="pre">last_page</span></code> instead of restarting at page 1, without ever blocking the event loop.</p>
 </section>
 <section id="progress-metadata">
 <h3>Progress metadata<a class="headerlink" href="#progress-metadata" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
@@ -957,7 +994,7 @@ the default retention window.</p>
 </section>
 <section id="deferrable-tasks">
 <h3>Deferrable tasks<a class="headerlink" href="#deferrable-tasks" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
-<p>Once a task defers, the Triggerer handles continuity across poke cycles. Use task state store in deferrable tasks only when you need to survive an operator-initiated clear, not for normal poke continuity.</p>
+<p>Once a task defers, the Triggerer handles continuity across poke cycles. Clearing a deferred task does not synchronously cancel its trigger: the Triggerer only notices the trigger is orphaned on its next iteration, then cancels it via the trigger’s <code class="docutils literal notranslate"><span class="pre">on_kill</span></code>, bounded by <code class="docutils literal notranslate"><span class="pre">[triggerer]</span> <span class="pre">on_kill_timeout</span></code>. A new attempt can therefore start before that cancellation finishes. Most triggers implement <code class="docutils literal notranslate"><span class="pre">on_kill</span></code> to cancel the external job there, so the next attempt usually finds nothing left to reconnect to, but this is not guaranteed. The state store still matters for triggers that don’t implement <code class="docutils literal notranslate"><span class="pre">on_kill</span></code> and do rely on a stored job id to reconnect. <code class="docutils literal notranslate"><span class="pre">GlueJobCompleteTrigger</span></code> and <code class="docutils literal notranslate"><span class="pre">LivyTrigger</span></code> are not examples of that: neither writes a job id to the state store when deferred, so <code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> does not help there. For a deferred <code class="docutils literal notranslate"><span class="pre">GlueJobOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">durable</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>, so the next attempt reattaches by scanning for the job’s task UUID regardless of state store contents; clearing it does not start it over unless the Glue run has already stopped, or you set <code class="docutils literal notranslate"><span class="pre">durable=False</span></code>. For a deferred <code class="docutils literal notranslate"><span class="pre">LivyOperator</span></code>, cancel the running batch yourself before clearing to avoid submitting a duplicate.</p>
 </section>
 </section>
 <section id="mapped-tasks">
@@ -971,6 +1008,9 @@ the default retention window.</p>
 </section>
 <section id="automatic-cleanup-clear-on-success">
 <h2>Automatic cleanup (<code class="docutils literal notranslate"><span class="pre">clear_on_success</span></code>)<a class="headerlink" href="#automatic-cleanup-clear-on-success" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p>Task state store entries are also removed when a task instance is cleared through the REST API, the
+UI, or <code class="docutils literal notranslate"><span class="pre">airflowctl</span></code>: clearing discards them by default so the next attempt starts over, unless
+<code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> is set. See <a class="reference internal" href="resumable-tasks.html"><span class="doc">Resumable Tasks</span></a> for that behaviour.</p>
 <p>When <code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">clear_on_success</span> <span class="pre">=</span> <span class="pre">True</span></code>, all task state store keys for a task instance are automatically deleted when the task moves to the <code class="docutils literal notranslate"><span class="pre">success</span></code> state. This is useful for reducing storage when post-success observability is not needed.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -1065,11 +1105,13 @@ the default retention window.</p>
 </li>
 <li><a class="reference internal" href="#delete-key"><code class="docutils literal notranslate"><span class="pre">delete(key)</span></code></a></li>
 <li><a class="reference internal" href="#clear"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
+<li><a class="reference internal" href="#aget-aset-adelete-aclear"><code class="docutils literal notranslate"><span class="pre">aget</span></code>, <code class="docutils literal notranslate"><span class="pre">aset</span></code>, <code class="docutils literal notranslate"><span class="pre">adelete</span></code>, <code class="docutils literal notranslate"><span class="pre">aclear</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#some-example-use-cases">Some Example Use Cases</a><ul>
 <li><a class="reference internal" href="#external-job-resumption">External job resumption</a></li>
 <li><a class="reference internal" href="#intra-task-checkpointing">Intra-task checkpointing</a></li>
+<li><a class="reference internal" href="#checkpointing-from-an-async-task">Checkpointing from an async task</a></li>
 <li><a class="reference internal" href="#progress-metadata">Progress metadata</a></li>
 </ul>
 </li>
@@ -1301,9 +1343,9 @@ the default retention window.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

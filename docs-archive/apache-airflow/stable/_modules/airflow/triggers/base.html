@@ -9,7 +9,7 @@
 <head>
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>airflow.triggers.base &mdash; Airflow 3.3.2 Documentation</title>
+        <title>airflow.triggers.base &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -489,7 +489,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -769,9 +769,21 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="sd">    let them be re-instantiated elsewhere.</span>
 <span class="sd">    """</span>
 
-<div class="viewcode-block" id="BaseTrigger.supports_triggerer_queue">
-<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseTrigger.supports_triggerer_queue">[docs]</a>
-    <span class="n">supports_triggerer_queue</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
+    <span class="c1"># Whether a deferred task's queue should be inherited by this trigger when</span>
+    <span class="c1"># ``triggerer.queues_enabled`` is set. Subclasses that assign their own ``queue``</span>
+    <span class="c1"># directly (e.g. ``BaseEventTrigger``, ``CallbackTrigger``) must set this to False,</span>
+    <span class="c1"># or ``_defer_task`` will overwrite that queue with the deferring task's queue.</span>
+<div class="viewcode-block" id="BaseTrigger.trigger_queue_inherited_from_task">
+<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseTrigger.trigger_queue_inherited_from_task">[docs]</a>
+    <span class="n">trigger_queue_inherited_from_task</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+    <span class="c1"># Trigger queue assignment. None means no explicit assignment; ``BaseEventTrigger`` and</span>
+    <span class="c1"># ``CallbackTrigger`` set this in their ``__init__``, see `trigger_queue_inherited_from_task`.</span>
+    <span class="c1"># Declared as a class attribute since many provider triggers don't call ``super().__init__()``.</span>
+<div class="viewcode-block" id="BaseTrigger.queue">
+<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseTrigger.queue">[docs]</a>
+    <span class="n">queue</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -1029,20 +1041,34 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="sd">    See :mod:`airflow.triggers.shared_stream` for the full ack-mode design,</span>
 <span class="sd">    including snapshot-at-fan-out semantics, per-event timeout behavior, and</span>
 <span class="sd">    triggerer-restart redeliver notes.</span>
+
+<span class="sd">    **Trigger queue assignment**</span>
+
+<span class="sd">    Pass ``queue`` to assign this trigger to a specific trigger queue (see</span>
+<span class="sd">    :ref:`config:triggerer__queues_enabled` and the ``--queues`` option of</span>
+<span class="sd">    ``airflow triggerer``). When used with team-based triggerer node assignment,</span>
+<span class="sd">    the team and queue function as a logical 'AND'.</span>
 <span class="sd">    """</span>
 
-<div class="viewcode-block" id="BaseEventTrigger.supports_triggerer_queue">
-<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.supports_triggerer_queue">[docs]</a>
-    <span class="n">supports_triggerer_queue</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+    <span class="c1"># BaseEventTrigger sets its own `queue` directly (see `__init__` below), so</span>
+    <span class="c1"># `_defer_task` must not overwrite it with the deferring task's queue.</span>
+<div class="viewcode-block" id="BaseEventTrigger.trigger_queue_inherited_from_task">
+<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.trigger_queue_inherited_from_task">[docs]</a>
+    <span class="n">trigger_queue_inherited_from_task</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">queue</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="c1"># Injected by the triggerer before run() is called</span>
 <div class="viewcode-block" id="BaseEventTrigger.asset_state_store">
 <a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.asset_state_store">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">asset_state_store</span><span class="p">:</span> <span class="n">AssetStateStoreAccessors</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+        <span class="c1"># Read by Dag processing when registering the trigger; unused once running.</span>
+<div class="viewcode-block" id="BaseEventTrigger.queue">
+<a class="viewcode-back" href="../../../_api/airflow/triggers/base/index.html#airflow.triggers.base.BaseEventTrigger.queue">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -1565,9 +1591,9 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <script src="../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../_static/js/globaltoc.js?v=32f50df6"></script>

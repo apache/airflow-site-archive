@@ -10,7 +10,7 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title data-pagefind-weight="10.0">Backfill &mdash; Airflow 3.3.2 Documentation</title>
+        <title data-pagefind-weight="10.0">Backfill &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -524,7 +524,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -750,8 +750,13 @@ and Airflow will create runs in the range according to the Dag’s schedule.</p>
 <section id="concurrency-control">
 <h2>Concurrency control<a class="headerlink" href="#concurrency-control" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>You can set <code class="docutils literal notranslate"><span class="pre">max_active_runs</span></code> on a backfill and it will control how many Dag runs in
-the backfill can run concurrently. Backfill <code class="docutils literal notranslate"><span class="pre">max_active_runs</span></code> is applied independently
+the backfill can run concurrently. Backfill <code class="docutils literal notranslate"><span class="pre">max_active_runs</span></code> is applied independently of
 the Dag <code class="docutils literal notranslate"><span class="pre">max_active_runs</span></code> setting.</p>
+<p>Once a backfill’s Dag runs are actually running, the scheduler does not otherwise
+deprioritize their task scheduling relative to other running Dag runs. <code class="docutils literal notranslate"><span class="pre">max_active_runs</span></code>
+is therefore the primary lever for controlling how much of your scheduling capacity a
+backfill consumes at once — lower it to leave more room for time-sensitive scheduled work
+while the backfill is in progress.</p>
 </section>
 <section id="run-ordering">
 <h2>Run ordering<a class="headerlink" href="#run-ordering" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
@@ -788,7 +793,12 @@ runs in the range at the time you actually run the backfill.</p>
 <li><p><strong>Max active runs</strong>: limit concurrent backfill runs for this backfill.</p></li>
 <li><p><strong>Run backwards</strong>: execute most recent intervals first.</p></li>
 <li><p><strong>Advanced Config</strong>: optionally provide JSON <code class="docutils literal notranslate"><span class="pre">dag_run.conf</span></code>.</p></li>
-<li><p>If the Dag is paused, you can <strong>Unpause</strong> it in the same window.</p></li>
+<li><p>If the Dag is paused, choose under <strong>Dag is paused</strong> what happens to the Dag: <strong>Unpause</strong> (the
+default) makes the Dag active and resumes its schedule; <strong>Drain</strong> lets the unfinished Dag runs,
+including the backfill’s, start or resume without creating scheduled ones, and pauses the Dag again once
+they finish (see <a class="reference internal" href="dags.html#concepts-dag-pausing"><span class="std std-ref">Dag pausing, deactivation and deletion</span></a>); <strong>Keep paused</strong> leaves the backfill runs queued until the
+Dag is unpaused. Both <strong>Unpause</strong> and <strong>Drain</strong> show how many unfinished Dag runs will start or resume.
+Paused backfills remain paused under all three choices.</p></li>
 </ul>
 </li>
 </ol>
@@ -1115,9 +1125,9 @@ all backfills.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

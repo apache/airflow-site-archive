@@ -9,7 +9,7 @@
 <head>
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>airflow.timetables.assets &mdash; Airflow 3.3.2 Documentation</title>
+        <title>airflow.timetables.assets &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -489,7 +489,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -683,51 +683,61 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">typing</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">attrs</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTimetableInvalid</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.assets</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedAsset</span><span class="p">,</span> <span class="n">SerializedAssetBase</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.simple</span><span class="w"> </span><span class="kn">import</span> <span class="n">AssetTriggeredTimetable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.assets</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedAsset</span><span class="p">,</span> <span class="n">SerializedAssetAll</span><span class="p">,</span> <span class="n">SerializedAssetBase</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">Timetable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.simple</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AssetTriggeredTimetable</span><span class="p">,</span>
+    <span class="n">_coerce_asset_condition</span><span class="p">,</span>
+    <span class="n">_get_default_batch_asset_events</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagRunType</span>
 
 <span class="k">if</span> <span class="n">typing</span><span class="o">.</span><span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Collection</span>
-
     <span class="kn">import</span><span class="w"> </span><span class="nn">pendulum</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagRunInfo</span><span class="p">,</span> <span class="n">DataInterval</span><span class="p">,</span> <span class="n">TimeRestriction</span><span class="p">,</span> <span class="n">Timetable</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.timetables.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagRunInfo</span><span class="p">,</span> <span class="n">DataInterval</span><span class="p">,</span> <span class="n">TimeRestriction</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_validate_asset_time_schedule</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">timetable</span><span class="p">:</span> <span class="n">Timetable</span><span class="p">,</span> <span class="n">asset_condition</span><span class="p">:</span> <span class="n">SerializedAssetBase</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">timetable</span><span class="o">.</span><span class="n">asset_triggered</span> <span class="ow">or</span> <span class="n">timetable</span><span class="o">.</span><span class="n">asset_gated</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">AirflowTimetableInvalid</span><span class="p">(</span><span class="s2">"Cannot nest asset-aware timetables"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">asset_condition</span><span class="p">,</span> <span class="n">SerializedAssetBase</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">AirflowTimetableInvalid</span><span class="p">(</span><span class="s2">"All elements in 'assets' must be assets"</span><span class="p">)</span>
+
+
+<span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <div class="viewcode-block" id="AssetOrTimeSchedule">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">AssetOrTimeSchedule</span><span class="p">(</span><span class="n">AssetTriggeredTimetable</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Combine time-based scheduling with event-based scheduling."""</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">timetable</span><span class="p">:</span> <span class="n">Timetable</span><span class="p">,</span>
-        <span class="n">assets</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">SerializedAsset</span><span class="p">]</span> <span class="o">|</span> <span class="n">SerializedAssetBase</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">assets</span><span class="p">)</span>
+<div class="viewcode-block" id="AssetOrTimeSchedule.asset_condition">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.asset_condition">[docs]</a>
+    <span class="n">asset_condition</span><span class="p">:</span> <span class="n">SerializedAssetBase</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">"assets"</span><span class="p">,</span> <span class="n">converter</span><span class="o">=</span><span class="n">_coerce_asset_condition</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="AssetOrTimeSchedule.timetable">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.timetable">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span> <span class="o">=</span> <span class="n">timetable</span></div>
+    <span class="n">timetable</span><span class="p">:</span> <span class="n">Timetable</span></div>
 
-<div class="viewcode-block" id="AssetOrTimeSchedule.description">
-<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.description">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Triggered by assets or </span><span class="si">{</span><span class="n">timetable</span><span class="o">.</span><span class="n">description</span><span class="si">}</span><span class="s2">"</span></div>
+<div class="viewcode-block" id="AssetOrTimeSchedule.batch_asset_events">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.batch_asset_events">[docs]</a>
+    <span class="n">batch_asset_events</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">attrs</span><span class="o">.</span><span class="n">Factory</span><span class="p">(</span><span class="n">_get_default_batch_asset_events</span><span class="p">,</span> <span class="n">takes_self</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="p">)</span></div>
 
-<div class="viewcode-block" id="AssetOrTimeSchedule.periodic">
-<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.periodic">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">periodic</span> <span class="o">=</span> <span class="n">timetable</span><span class="o">.</span><span class="n">periodic</span></div>
 
-<div class="viewcode-block" id="AssetOrTimeSchedule.can_be_scheduled">
-<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.can_be_scheduled">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">can_be_scheduled</span> <span class="o">=</span> <span class="n">timetable</span><span class="o">.</span><span class="n">can_be_scheduled</span></div>
-
-<div class="viewcode-block" id="AssetOrTimeSchedule.active_runs_limit">
-<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.active_runs_limit">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">active_runs_limit</span> <span class="o">=</span> <span class="n">timetable</span><span class="o">.</span><span class="n">active_runs_limit</span></div>
+<div class="viewcode-block" id="AssetOrTimeSchedule.__attrs_post_init__">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.__attrs_post_init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__attrs_post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Triggered by assets or </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">description</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">periodic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">periodic</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">can_be_scheduled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">can_be_scheduled</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">active_runs_limit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">active_runs_limit</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -739,16 +749,18 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
             <span class="n">assets</span><span class="o">=</span><span class="n">decode_asset_like</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"asset_condition"</span><span class="p">]),</span>
             <span class="n">timetable</span><span class="o">=</span><span class="n">decode_timetable</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"timetable"</span><span class="p">]),</span>
+            <span class="n">batch_asset_events</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"batch_asset_events"</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
         <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="AssetOrTimeSchedule.validate">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetOrTimeSchedule.validate">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="p">,</span> <span class="n">AssetTriggeredTimetable</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">AirflowTimetableInvalid</span><span class="p">(</span><span class="s2">"cannot nest asset timetables"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">,</span> <span class="n">SerializedAssetBase</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">AirflowTimetableInvalid</span><span class="p">(</span><span class="s2">"all elements in 'assets' must be assets"</span><span class="p">)</span></div>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+        <span class="n">_validate_asset_time_schedule</span><span class="p">(</span>
+            <span class="n">timetable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="p">,</span>
+            <span class="n">asset_condition</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="AssetOrTimeSchedule.serialize">
@@ -759,6 +771,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">"asset_condition"</span><span class="p">:</span> <span class="n">encode_asset_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">),</span>
             <span class="s2">"timetable"</span><span class="p">:</span> <span class="n">encode_timetable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="p">),</span>
+            <span class="s2">"batch_asset_events"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_asset_events</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 
@@ -792,6 +805,137 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">run_type</span> <span class="o">!=</span> <span class="n">DagRunType</span><span class="o">.</span><span class="n">ASSET_TRIGGERED</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">generate_run_id</span><span class="p">(</span><span class="n">run_type</span><span class="o">=</span><span class="n">run_type</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">generate_run_id</span><span class="p">(</span><span class="n">run_type</span><span class="o">=</span><span class="n">run_type</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AssetAndTimeSchedule</span><span class="p">(</span><span class="n">Timetable</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Time-based schedule that waits for required assets before creating a run.</span>
+
+<span class="sd">    This timetable composes a time-based timetable with an asset condition. It</span>
+<span class="sd">    schedules runs according to the provided ``timetable`` (e.g. cron), but a run</span>
+<span class="sd">    is only created when all required assets are present. Unlike</span>
+<span class="sd">    :class:`AssetOrTimeSchedule`, this does not create asset-triggered runs.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.asset_gated">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.asset_gated">[docs]</a>
+    <span class="n">asset_gated</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">timetable</span><span class="p">:</span> <span class="n">Timetable</span><span class="p">,</span>
+        <span class="n">assets</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">SerializedAsset</span><span class="p">]</span> <span class="o">|</span> <span class="n">SerializedAssetBase</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.encoders</span><span class="w"> </span><span class="kn">import</span> <span class="n">ensure_serialized_asset</span>
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.timetable">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.timetable">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span> <span class="o">=</span> <span class="n">timetable</span></div>
+
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">assets</span><span class="p">,</span> <span class="n">SerializedAssetBase</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span> <span class="o">=</span> <span class="n">assets</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">assets</span><span class="p">,</span> <span class="n">Collection</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span> <span class="o">=</span> <span class="n">SerializedAssetAll</span><span class="p">([</span><span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">assets</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span> <span class="o">=</span> <span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">assets</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.deserialize">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.deserialize">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Timetable</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.decoders</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode_asset_like</span><span class="p">,</span> <span class="n">decode_timetable</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">assets</span><span class="o">=</span><span class="n">decode_asset_like</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"asset_condition"</span><span class="p">]),</span>
+            <span class="n">timetable</span><span class="o">=</span><span class="n">decode_timetable</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"timetable"</span><span class="p">]),</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.serialize">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.serialize">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.encoders</span><span class="w"> </span><span class="kn">import</span> <span class="n">encode_asset_like</span><span class="p">,</span> <span class="n">encode_timetable</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"asset_condition"</span><span class="p">:</span> <span class="n">encode_asset_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">),</span>
+            <span class="s2">"timetable"</span><span class="p">:</span> <span class="n">encode_timetable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="p">),</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.validate">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.validate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_validate_asset_time_schedule</span><span class="p">(</span>
+            <span class="n">timetable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="p">,</span>
+            <span class="n">asset_condition</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.description">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.description">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"Triggered by assets and </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">description</span><span class="si">}</span><span class="s2">"</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.summary">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.summary">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"Asset and </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">summary</span><span class="si">}</span><span class="s2">"</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.periodic">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.periodic">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">periodic</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">periodic</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.can_be_scheduled">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.can_be_scheduled">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">can_be_scheduled</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">can_be_scheduled</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="AssetAndTimeSchedule.active_runs_limit">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.active_runs_limit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">active_runs_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">active_runs_limit</span></div>
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.infer_manual_data_interval">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.infer_manual_data_interval">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">infer_manual_data_interval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">run_after</span><span class="p">:</span> <span class="n">pendulum</span><span class="o">.</span><span class="n">DateTime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataInterval</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">infer_manual_data_interval</span><span class="p">(</span><span class="n">run_after</span><span class="o">=</span><span class="n">run_after</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.next_dagrun_info">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.next_dagrun_info">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">next_dagrun_info</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">last_automated_data_interval</span><span class="p">:</span> <span class="n">DataInterval</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">restriction</span><span class="p">:</span> <span class="n">TimeRestriction</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DagRunInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">next_dagrun_info</span><span class="p">(</span>
+            <span class="n">last_automated_data_interval</span><span class="o">=</span><span class="n">last_automated_data_interval</span><span class="p">,</span>
+            <span class="n">restriction</span><span class="o">=</span><span class="n">restriction</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AssetAndTimeSchedule.generate_run_id">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/assets/index.html#airflow.timetables.assets.AssetAndTimeSchedule.generate_run_id">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_run_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">run_type</span><span class="p">:</span> <span class="n">DagRunType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># All run IDs are delegated to the wrapped timetable; this class</span>
+        <span class="c1"># intentionally does not create ASSET_TRIGGERED runs.</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timetable</span><span class="o">.</span><span class="n">generate_run_id</span><span class="p">(</span><span class="n">run_type</span><span class="o">=</span><span class="n">run_type</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 </div>
 
 </pre></div>
@@ -1055,9 +1199,9 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <script src="../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../_static/js/globaltoc.js?v=32f50df6"></script>

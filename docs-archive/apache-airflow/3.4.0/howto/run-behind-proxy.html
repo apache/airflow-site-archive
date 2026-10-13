@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -767,7 +764,7 @@ flexibility.</p>
 </pre></div>
 </div>
 <ul>
-<li><p>Configure your reverse  proxy (e.g. nginx) to pass the url and http header as it for the Airflow webserver, without any rewrite, for example:</p>
+<li><p>Configure your reverse proxy (e.g. nginx) to pass the url and http header as-is to the Airflow webserver, without any rewrite, for example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>server {
   listen 80;
   server_name lab.mycompany.com;
@@ -788,13 +785,16 @@ flexibility.</p>
 </li>
 <li><p>Some parts of the UI are rendered inside iframes (Auth managers security links for instance), you need to make sure that you are not setting a restricted CSP for iframe rendering
 such as <code class="docutils literal notranslate"><span class="pre">frame-ancestors</span> <span class="pre">'none'</span></code>. You can set the CSP header in your reverse proxy configuration, for example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">add_header</span> <span class="n">Content</span><span class="o">-</span><span class="n">Security</span><span class="o">-</span><span class="n">Policy</span> <span class="s2">&quot;frame-ancestors &#39;self&#39;;&quot;</span><span class="p">;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">add_header</span> <span class="n">Content</span><span class="o">-</span><span class="n">Security</span><span class="o">-</span><span class="n">Policy</span> <span class="s2">"frame-ancestors 'self';"</span><span class="p">;</span>
 </pre></div>
 </div>
 </li>
-<li><p>Use <code class="docutils literal notranslate"><span class="pre">--proxy-headers</span></code> CLI flag to tell Uvicorn to respect these headers: <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">api-server</span> <span class="pre">--proxy-headers</span></code></p></li>
+<li><p>The API server runs on one of two application servers, selected with the <code class="docutils literal notranslate"><span class="pre">[api]</span> <span class="pre">server_type</span></code>
+option: <a class="reference external" href="https://www.uvicorn.org">Uvicorn</a>, the default, or <a class="reference external" href="https://gunicorn.org">Gunicorn</a>
+with Uvicorn workers. Both read the settings below.</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">--proxy-headers</span></code> CLI flag to tell the application server to respect these headers: <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">api-server</span> <span class="pre">--proxy-headers</span></code></p></li>
 <li><p>If your proxy server is not on the same host (or in the same docker container) as Airflow, then you will need to
-set the <code class="docutils literal notranslate"><span class="pre">FORWARDED_ALLOW_IPS</span></code> environment variable so Uvicorn knows who to trust this header from. See
+set the <code class="docutils literal notranslate"><span class="pre">FORWARDED_ALLOW_IPS</span></code> environment variable so the application server knows who to trust this header from. See
 <a class="reference external" href="https://www.uvicorn.org/deployment/#proxies-and-forwarded-headers">Uvicorn’s docs</a>. For the full options you can pass here.
 (Please note the <code class="docutils literal notranslate"><span class="pre">--forwarded-allow-ips</span></code> CLI option does not exist in Airflow.)</p></li>
 <li><p>Please make sure your proxy does not enforce http-only status on the Set-Cookie headers.
@@ -805,15 +805,15 @@ Airflow frontend needs to access the cookies through javascript, and a http-only
 <p>When deploying Airflow using the Helm chart behind a reverse proxy (e.g., nginx ingress), you need to configure the API server to respect proxy headers.</p>
 <p>Configure the API server arguments to include the <code class="docutils literal notranslate"><span class="pre">--proxy-headers</span></code> flag:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apiServer</span><span class="p">:</span>
-  <span class="n">args</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;bash&quot;</span><span class="p">,</span> <span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;exec airflow api-server --proxy-headers&quot;</span><span class="p">]</span>
+  <span class="n">args</span><span class="p">:</span> <span class="p">[</span><span class="s2">"bash"</span><span class="p">,</span> <span class="s2">"-c"</span><span class="p">,</span> <span class="s2">"exec airflow api-server --proxy-headers"</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>If your proxy server is not on the same host as Airflow, set the <code class="docutils literal notranslate"><span class="pre">FORWARDED_ALLOW_IPS</span></code> environment variable:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apiServer</span><span class="p">:</span>
-  <span class="n">args</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;bash&quot;</span><span class="p">,</span> <span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;exec airflow api-server --proxy-headers&quot;</span><span class="p">]</span>
+  <span class="n">args</span><span class="p">:</span> <span class="p">[</span><span class="s2">"bash"</span><span class="p">,</span> <span class="s2">"-c"</span><span class="p">,</span> <span class="s2">"exec airflow api-server --proxy-headers"</span><span class="p">]</span>
   <span class="n">env</span><span class="p">:</span>
     <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">FORWARDED_ALLOW_IPS</span>
-      <span class="n">value</span><span class="p">:</span> <span class="s2">&quot;*&quot;</span>  <span class="c1"># Use &quot;*&quot; for trusted environments, or specify proxy IP ranges for production</span>
+      <span class="n">value</span><span class="p">:</span> <span class="s2">"*"</span>  <span class="c1"># Use "*" for trusted environments, or specify proxy IP ranges for production</span>
 </pre></div>
 </div>
 <p>Additionally, configure your ingress annotations to pass the necessary headers. For nginx ingress, add these annotations:</p>
@@ -821,8 +821,8 @@ Airflow frontend needs to access the cookies through javascript, and a http-only
   apiServer:
     enabled: true
     annotations:
-      nginx.ingress.kubernetes.io/proxy-http-version: &quot;1.1&quot;
-      nginx.ingress.kubernetes.io/proxy-redirect-off: &quot;true&quot;
+      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+      nginx.ingress.kubernetes.io/proxy-redirect-off: "true"
       nginx.ingress.kubernetes.io/configuration-snippet: |
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -1144,8 +1144,8 @@ Airflow frontend needs to access the cookies through javascript, and a http-only
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

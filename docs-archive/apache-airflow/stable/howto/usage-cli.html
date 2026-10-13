@@ -10,7 +10,7 @@
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-        <title data-pagefind-weight="10.0">Using the Command Line Interface &mdash; Airflow 3.3.2 Documentation</title>
+        <title data-pagefind-weight="10.0">Using the Command Line Interface &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -436,6 +436,7 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#downgrading-airflow">Downgrading Airflow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reserializing-dags">Reserializing Dags</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#exporting-connections">Exporting Connections</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#testing-for-dag-import-errors">Testing for Dag Import Errors</a></li>
 </ul>
@@ -556,7 +557,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -623,6 +624,7 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#downgrading-airflow">Downgrading Airflow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reserializing-dags">Reserializing Dags</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#exporting-connections">Exporting Connections</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#testing-for-dag-import-errors">Testing for Dag Import Errors</a></li>
 </ul>
@@ -971,11 +973,40 @@ which allow users to change the formatting of command’s output. Possible optio
 <p>It’s strongly recommended that you backup the metadata database before running the <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">clean</span></code> command.</p>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">clean</span></code> command works by deleting from each table the records older than the provided <code class="docutils literal notranslate"><span class="pre">--clean-before-timestamp</span></code>.</p>
-<p>You can optionally provide a list of tables to perform deletes on. If no list of tables is supplied, all tables will be included.</p>
-<p>You can filter cleanup to specific DAGs using <code class="docutils literal notranslate"><span class="pre">--dag-ids</span></code> (comma-separated list), or exclude specific DAGs using <code class="docutils literal notranslate"><span class="pre">--exclude-dag-ids</span></code> (comma-separated list). These options allow you to target or avoid cleanup for particular DAGs.</p>
-<p>You can use the <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> option to print the row counts in the primary tables to be cleaned.</p>
-<p>By default, <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">clean</span></code> will archive purged rows in tables of the form <code class="docutils literal notranslate"><span class="pre">_airflow_deleted__&lt;table&gt;__&lt;timestamp&gt;</span></code>.  If you don’t want the data preserved in this way, you may supply argument <code class="docutils literal notranslate"><span class="pre">--skip-archive</span></code>.</p>
-<p>When you encounter an error without using <code class="docutils literal notranslate"><span class="pre">--skip-archive</span></code>,  <code class="docutils literal notranslate"><span class="pre">_airflow_deleted__&lt;table&gt;__&lt;timestamp&gt;</span></code> would still exist in the DB. You can use  <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">drop-archived</span></code> command to manually drop these tables.</p>
+<p>You can use the <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> option to print the tables that would be cleaned, the configuration used for each, and the row counts, without deleting anything.</p>
+<p>You can optionally provide a list of tables to perform deletes on with <code class="docutils literal notranslate"><span class="pre">--tables</span></code>. If no list of tables is supplied, all tables will be included.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">--tables</span></code> sets where cleanup starts, not the full list of tables it touches. Each table has a
+configured list of dependent tables, and those are cleaned first, so that their rows are archived
+too. Asking for <code class="docutils literal notranslate"><span class="pre">--tables</span> <span class="pre">trigger</span></code> therefore also cleans <code class="docutils literal notranslate"><span class="pre">task_instance</span></code>,
+<code class="docutils literal notranslate"><span class="pre">xcom_v1</span></code> and <code class="docutils literal notranslate"><span class="pre">xcom_v2</span></code>, all of which the <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> output lists.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--tables</span> <span class="pre">xcom</span></code> selects both XCom stores. <code class="docutils literal notranslate"><span class="pre">--tables</span> <span class="pre">task_instance_history</span></code> selects only
+older tries from <code class="docutils literal notranslate"><span class="pre">task_instance</span></code>. Selecting <code class="docutils literal notranslate"><span class="pre">xcom_v2</span></code> also removes legacy values
+shadowed by the selected v2 rows, so those values cannot reappear after cleanup.</p>
+<p>That list is maintained per table rather than derived from the schema, so it does not cover every
+foreign key. A table left off it can still lose rows to a cascading delete when its parent is
+cleaned, and those rows are neither listed in the dry run nor archived. See
+<a class="reference internal" href="#beware-cascading-deletes">Beware cascading deletes</a> below.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Cleaning the <code class="docutils literal notranslate"><span class="pre">asset_event</span></code> table also drops any queued-but-not-yet-consumed asset events. This mainly
+affects Dags waiting on a multi-asset condition, where a pending event can be purged before the condition
+is met, meaning the Dag will not be triggered by it.</p>
+</div>
+<p>You can filter cleanup to specific DAGs using <code class="docutils literal notranslate"><span class="pre">--dag-ids</span></code> (comma-separated list), or exclude specific DAGs using <code class="docutils literal notranslate"><span class="pre">--exclude-dag-ids</span></code> (comma-separated list).</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Both options only reach tables whose cleanup configuration declares a DAG column. Every other table is
+cleaned whatever you pass, so <code class="docutils literal notranslate"><span class="pre">--exclude-dag-ids</span></code> does not preserve everything connected to the DAGs
+you name – <code class="docutils literal notranslate"><span class="pre">trigger</span></code>, <code class="docutils literal notranslate"><span class="pre">callback</span></code> and <code class="docutils literal notranslate"><span class="pre">import_error</span></code> declare none, for instance, so the filters
+never narrow them.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> output shows a <code class="docutils literal notranslate"><span class="pre">dag_id_column</span></code> for each table it would clean. Where that column is
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, the DAG filters do not apply to that table.</p>
+</div>
+<p>By default, <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">clean</span></code> will archive purged rows in tables of the form <code class="docutils literal notranslate"><span class="pre">_airflow_deleted__&lt;table&gt;__&lt;timestamp&gt;</span></code>. Cascading attempt data may use a unique suffix instead of a timestamp. If you don’t want the data preserved in this way, you may supply argument <code class="docutils literal notranslate"><span class="pre">--skip-archive</span></code>.</p>
+<p>When you encounter an error without using <code class="docutils literal notranslate"><span class="pre">--skip-archive</span></code>, an archive table may remain in the DB. You can use <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">drop-archived</span></code> to remove it. <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">export-archived</span></code> and <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">drop-archived</span></code> also accept the pre-upgrade names <code class="docutils literal notranslate"><span class="pre">xcom</span></code> and <code class="docutils literal notranslate"><span class="pre">task_instance_history</span></code> to find older archives.</p>
 <section id="detecting-cleanup-failures">
 <h3>Detecting cleanup failures<a class="headerlink" href="#detecting-cleanup-failures" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <p>By default, <code class="docutils literal notranslate"><span class="pre">db</span> <span class="pre">clean</span></code> suppresses per-table errors (such as a database <code class="docutils literal notranslate"><span class="pre">statement_timeout</span></code>
@@ -1055,6 +1086,19 @@ dropped.</p>
 <p class="admonition-title">Note</p>
 <p>It’s highly recommended that you reserialize your Dags with <code class="docutils literal notranslate"><span class="pre">dags</span> <span class="pre">reserialize</span></code> after you finish downgrading your Airflow environment (meaning, after you’ve downgraded the Airflow version installed in your Python environment, not immediately after you’ve downgraded the database).
 This is to ensure that the serialized Dags are compatible with the downgraded version of Airflow.</p>
+</div>
+</section>
+<section id="reserializing-dags">
+<span id="cli-reserialize-dags"></span><h2>Reserializing Dags<a class="headerlink" href="#reserializing-dags" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">dags</span> <span class="pre">reserialize</span></code> command parses the Dag files visible to it and updates their
+serialized representation in the metadata database. It is a maintenance command, useful
+for example to refresh serialized Dags after upgrading or downgrading Airflow.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">reserialize</span></code> serializes the Dag files visible to the process
+running it. It does not deploy or synchronize Dag source files, and does not
+replace normal Dag Processor bundle refreshes. In a distributed deployment,
+run it from an environment that sees the same Dag bundle contents as the Dag Processor.</p>
 </div>
 </section>
 <section id="exporting-connections">
@@ -1250,6 +1294,7 @@ For example, the default output when there are no errors is <code class="docutil
 </ul>
 </li>
 <li><a class="reference internal" href="#downgrading-airflow">Downgrading Airflow</a></li>
+<li><a class="reference internal" href="#reserializing-dags">Reserializing Dags</a></li>
 <li><a class="reference internal" href="#exporting-connections">Exporting Connections</a></li>
 <li><a class="reference internal" href="#testing-for-dag-import-errors">Testing for Dag Import Errors</a></li>
 </ul>
@@ -1473,9 +1518,9 @@ For example, the default output when there are no errors is <code class="docutil
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

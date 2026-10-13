@@ -9,7 +9,7 @@
 <head>
         <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>airflow.timetables.simple &mdash; Airflow 3.3.2 Documentation</title>
+        <title>airflow.timetables.simple &mdash; Airflow 3.4.0 Documentation</title>
     <link rel="stylesheet" href="../../../_static/_gen/css/main.min.css" type="text/css" />
             <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../_static/_gen/css/main.min.css?v=b5695b71" />
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -489,7 +489,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.3.2</span>
+        <span class="version-label">Version: </span><span class="version">3.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -685,10 +685,12 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeAlias</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">attrs</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">structlog</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow._shared.timezones</span><span class="w"> </span><span class="kn">import</span> <span class="n">timezone</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">InvalidPartitionKeyError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.configuration</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTimetableInvalid</span><span class="p">,</span> <span class="n">InvalidPartitionKeyError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.partition_mappers.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">IdentityMapper</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.assets</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">SerializedAsset</span><span class="p">,</span>
@@ -935,6 +937,22 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_coerce_asset_condition</span><span class="p">(</span>
+    <span class="n">assets</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">SerializedAsset</span> <span class="o">|</span> <span class="n">BaseAsset</span><span class="p">]</span> <span class="o">|</span> <span class="n">SerializedAssetBase</span> <span class="o">|</span> <span class="n">BaseAsset</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SerializedAssetBase</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">assets</span><span class="p">,</span> <span class="n">SerializedAssetBase</span> <span class="o">|</span> <span class="n">BaseAsset</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">assets</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">SerializedAssetAll</span><span class="p">([</span><span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">asset</span><span class="p">)</span> <span class="k">for</span> <span class="n">asset</span> <span class="ow">in</span> <span class="n">assets</span><span class="p">])</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_default_batch_asset_events</span><span class="p">(</span><span class="n">timetable</span><span class="p">:</span> <span class="n">AssetTriggeredTimetable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"scheduler"</span><span class="p">,</span> <span class="s2">"batch_asset_events"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">timetable</span><span class="o">.</span><span class="n">get_batching_requirement</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="p">)</span>
+
+
+<span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">AssetTriggeredTimetable</span><span class="p">(</span><span class="n">_TrivialTimetable</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Timetable that never schedules anything.</span>
@@ -944,28 +962,42 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 <span class="sd">    :meta private:</span>
 <span class="sd">    """</span>
 
-    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"Triggered by assets"</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s2">"Triggered by assets"</span>
+    <span class="n">asset_triggered</span> <span class="o">=</span> <span class="kc">True</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">assets</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="n">SerializedAsset</span><span class="p">]</span> <span class="o">|</span> <span class="n">SerializedAssetBase</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="c1"># Compatibility: Handle SDK assets if needed so this class works in dag files.</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">assets</span><span class="p">,</span> <span class="n">SerializedAssetBase</span> <span class="o">|</span> <span class="n">BaseAsset</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span> <span class="o">=</span> <span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">assets</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span> <span class="o">=</span> <span class="n">SerializedAssetAll</span><span class="p">([</span><span class="n">ensure_serialized_asset</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">assets</span><span class="p">])</span>
+    <span class="n">asset_condition</span><span class="p">:</span> <span class="n">SerializedAssetBase</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">"assets"</span><span class="p">,</span> <span class="n">converter</span><span class="o">=</span><span class="n">_coerce_asset_condition</span><span class="p">)</span>
+    <span class="n">batch_asset_events</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">attrs</span><span class="o">.</span><span class="n">Factory</span><span class="p">(</span><span class="n">_get_default_batch_asset_events</span><span class="p">,</span> <span class="n">takes_self</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">deserialize</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Timetable</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.decoders</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode_asset_like</span>
 
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">decode_asset_like</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"asset_condition"</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">decode_asset_like</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"asset_condition"</span><span class="p">]),</span>
+            <span class="n">batch_asset_events</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"batch_asset_events"</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+        <span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">return</span> <span class="s2">"Asset"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s2">"asset_condition"</span><span class="p">:</span> <span class="n">encode_asset_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">)}</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"asset_condition"</span><span class="p">:</span> <span class="n">encode_asset_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">),</span>
+            <span class="s2">"batch_asset_events"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_asset_events</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_batching_requirement</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return why this timetable cannot run without event batching, or ``None``."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="o">.</span><span class="n">requires_batching</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">"Asset AND conditions require batch_asset_events=True"</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_asset_events</span> <span class="ow">and</span> <span class="p">(</span><span class="n">reason</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_batching_requirement</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="n">AirflowTimetableInvalid</span><span class="p">(</span><span class="n">reason</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">generate_run_id</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1003,6 +1035,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
 
 
+<span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <div class="viewcode-block" id="PartitionedAssetTimetable">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">PartitionedAssetTimetable</span><span class="p">(</span><span class="n">AssetTriggeredTimetable</span><span class="p">):</span>
@@ -1020,26 +1053,47 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="s2">"Partitioned Asset"</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
-        <span class="n">assets</span><span class="p">:</span> <span class="n">SerializedAssetBase</span><span class="p">,</span>
-        <span class="n">partition_mapper_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SerializedAssetBase</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">default_partition_mapper</span><span class="p">:</span> <span class="n">PartitionMapper</span> <span class="o">=</span> <span class="n">DEFAULT_PARTITION_MAPPER</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">assets</span><span class="o">=</span><span class="n">assets</span><span class="p">)</span>
+<div class="viewcode-block" id="PartitionedAssetTimetable.asset_condition">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.asset_condition">[docs]</a>
+    <span class="n">asset_condition</span><span class="p">:</span> <span class="n">SerializedAssetBase</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">"assets"</span><span class="p">,</span> <span class="n">converter</span><span class="o">=</span><span class="n">_coerce_asset_condition</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="PartitionedAssetTimetable.partition_mapper_config">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.partition_mapper_config">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">partition_mapper_config</span> <span class="o">=</span> <span class="n">partition_mapper_config</span> <span class="ow">or</span> <span class="p">{}</span></div>
+    <span class="n">partition_mapper_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">SerializedAssetBase</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+        <span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span>
+        <span class="c1"># Mypy's attrs plugin does not recognize converter factories.</span>
+        <span class="n">converter</span><span class="o">=</span><span class="n">attrs</span><span class="o">.</span><span class="n">converters</span><span class="o">.</span><span class="n">default_if_none</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">),</span>  <span class="c1"># type: ignore[misc]</span>
+    <span class="p">)</span></div>
 
 <div class="viewcode-block" id="PartitionedAssetTimetable.default_partition_mapper">
 <a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.default_partition_mapper">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">default_partition_mapper</span> <span class="o">=</span> <span class="n">default_partition_mapper</span></div>
+    <span class="n">default_partition_mapper</span><span class="p">:</span> <span class="n">PartitionMapper</span> <span class="o">=</span> <span class="n">DEFAULT_PARTITION_MAPPER</span></div>
+
+<div class="viewcode-block" id="PartitionedAssetTimetable.batch_asset_events">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.batch_asset_events">[docs]</a>
+    <span class="n">batch_asset_events</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">attrs</span><span class="o">.</span><span class="n">Factory</span><span class="p">(</span><span class="n">_get_default_batch_asset_events</span><span class="p">,</span> <span class="n">takes_self</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="p">)</span></div>
+
+    <span class="n">_name_to_partition_mapper</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">_uri_to_partition_mapper</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PartitionedAssetTimetable.__attrs_post_init__">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.__attrs_post_init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__attrs_post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_name_uri_mapping</span><span class="p">()</span></div>
 
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_name_to_partition_mapper</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_uri_to_partition_mapper</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PartitionMapper</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_build_name_uri_mapping</span><span class="p">()</span>
+<div class="viewcode-block" id="PartitionedAssetTimetable.get_batching_requirement">
+<a class="viewcode-back" href="../../../_api/airflow/timetables/simple/index.html#airflow.timetables.simple.PartitionedAssetTimetable.get_batching_requirement">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_batching_requirement</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">mapper</span><span class="o">.</span><span class="n">is_rollup</span>
+            <span class="k">for</span> <span class="n">mapper</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_partition_mapper</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">partition_mapper_config</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="s2">"Partition rollups require batch_asset_events=True"</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">get_batching_requirement</span><span class="p">()</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_name_uri_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">base_asset</span><span class="p">,</span> <span class="n">partition_mapper</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">partition_mapper_config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -1155,6 +1209,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">"asset_condition"</span><span class="p">:</span> <span class="n">encode_asset_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">asset_condition</span><span class="p">),</span>
+            <span class="s2">"batch_asset_events"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_asset_events</span><span class="p">,</span>
             <span class="s2">"partition_mapper_config"</span><span class="p">:</span> <span class="p">[</span>
                 <span class="p">(</span><span class="n">encode_asset_like</span><span class="p">(</span><span class="n">asset</span><span class="p">),</span> <span class="n">encode_partition_mapper</span><span class="p">(</span><span class="n">partition_mapper</span><span class="p">))</span>
                 <span class="k">for</span> <span class="n">asset</span><span class="p">,</span> <span class="n">partition_mapper</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">partition_mapper_config</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
@@ -1175,6 +1230,7 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
 
         <span class="n">timetable</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span>
             <span class="n">assets</span><span class="o">=</span><span class="n">decode_asset_like</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"asset_condition"</span><span class="p">]),</span>
+            <span class="n">batch_asset_events</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"batch_asset_events"</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
             <span class="n">default_partition_mapper</span><span class="o">=</span><span class="n">decode_partition_mapper</span><span class="p">(</span><span class="n">default_partition_mapper_data</span><span class="p">),</span>
             <span class="n">partition_mapper_config</span><span class="o">=</span><span class="p">{</span>
                 <span class="n">decode_asset_like</span><span class="p">(</span><span class="n">ser_asest</span><span class="p">):</span> <span class="n">decode_partition_mapper</span><span class="p">(</span><span class="n">ser_partition_mapper</span><span class="p">)</span>
@@ -1445,9 +1501,9 @@ window.PAGEFIND_PATH = '../../../_pagefind/pagefind.js';
     <script src="../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../_static/documentation_options.js?v=ad389f6d"></script>
-        <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../_static/documentation_options.js?v=b0e360d0"></script>
+        <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../_static/js/globaltoc.js?v=32f50df6"></script>

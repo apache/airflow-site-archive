@@ -731,7 +731,7 @@ To disable check, set <code class="docutils literal notranslate"><span class="pr
 <span id="entrypoint-commands"></span><h2>Executing commands<a class="headerlink" href="#executing-commands" title="Link to this heading">¶</a></h2>
 <p>If first argument equals to “bash” - you are dropped to a bash shell or you can executes bash command
 if you specify extra arguments. For example:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s2">"ls -la"</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s2">"ls -la"</span>
 total<span class="w"> </span><span class="m">16</span>
 drwxr-xr-x<span class="w"> </span><span class="m">4</span><span class="w"> </span>airflow<span class="w"> </span>root<span class="w"> </span><span class="m">4096</span><span class="w"> </span>Jun<span class="w">  </span><span class="m">5</span><span class="w"> </span><span class="m">18</span>:12<span class="w"> </span>.
 drwxr-xr-x<span class="w"> </span><span class="m">1</span><span class="w"> </span>root<span class="w">    </span>root<span class="w"> </span><span class="m">4096</span><span class="w"> </span>Jun<span class="w">  </span><span class="m">5</span><span class="w"> </span><span class="m">18</span>:12<span class="w"> </span>..
@@ -741,17 +741,17 @@ drwxr-xr-x<span class="w"> </span><span class="m">2</span><span class="w"> </spa
 </div>
 <p>If first argument is equal to <code class="docutils literal notranslate"><span class="pre">python</span></code> - you are dropped in python shell or python commands are executed if
 you pass extra parameters. For example:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>&gt;<span class="w"> </span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"print('test')"</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>&gt;<span class="w"> </span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"print('test')"</span>
 <span class="nb">test</span>
 </pre></div>
 </div>
 <p>If first argument equals to <code class="docutils literal notranslate"><span class="pre">airflow</span></code> - the rest of the arguments is treated as an Airflow command
 to execute. Example:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>airflow<span class="w"> </span>webserver
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>airflow<span class="w"> </span>webserver
 </pre></div>
 </div>
 <p>If there are any other arguments - they are simply passed to the “airflow” command</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>&gt;<span class="w"> </span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.3.2-python3.10<span class="w"> </span><span class="nb">help</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>&gt;<span class="w"> </span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>apache/airflow:3.4.0-python3.11<span class="w"> </span><span class="nb">help</span>
 <span class="w">  </span>usage:<span class="w"> </span>airflow<span class="w"> </span><span class="o">[</span>-h<span class="o">]</span><span class="w"> </span>GROUP_OR_COMMAND<span class="w"> </span>...
 
 <span class="w">  </span>Positional<span class="w"> </span>Arguments:
@@ -882,6 +882,14 @@ and either use <code class="docutils literal notranslate"><span class="pre">[&qu
 If you are running it through <code class="docutils literal notranslate"><span class="pre">[&quot;bash&quot;,</span> <span class="pre">&quot;-c&quot;]</span></code> command,
 you  need to start the worker via <code class="docutils literal notranslate"><span class="pre">exec</span> <span class="pre">airflow</span> <span class="pre">celery</span> <span class="pre">worker</span></code>
 as the last command executed.</p>
+<p>The same applies to KubernetesExecutor task pods. Here <code class="docutils literal notranslate"><span class="pre">dumb-init</span></code>
+runs as the init process and its direct child is the task
+<em>supervisor</em>, which supervises a single task subprocess. Setting the
+variable to 0 propagates a graceful SIGTERM only to the supervisor,
+which then performs a warm shutdown and waits for the running task
+to finish, instead of the signal being broadcast to the whole
+process group and killing the task subprocess directly. The Airflow
+Helm chart sets this on the KubernetesExecutor pod template for you.</p>
 </td>
 </tr>
 </tbody>
@@ -959,14 +967,14 @@ database and creating an <code class="docutils literal notranslate"><span class=
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_DB_MIGRATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_CREATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_PASSWORD=admin"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>webserver
+<span class="w">    </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>webserver
 </pre></div>
 </div>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_DB_MIGRATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_CREATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_PASSWORD_CMD=echo admin"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>webserver
+<span class="w">    </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>webserver
 </pre></div>
 </div>
 <p>The commands above perform initialization of the SQLite database, create admin user with admin password
@@ -1004,7 +1012,7 @@ you should create your custom image with dependencies baked in.</p>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_DB_MIGRATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_CREATE=true"</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--env<span class="w"> </span><span class="s2">"_AIRFLOW_WWW_USER_PASSWORD_CMD=echo admin"</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>apache/airflow:3.3.2-python3.10<span class="w"> </span>webserver
+<span class="w">    </span>apache/airflow:3.4.0-python3.11<span class="w"> </span>webserver
 </pre></div>
 </div>
 <p>This method is only available starting from Docker image of Airflow 2.1.1 and above.</p>
@@ -1321,8 +1329,8 @@ you should create your custom image with dependencies baked in.</p>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="_static/documentation_options.js?v=ea3bebfc"></script>
-        <script src="_static/doctools.js?v=9bcbadda"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="_static/copybutton.js?v=f281be69"></script>
         <script src="_static/js/globaltoc.js?v=32f50df6"></script>

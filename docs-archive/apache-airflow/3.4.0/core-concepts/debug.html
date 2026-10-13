@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -734,15 +731,27 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 serialized python process.</p>
 <p>This approach can be used with any supported database (including a local SQLite database) and will
 <em>fail fast</em> as all tasks run in a single process.</p>
+<p><code class="docutils literal notranslate"><span class="pre">dag.test()</span></code> executes a real Dag run, so it has two prerequisites:</p>
+<ul class="simple">
+<li><p>an initialized metadata database (<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">db</span> <span class="pre">migrate</span></code>), and</p></li>
+<li><p>a Dag that Airflow can serialize, which means the Dag must be defined in a file inside a
+configured <a class="reference internal" href="../administration-and-deployment/dag-bundles.html"><span class="doc">Dag bundle</span></a> — by default, your
+Dags folder. <code class="docutils literal notranslate"><span class="pre">dag.test()</span></code> re-parses the bundle and serializes the Dag for you.</p></li>
+</ul>
+<p>A Dag built in memory — for instance inside a pytest function, in a file outside your Dags folder —
+is not in any bundle, so nothing gets serialized and the call fails with
+<code class="docutils literal notranslate"><span class="pre">Cannot</span> <span class="pre">create</span> <span class="pre">DagRun</span> <span class="pre">for</span> <span class="pre">DAG</span> <span class="pre">&lt;dag_id&gt;</span> <span class="pre">because</span> <span class="pre">the</span> <span class="pre">dag</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">serialized</span></code>. To test operator
+behaviour without a Dag run at all, call the operator directly as described in
+<a class="reference internal" href="../best-practices.html#best-practices-unit-tests"><span class="std std-ref">Unit tests</span></a>.</p>
 <p>To set up <code class="docutils literal notranslate"><span class="pre">dag.test</span></code>, add these two lines to the bottom of your Dag file:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">dag</span><span class="o">.</span><span class="n">test</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>and that’s it! You can add optional arguments to fine tune the testing but otherwise you can run or debug Dags as
 needed. Here are some examples of arguments:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">execution_date</span></code> if you want to test argument-specific Dag runs</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logical_date</span></code> if you want to test argument-specific Dag runs</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">use_executor</span></code> if you want to test the Dag using an executor. By default <code class="docutils literal notranslate"><span class="pre">dag.test</span></code> runs the Dag without an
 executor, it just runs all the tasks locally.
 By providing this argument, the Dag is executed using the executor configured in the Airflow environment.</p></li>
@@ -754,19 +763,19 @@ By providing this argument, the Dag is executed using the executor configured in
 you can automatically mark them successful supplying a pattern matching their <code class="docutils literal notranslate"><span class="pre">task_id</span></code> in the <code class="docutils literal notranslate"><span class="pre">mark_success_pattern</span></code> argument.</p>
 <p>In the following example, testing the Dag won’t wait for either of the upstream Dags to complete. Instead, testing data
 is manually ingested. The cleanup step is also skipped, making the intermediate csv is available for inspection.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">DAG</span><span class="p">(</span><span class="s2">&quot;example_dag&quot;</span><span class="p">,</span> <span class="n">default_args</span><span class="o">=</span><span class="n">default_args</span><span class="p">)</span> <span class="k">as</span> <span class="n">dag</span><span class="p">:</span>
-    <span class="n">sensor</span> <span class="o">=</span> <span class="n">ExternalTaskSensor</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;wait_for_ingestion_dag&quot;</span><span class="p">,</span> <span class="n">external_dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_raw_data&quot;</span><span class="p">)</span>
-    <span class="n">sensor2</span> <span class="o">=</span> <span class="n">ExternalTaskSensor</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;wait_for_dim_dag&quot;</span><span class="p">,</span> <span class="n">external_dag_id</span><span class="o">=</span><span class="s2">&quot;ingest_dim&quot;</span><span class="p">)</span>
-    <span class="n">collect_stats</span> <span class="o">=</span> <span class="n">PythonOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;extract_stats_csv&quot;</span><span class="p">,</span> <span class="n">python_callable</span><span class="o">=</span><span class="n">extract_stats_csv</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">DAG</span><span class="p">(</span><span class="s2">"example_dag"</span><span class="p">,</span> <span class="n">default_args</span><span class="o">=</span><span class="n">default_args</span><span class="p">)</span> <span class="k">as</span> <span class="n">dag</span><span class="p">:</span>
+    <span class="n">sensor</span> <span class="o">=</span> <span class="n">ExternalTaskSensor</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"wait_for_ingestion_dag"</span><span class="p">,</span> <span class="n">external_dag_id</span><span class="o">=</span><span class="s2">"ingest_raw_data"</span><span class="p">)</span>
+    <span class="n">sensor2</span> <span class="o">=</span> <span class="n">ExternalTaskSensor</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"wait_for_dim_dag"</span><span class="p">,</span> <span class="n">external_dag_id</span><span class="o">=</span><span class="s2">"ingest_dim"</span><span class="p">)</span>
+    <span class="n">collect_stats</span> <span class="o">=</span> <span class="n">PythonOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"extract_stats_csv"</span><span class="p">,</span> <span class="n">python_callable</span><span class="o">=</span><span class="n">extract_stats_csv</span><span class="p">)</span>
     <span class="c1"># ... run other tasks</span>
-    <span class="n">cleanup</span> <span class="o">=</span> <span class="n">PythonOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;cleanup&quot;</span><span class="p">,</span> <span class="n">python_callable</span><span class="o">=</span><span class="n">Path</span><span class="o">.</span><span class="n">unlink</span><span class="p">,</span> <span class="n">op_args</span><span class="o">=</span><span class="p">[</span><span class="n">collect_stats</span><span class="o">.</span><span class="n">output</span><span class="p">])</span>
+    <span class="n">cleanup</span> <span class="o">=</span> <span class="n">PythonOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cleanup"</span><span class="p">,</span> <span class="n">python_callable</span><span class="o">=</span><span class="n">Path</span><span class="o">.</span><span class="n">unlink</span><span class="p">,</span> <span class="n">op_args</span><span class="o">=</span><span class="p">[</span><span class="n">collect_stats</span><span class="o">.</span><span class="n">output</span><span class="p">])</span>
 
     <span class="p">[</span><span class="n">sensor</span><span class="p">,</span> <span class="n">sensor2</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">collect_stats</span> <span class="o">&gt;&gt;</span> <span class="n">cleanup</span>
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">ingest_testing_data</span><span class="p">()</span>
-    <span class="n">run</span> <span class="o">=</span> <span class="n">dag</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">mark_success_pattern</span><span class="o">=</span><span class="s2">&quot;wait_for_.*|cleanup&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Intermediate csv: </span><span class="si">{</span><span class="n">run</span><span class="o">.</span><span class="n">get_task_instance</span><span class="p">(</span><span class="s1">&#39;collect_stats&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s1">&#39;collect_stats&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">run</span> <span class="o">=</span> <span class="n">dag</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">mark_success_pattern</span><span class="o">=</span><span class="s2">"wait_for_.*|cleanup"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Intermediate csv: </span><span class="si">{</span><span class="n">run</span><span class="o">.</span><span class="n">get_task_instance</span><span class="p">(</span><span class="s1">'collect_stats'</span><span class="p">)</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">task_ids</span><span class="o">=</span><span class="s1">'collect_stats'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -775,14 +784,14 @@ is manually ingested. The cleanup step is also skipped, making the intermediate 
 <h1 data-pagefind-weight="9.0">Debugging Airflow Dags on the command line<a class="headerlink" href="#debugging-airflow-dags-on-the-command-line" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h1>
 <p>With the same two line addition as mentioned in the above section, you can now easily debug a Dag using pdb as well.
 Run <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pdb</span> <span class="pre">&lt;path</span> <span class="pre">to</span> <span class="pre">Dag</span> <span class="pre">file&gt;.py</span></code> for an interactive debugging experience on the command line.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">[</span>Breeze:3.10.19<span class="o">]</span><span class="w"> </span>root@ef2c84ad4856:/opt/airflow#<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pdb<span class="w"> </span>providers/standard/src/airflow/providers/standard/example_dags/example_bash_operator.py
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">[</span>Breeze:3.11.16<span class="o">]</span><span class="w"> </span>root@ef2c84ad4856:/opt/airflow#<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pdb<span class="w"> </span>providers/standard/src/airflow/providers/standard/example_dags/example_bash_operator.py
 &gt;<span class="w"> </span>/opt/airflow/providers/standard/src/airflow/providers/standard/example_dags/example_bash_operator.py<span class="o">(</span><span class="m">18</span><span class="o">)</span>&lt;module&gt;<span class="o">()</span>
--&gt;<span class="w"> </span><span class="s2">&quot;&quot;&quot;Example Dag demonstrating the usage of the BashOperator.&quot;&quot;&quot;</span>
+-&gt;<span class="w"> </span><span class="s2">"""Example Dag demonstrating the usage of the BashOperator."""</span>
 <span class="o">(</span>Pdb<span class="o">)</span><span class="w"> </span>b<span class="w"> </span><span class="m">45</span>
 Breakpoint<span class="w"> </span><span class="m">1</span><span class="w"> </span>at<span class="w"> </span>/opt/airflow/providers/standard/src/airflow/providers/standard/example_dags/example_bash_operator.py:45
 <span class="o">(</span>Pdb<span class="o">)</span><span class="w"> </span>c
 &gt;<span class="w"> </span>/opt/airflow/providers/standard/src/airflow/providers/standard/example_dags/example_bash_operator.py<span class="o">(</span><span class="m">45</span><span class="o">)</span>&lt;module&gt;<span class="o">()</span>
--&gt;<span class="w"> </span><span class="nv">task_id</span><span class="o">=</span><span class="s2">&quot;run_after_loop&quot;</span>,
+-&gt;<span class="w"> </span><span class="nv">task_id</span><span class="o">=</span><span class="s2">"run_after_loop"</span>,
 <span class="o">(</span>Pdb<span class="o">)</span><span class="w"> </span>run_this_last
 &lt;Task<span class="o">(</span>EmptyOperator<span class="o">)</span>:<span class="w"> </span>run_this_last&gt;
 </pre></div>
@@ -791,7 +800,7 @@ Breakpoint<span class="w"> </span><span class="m">1</span><span class="w"> </spa
 <ol class="arabic simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">main</span></code> block at the end of your Dag file to make it runnable.</p></li>
 </ol>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">dag</span><span class="o">.</span><span class="n">test</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -1101,8 +1110,8 @@ Breakpoint<span class="w"> </span><span class="m">1</span><span class="w"> </spa
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

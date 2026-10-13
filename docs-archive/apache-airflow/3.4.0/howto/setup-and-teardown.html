@@ -15,7 +15,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=cfc51a96" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -111,10 +111,7 @@
     
 
 <header>
-    <a href="https://airflowsummit.org" target="_blank" class="d-block fixed-top px-3 py-2 bg-success text-center text-bold text-white">
-        Airflow Summit 2026 is coming August 31 - September 2 in Austin, TX. Register now to secure your spot!
-    </a>
-    <nav class="js-navbar-scroll navbar" style="top: 40px;">
+    <nav class="js-navbar-scroll navbar">
         <div class="navbar__icon-container">
             <a href="/">
                 <svg xmlns="http://www.w3.org/2000/svg" width="155.314" height="60" viewBox="0 0 155.314 60">
@@ -850,7 +847,7 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <p>Now, Airflow can infer that other_task does not require create_cluster, so if we clear other_task, create_cluster will not also be cleared.</p>
 <p>In that example, we (in our pretend docs land) actually wanted to delete the cluster.  But supposing we did not, and we just wanted to say “other_task does not require create_cluster”, then we could use an EmptyOperator to limit the setup’s scope:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">create_cluster</span> <span class="o">&gt;&gt;</span> <span class="n">run_query</span> <span class="o">&gt;&gt;</span> <span class="n">other_task</span>
-<span class="n">run_query</span> <span class="o">&gt;&gt;</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">&quot;cluster_teardown&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">as_teardown</span><span class="p">(</span><span class="n">setups</span><span class="o">=</span><span class="n">create_cluster</span><span class="p">)</span>
+<span class="n">run_query</span> <span class="o">&gt;&gt;</span> <span class="n">EmptyOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cluster_teardown"</span><span class="p">)</span><span class="o">.</span><span class="n">as_teardown</span><span class="p">(</span><span class="n">setups</span><span class="o">=</span><span class="n">create_cluster</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -858,8 +855,8 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <h2>Implicit ALL_SUCCESS constraint<a class="headerlink" href="#implicit-all-success-constraint" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>Any task in the scope of a setup has an implicit “all_success” constraint on its setups.
 This is necessary to ensure that if a task with indirect setups is cleared, it will
-wait for them to complete.  If a setup fails or is skipped, the work tasks which depend
-them will be marked ask failures or skips.  We also require that any non-teardown directly
+wait for them to complete.  If a setup fails or is skipped, the work tasks which depend on
+them will be marked as failures or skips.  We also require that any non-teardown directly
 downstream of a setup must have trigger rule ALL_SUCCESS.</p>
 </section>
 <section id="controlling-dag-run-state">
@@ -874,7 +871,7 @@ downstream of a setup must have trigger rule ALL_SUCCESS.</p>
 <h2>Authoring with task groups<a class="headerlink" href="#authoring-with-task-groups" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>When adding dependency from task group to task group, or from task group to <em>task</em>, we ignore teardowns.  This allows teardowns to run in parallel, and allows Dag execution to proceed even if teardown tasks fail.</p>
 <p>Consider this example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">&quot;my_group&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">"my_group"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg</span><span class="p">:</span>
     <span class="n">s1</span> <span class="o">=</span> <span class="n">s1</span><span class="p">()</span>
     <span class="n">w1</span> <span class="o">=</span> <span class="n">w1</span><span class="p">()</span>
     <span class="n">t1</span> <span class="o">=</span> <span class="n">t1</span><span class="p">()</span>
@@ -890,7 +887,7 @@ downstream of a setup must have trigger rule ALL_SUCCESS.</p>
 </pre></div>
 </div>
 <p>Now let’s consider an example with nesting:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">&quot;my_group&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">"my_group"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg</span><span class="p">:</span>
     <span class="n">s1</span> <span class="o">=</span> <span class="n">s1</span><span class="p">()</span>
     <span class="n">w1</span> <span class="o">=</span> <span class="n">w1</span><span class="p">()</span>
     <span class="n">t1</span> <span class="o">=</span> <span class="n">t1</span><span class="p">()</span>
@@ -919,11 +916,11 @@ downstream of a setup must have trigger rule ALL_SUCCESS.</p>
 <p>Graph:</p>
 <img alt="../_images/setup-teardown-parallel.png" src="../_images/setup-teardown-parallel.png" />
 <p>It can be nice visually to put them in a group:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">&quot;setup&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg_s</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">"setup"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg_s</span><span class="p">:</span>
     <span class="n">create_cluster</span> <span class="o">=</span> <span class="n">create_cluster</span><span class="p">()</span>
     <span class="n">create_bucket</span> <span class="o">=</span> <span class="n">create_bucket</span><span class="p">()</span>
 <span class="n">run_query</span> <span class="o">=</span> <span class="n">run_query</span><span class="p">()</span>
-<span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">&quot;teardown&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg_t</span><span class="p">:</span>
+<span class="k">with</span> <span class="n">TaskGroup</span><span class="p">(</span><span class="s2">"teardown"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tg_t</span><span class="p">:</span>
     <span class="n">delete_cluster</span> <span class="o">=</span> <span class="n">delete_cluster</span><span class="p">()</span><span class="o">.</span><span class="n">as_teardown</span><span class="p">(</span><span class="n">setups</span><span class="o">=</span><span class="n">create_cluster</span><span class="p">)</span>
     <span class="n">delete_bucket</span> <span class="o">=</span> <span class="n">delete_bucket</span><span class="p">()</span><span class="o">.</span><span class="n">as_teardown</span><span class="p">(</span><span class="n">setups</span><span class="o">=</span><span class="n">create_bucket</span><span class="p">)</span>
 <span class="n">tg_s</span> <span class="o">&gt;&gt;</span> <span class="n">run_query</span> <span class="o">&gt;&gt;</span> <span class="n">tg_t</span>
@@ -1249,8 +1246,8 @@ downstream of a setup must have trigger rule ALL_SUCCESS.</p>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
         <script src="../_static/documentation_options.js?v=b0e360d0"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>
