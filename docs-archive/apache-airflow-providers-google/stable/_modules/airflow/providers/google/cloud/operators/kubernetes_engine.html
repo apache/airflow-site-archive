@@ -706,7 +706,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">KubernetesDeleteResourceOperator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.utils.pod_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">OnFinishAction</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AirflowException</span><span class="p">,</span>
+    <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span>
+    <span class="n">BaseOperator</span><span class="p">,</span>
+    <span class="n">conf</span><span class="p">,</span>
+    <span class="n">timezone</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.hooks.kubernetes_engine</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">GKEHook</span><span class="p">,</span>
     <span class="n">GKEKubernetesHook</span><span class="p">,</span>
@@ -728,19 +734,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.operators.pod_exec</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesPodExecOperator</span>
-<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
+<span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">_pod_exec_import_error</span> <span class="o">=</span> <span class="n">e</span>
 
-    <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
-        <span class="s2">"Failed to import KubernetesPodExecOperator. This operator is only available in cncf-kubernetes "</span>
-        <span class="s2">"provider version &gt;=10.22.0"</span>
-    <span class="p">)</span>
+    <span class="k">class</span><span class="w"> </span><span class="nc">KubernetesPodExecOperator</span><span class="p">(</span><span class="n">BaseOperator</span><span class="p">):</span>  <span class="c1"># type: ignore[no-redef]</span>
+<span class="w">        </span><span class="sd">"""Keep existing GKE operators importable with older Kubernetes providers."""</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
+                <span class="s2">"GKEPodExecOperator requires apache-airflow-providers-cncf-kubernetes&gt;=10.22.0."</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">_pod_exec_import_error</span>
+
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.operators.job</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesDeleteJobOperator</span>
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
-
     <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
         <span class="s2">"Failed to import KubernetesDeleteJobOperator. This operator is only available in cncf-kubernetes "</span>
         <span class="s2">"provider version &gt;=8.1.0"</span>

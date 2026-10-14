@@ -818,13 +818,28 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="c1"># [END howto_sensor_create_document_classifier]</span>
 
     <span class="nd">@task</span><span class="p">(</span><span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">)</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_classifier</span><span class="p">(</span><span class="n">document_classifier_arn</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-        <span class="n">ComprehendHook</span><span class="p">()</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">delete_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">document_classifier_arn</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_classifier</span><span class="p">(</span><span class="n">classifier_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">hook</span> <span class="o">=</span> <span class="n">ComprehendHook</span><span class="p">()</span>
+        <span class="n">classifiers</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">list_document_classifiers</span><span class="p">(</span>
+            <span class="n">Filter</span><span class="o">=</span><span class="p">{</span><span class="s2">"DocumentClassifierName"</span><span class="p">:</span> <span class="n">classifier_name</span><span class="p">},</span>
+        <span class="p">)[</span><span class="s2">"DocumentClassifierPropertiesList"</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">classifier</span> <span class="ow">in</span> <span class="n">classifiers</span><span class="p">:</span>
+            <span class="n">classifier_arn</span> <span class="o">=</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"DocumentClassifierArn"</span><span class="p">]</span>
+
+            <span class="c1"># A classifier can only be deleted from a terminal state.</span>
+            <span class="k">if</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"Status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"DELETING"</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"Status"</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"SUBMITTED"</span><span class="p">,</span> <span class="s2">"TRAINING"</span><span class="p">):</span>
+                <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">stop_training_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
+
+            <span class="n">hook</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="s2">"document_classifier_deletable"</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
+            <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">delete_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
 
     <span class="n">chain</span><span class="p">(</span>
         <span class="n">create_document_classifier</span><span class="p">,</span>
         <span class="n">await_create_document_classifier</span><span class="p">,</span>
-        <span class="n">delete_classifier</span><span class="p">(</span><span class="n">create_document_classifier</span><span class="o">.</span><span class="n">output</span><span class="p">),</span>
+        <span class="n">delete_classifier</span><span class="p">(</span><span class="n">classifier_name</span><span class="p">),</span>
     <span class="p">)</span></div>
 
 

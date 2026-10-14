@@ -1,0 +1,423 @@
+airflow.providers.common.ai.hooks.pydantic_ai
+=============================================
+
+.. py:module:: airflow.providers.common.ai.hooks.pydantic_ai
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.hooks.pydantic_ai.OutputT
+   airflow.providers.common.ai.hooks.pydantic_ai.FALLBACK_CONN_IDS_EXTRA_KEY
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook
+   airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIAzureHook
+   airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIBedrockHook
+   airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIVertexHook
+
+
+Module Contents
+---------------
+
+.. py:data:: OutputT
+
+.. py:data:: FALLBACK_CONN_IDS_EXTRA_KEY
+   :value: 'fallback_conn_ids'
+
+
+.. py:class:: PydanticAIHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Hook for LLM access via pydantic-ai.
+
+   Covers providers that use a standard ``api_key`` + optional ``base_url``
+   (OpenAI, Anthropic, Groq, Mistral, DeepSeek, Ollama, vLLM, GitHub Copilot, …).
+
+   For cloud providers with non-standard auth use the dedicated subclasses:
+   :class:`PydanticAIAzureHook`, :class:`PydanticAIBedrockHook`,
+   :class:`PydanticAIVertexHook`.
+
+   Connection fields:
+       - **password**: API key
+       - **host**: Base URL (optional, e.g. ``https://api.openai.com/v1``)
+       - **extra** JSON: ``{"model": "openai:gpt-5",
+         "fallback_conn_ids": ["anthropic_prod", "bedrock_dr"]}``
+
+   :param llm_conn_id: Airflow connection ID for the LLM provider.
+   :param model_id: Model identifier. A name whose segment before the first ``:``
+       is itself a pydantic-ai provider (e.g. ``"openai:gpt-5"``) pins the
+       platform and is used verbatim -- a plain ``:`` alone is not enough, since
+       some vendors' native model ids contain one of their own (e.g. Bedrock's
+       version-suffixed ``"us.anthropic.claude-opus-4-6-v1:0"``, which is still a
+       *bare* name here). A bare name is resolved against this connection's own
+       platform: vendor subclasses (:class:`PydanticAIAzureHook`,
+       :class:`PydanticAIBedrockHook`, :class:`PydanticAIVertexHook`) each default
+       to their own platform via :attr:`model_provider`; the generic connection
+       type has none, so a bare name there raises ``ValueError`` instead of
+       reaching pydantic-ai's own, less actionable ``Unknown model`` error.
+       Overrides the model stored in the connection's extra field. Whichever of
+       the two configures the primary's model is forwarded (only while still
+       bare) down the fallback chain -- see :meth:`_resolve_fallback_models`.
+   :param fallback_conn_ids: Connection IDs to fail over to, in order, when the
+       primary provider is unavailable.  Overrides the ``fallback_conn_ids``
+       list stored in the connection's extra field; pass an empty list to
+       disable a chain configured there.  Blank or whitespace-only entries
+       (including a trailing blank line from the Fallback Connections textarea)
+       are dropped; a chain left entirely blank is treated the same as passing
+       ``[]``.  Each entry may point at any ``pydanticai*`` connection type, so
+       the chain can span providers (for example OpenAI, then Bedrock).  See
+       :meth:`get_conn` for the failover semantics and their cost.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'llm_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'pydanticai_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'pydanticai'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Pydantic AI'
+
+
+
+   .. py:attribute:: model_provider
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: model_id
+      :value: None
+
+
+
+   .. py:attribute:: fallback_conn_ids
+      :value: None
+
+
+
+   .. py:method:: get_hook(conn_id, hook_params = None)
+      :classmethod:
+
+
+      Return the hook for ``conn_id``, built with ``hook_params``.
+
+      Airflow 3's ``BaseHook.get_hook`` already takes ``hook_params``; Airflow 2's does
+      not, so this mirrors the Airflow 3 body.
+
+      :raises ValueError: if the connection's type is registered to a hook that is not a
+          ``PydanticAIHook``.
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+   .. py:method:: get_conn()
+
+      Return a configured pydantic-ai ``Model``.
+
+      Resolution order for this hook's own connection:
+
+      1. **Explicit credentials** — when :meth:`_get_provider_kwargs` returns
+         a non-empty dict the provider class is instantiated with those kwargs
+         and wrapped in a ``provider_factory``.
+      2. **Default resolution** — delegates to pydantic-ai ``infer_model``
+         which reads standard env vars (``OPENAI_API_KEY``, ``AWS_PROFILE``, …).
+
+      A bare ``model_id`` (one with no recognized platform prefix) is qualified with
+      this connection's own platform before either of the above -- see the class
+      docstring's ``model_id`` entry for the resolution and fallback-forwarding rules.
+
+      When ``fallback_conn_ids`` is configured (on the hook or in the
+      connection's extra) the resolved models are wrapped in a pydantic-ai
+      ``FallbackModel``, so a provider outage moves to the next connection
+      *within the same task attempt* instead of failing the task.
+
+      Two costs of that wrapping are worth knowing before configuring a long
+      chain.  A ``timeout`` in ``ModelSettings`` is applied by pydantic-ai to
+      every model in the chain rather than to the chain as a whole, so the
+      worst-case wait is the timeout multiplied by the number of connections.
+      And there is no circuit breaker: every call retries the primary first,
+      so during an outage each task instance pays the primary's timeout again.
+      Keep the primary's timeout short to bound both.
+
+      The resolved model is cached for the lifetime of this hook instance.
+
+
+
+   .. py:method:: create_agent(output_type: type[OutputT], *, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
+                  create_agent(*, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, str]
+                  create_agent(output_type: type[OutputT], *, spec_file: str | pathlib.Path, instructions: str | None = ..., **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
+                  create_agent(*, spec_file: str | pathlib.Path, instructions: str | None = ..., **agent_kwargs) -> pydantic_ai.Agent[object, str]
+
+      Create a pydantic-ai Agent configured with this hook's model.
+
+      When ``[common.ai] otel_export_enabled`` is set and the worker has an
+      OpenTelemetry exporter configured, the agent is instrumented to emit
+      GenAI spans through Airflow's tracing pipeline. See
+      :mod:`airflow.providers.common.ai.observability`.
+
+      What each tool returns or raises while it runs passes through Airflow's secret
+      masker before the model sees it, whichever toolset or capability supplied the
+      tool: the agent gets a
+      :class:`~airflow.providers.common.ai.utils.toolset_base.MaskingCapability` after
+      any ``capabilities`` passed in.
+
+      :param output_type: The expected output type from the agent (default: ``str``).
+      :param instructions: System-level instructions for the agent.
+          Required when *spec_file* is not given. When *spec_file* is given,
+          this value is merged with the instructions in the file; omit it to
+          use only the file value.
+      :param spec_file: Path to a YAML or JSON ``AgentSpec`` file.  When supplied,
+          delegates to ``Agent.from_file``. If ``model_id`` or the connection's
+          ``model`` extra is set, that model is passed to pydantic-ai; otherwise the
+          spec file's ``model`` is used.  A connection that declares
+          ``fallback_conn_ids`` but no ``model`` raises ``ValueError`` instead: a model
+          resolved from the spec file cannot be wrapped in a fallback chain, so the
+          chain would otherwise be dropped silently.
+      :param agent_kwargs: Additional keyword arguments passed to the Agent constructor.
+
+
+
+   .. py:method:: test_connection()
+
+      Test connection by resolving the model.
+
+      A success here can come from this connection's own credentials, or -- when a
+      provider class rejects them with a ``TypeError`` -- from a silent retry against
+      the standard environment variables, which ignores those credentials entirely.
+      See :doc:`/provider_fallback`'s *Verifying a chain* section for how to tell the
+      two apart. Does NOT make an LLM API call — that would be expensive and fail for
+      reasons unrelated to connectivity (quotas, billing, rate limits).
+
+      Every connection in ``fallback_conn_ids`` is resolved too, so a
+      misconfigured fallback is reported here rather than discovered during
+      the outage it was meant to cover.
+
+
+
+.. py:class:: PydanticAIAzureHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, **kwargs)
+
+   Bases: :py:obj:`PydanticAIHook`
+
+
+   Hook for Azure OpenAI via pydantic-ai.
+
+   Connection fields:
+       - **password**: Azure API key
+       - **host**: Azure endpoint (e.g. ``https://<resource>.openai.azure.com/openai/v1``)
+       - **extra** JSON::
+
+           {"model": "azure:gpt-5"}
+
+         ``api_version`` must be omitted when the endpoint path ends in ``/v1``
+         or the host is ``*.models.ai.azure.com``. For other endpoints, set it
+         here or with ``OPENAI_API_VERSION``.
+
+   :param llm_conn_id: Airflow connection ID.
+   :param model_id: Model identifier, e.g. ``"azure:gpt-5"``.
+
+
+   .. py:attribute:: conn_type
+      :value: 'pydanticai_azure'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'pydanticai_azure_default'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Pydantic AI (Azure OpenAI)'
+
+
+
+   .. py:attribute:: model_provider
+      :value: 'azure'
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+.. py:class:: PydanticAIBedrockHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, **kwargs)
+
+   Bases: :py:obj:`PydanticAIHook`
+
+
+   Hook for AWS Bedrock via pydantic-ai.
+
+   Credentials are resolved in order:
+
+   1. Bearer token in ``extra`` (``api_key``, maps to env ``AWS_BEARER_TOKEN_BEDROCK``).
+      Takes precedence over IAM keys if both are set.
+   2. IAM keys from ``extra`` (``aws_access_key_id`` + ``aws_secret_access_key``,
+      optionally ``aws_session_token``).
+   3. Environment-variable / instance-role chain (``AWS_PROFILE``, IAM role, …)
+      when no explicit keys are provided.
+
+   Connection fields:
+       - **extra** JSON::
+
+           {
+             "model": "bedrock:us.anthropic.claude-opus-4-5",
+             "region_name": "us-east-1",
+             "aws_access_key_id": "AKIA...",
+             "aws_secret_access_key": "...",
+             "aws_session_token": "...",
+             "profile_name": "my-aws-profile",
+             "api_key": "bearer-token",
+             "base_url": "https://custom-bedrock-endpoint",
+             "aws_read_timeout": 60.0,
+             "aws_connect_timeout": 10.0
+           }
+
+         Leave ``aws_access_key_id`` / ``aws_secret_access_key`` and ``api_key``
+         empty to use the default AWS credential chain.
+
+   :param llm_conn_id: Airflow connection ID.
+   :param model_id: Model identifier, e.g. ``"bedrock:us.anthropic.claude-opus-4-5"``.
+
+
+   .. py:attribute:: conn_type
+      :value: 'pydanticai_bedrock'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'pydanticai_bedrock_default'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Pydantic AI (AWS Bedrock)'
+
+
+
+   .. py:attribute:: model_provider
+      :value: 'bedrock'
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+.. py:class:: PydanticAIVertexHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, **kwargs)
+
+   Bases: :py:obj:`PydanticAIHook`
+
+
+   Hook for Google Vertex AI (or Generative Language API) via pydantic-ai.
+
+   Credentials are resolved in order:
+
+   1. ``service_account_info`` (JSON object) in ``extra``
+      — loaded into a ``google.auth.credentials.Credentials``
+      object and passed as ``credentials`` to ``GoogleProvider``.
+   2. ``api_key`` in ``extra`` — for Generative Language API (non-Vertex) or
+      Vertex API-key auth.
+   3. Application Default Credentials (``GOOGLE_APPLICATION_CREDENTIALS``,
+      ``gcloud auth application-default login``, Workload Identity, …) when
+      no explicit credentials are provided.
+
+   Connection fields:
+       - **extra** JSON::
+
+           {
+               "model": "google-cloud:gemini-2.5-flash",
+               "project": "my-gcp-project",
+               "location": "us-central1",
+               "service_account_info": {...},
+           }
+
+       Use ``"service_account_info"`` to embed the service-account JSON directly
+       (as an object, not a string path).
+
+       ``"vertexai"`` is accepted for backward compatibility but has no effect:
+       pydantic-ai now selects Vertex AI vs. the Generative Language API from the
+       model prefix (``google-cloud:`` vs. ``google:``) rather than a
+       constructor flag, so there is nothing left for this field to control.
+
+   A bare ``model_id`` (or Extra ``model``) always defaults to Vertex AI
+   (``google-cloud:``) -- this default is **not** inferred from which
+   credential fields are set. ``api_key`` in ``extra`` can mean either the
+   Generative Language API or Vertex API-key auth (see credential order
+   above), so its presence alone cannot tell the two platforms apart; guessing
+   would risk silently authenticating against the wrong endpoint. To use the
+   Generative Language API, set an explicit ``google:``-prefixed model id (on
+   the hook or the connection's ``model`` extra) -- that spelling already
+   works today.
+
+   :param llm_conn_id: Airflow connection ID.
+   :param model_id: Model identifier, e.g. ``"google-cloud:gemini-2.5-flash"``. A
+       bare name (e.g. ``"gemini-2.5-flash"``) defaults to Vertex AI; prefix with
+       ``google:`` for the Generative Language API.
+
+
+   .. py:attribute:: conn_type
+      :value: 'pydanticai_vertex'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'pydanticai_vertex_default'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Pydantic AI (Google Vertex AI)'
+
+
+
+   .. py:attribute:: model_provider
+      :value: 'google-cloud'
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+

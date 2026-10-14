@@ -1,0 +1,121 @@
+airflow.providers.common.ai.toolsets.datafusion
+===============================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.datafusion
+
+.. autoapi-nested-parse::
+
+   Curated SQL toolset wrapping DataFusionEngine for agentic object-store workflows.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.datafusion.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.datafusion.DataFusionToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: DataFusionToolset(datasource_configs, *, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES, max_columns = DEFAULT_MAX_COLUMNS, max_retries = None)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Curated toolset that gives an LLM agent SQL access to object-storage data via Apache DataFusion.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   Provides three tools — ``list_tables``, ``get_schema``, and ``query`` —
+   backed by
+   :class:`~airflow.providers.common.sql.datafusion.engine.DataFusionEngine`.
+
+   Each :class:`~airflow.providers.common.sql.config.DataSourceConfig` entry
+   registers a table backed by Parquet, CSV, Avro, or Iceberg data on S3 or
+   local storage. Multiple configs can be registered so that SQL queries can
+   join across tables.
+
+   Requires the ``datafusion`` extra of ``apache-airflow-providers-common-sql``.
+
+   :param datasource_configs: One or more DataFusion data-source configurations.
+   :param allow_writes: Allow data-modifying SQL (CREATE TABLE, CREATE VIEW,
+       INSERT INTO, etc.). Default ``False`` — only SELECT-family statements
+       are permitted. ``EXPLAIN`` reaches the engine only with ``allow_writes=True``,
+       and fails there: the ``max_rows`` limit wraps the plan, and DataFusion requires
+       ``EXPLAIN`` to be the root of the plan. The agent gets an error result, not the
+       plan.
+   :param max_rows: Maximum number of rows returned from the ``query`` tool.
+       Default ``50``. The query is limited to ``max_rows + 1`` rows, so a large
+       result is never fully materialized; the extra row only signals truncation.
+   :param max_result_bytes: Budget for the serialized ``query`` result, in bytes, and the
+       byte backstop that also triggers the ``get_schema`` summary (see ``max_columns``).
+       Default 64 KiB. ``max_rows`` bounds rows, which says nothing about size: one
+       row of a 3000-column table is larger than a thousand rows of a narrow one, and
+       a tool result stays in the model's message history for the rest of the run, so
+       its cost is re-paid on every subsequent request. Rows are returned as a
+       contiguous prefix, stopping at the first that does not fit the remaining budget
+       rather than skipping it and packing later ones, so one wide row early in the
+       result ends it. The result reports which limit it hit so the agent can narrow
+       its projection rather than page through the table.
+   :param max_columns: Maximum number of columns ``get_schema`` returns in full. Default
+       ``100``. Above it -- or when the serialized columns exceed ``max_result_bytes`` --
+       the full list is replaced by a bounded summary (column count, a type histogram, a
+       sample of columns) that points the agent at the ``name_contains`` filter, so a
+       several-thousand-column table cannot exhaust the context before a query is written.
+   :param max_retries: How many times the model may correct a failed call to one of these
+       tools before the run fails. ``None`` (the default) uses the agent's tool retry
+       budget, its ``retries``, as pydantic-ai's own toolsets do.
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+

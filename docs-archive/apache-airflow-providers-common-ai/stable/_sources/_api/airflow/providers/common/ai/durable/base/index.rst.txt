@@ -14,8 +14,9 @@ Attributes
 
 .. autoapisummary::
 
-   airflow.providers.common.ai.durable.base.TOOL_RESULT_SENTINEL
    airflow.providers.common.ai.durable.base.DURABLE_KEY_PREFIX
+   airflow.providers.common.ai.durable.base.RUN_ID_KEY
+   airflow.providers.common.ai.durable.base.RUNS_KEY
 
 
 Classes
@@ -31,29 +32,33 @@ Functions
 
 .. autoapisummary::
 
-   airflow.providers.common.ai.durable.base.build_model_step_key
-   airflow.providers.common.ai.durable.base.build_tool_step_key
+   airflow.providers.common.ai.durable.base.build_step_key
+   airflow.providers.common.ai.durable.base.build_run_meta_key
 
 
 Module Contents
 ---------------
 
-.. py:data:: TOOL_RESULT_SENTINEL
-   :value: '__durable_cached__'
-
-
 .. py:data:: DURABLE_KEY_PREFIX
    :value: '__commonai_durable__'
 
 
-.. py:function:: build_model_step_key(step)
+.. py:function:: build_step_key(run, position)
 
-   Build the durable cache key for the model response produced at ``step``.
+   Build the journal key for the step at ``position`` of the agent run ``run``.
 
 
-.. py:function:: build_tool_step_key(step)
+.. py:function:: build_run_meta_key(run)
 
-   Build the durable cache key for the tool result produced at ``step``.
+   Build the journal key for what the agent run ``run`` keeps about itself across attempts.
+
+
+.. py:data:: RUN_ID_KEY
+   :value: '__commonai_durable__run_id'
+
+
+.. py:data:: RUNS_KEY
+   :value: '__commonai_durable__runs'
 
 
 .. py:class:: DurableStorageProtocol
@@ -63,30 +68,26 @@ Module Contents
 
    Persistence contract shared by the durable execution storage backends.
 
-   Implemented by both :class:`~airflow.providers.common.ai.durable.storage.DurableStorage`
+   Implemented by :class:`~airflow.providers.common.ai.durable.storage.DurableStorage`
    (ObjectStorage, Airflow < 3.3) and
    :class:`~airflow.providers.common.ai.durable.task_state_store.TaskStateStoreDurableStorage`
-   (AIP-103 task state store, Airflow >= 3.3). ``CachingModel`` and
-   ``CachingToolset`` depend on this interface, not a concrete backend.
+   (AIP-103 task state store, Airflow >= 3.3). The journal depends on this interface,
+   not a concrete backend.
 
-   Both ``save_*`` methods return whether the entry was written. A backend may
-   skip a write (a tool result that is not JSON-serializable, a store write that
-   fails) without failing the step; the step then re-runs live on retry, and the
-   caller counts it as skipped rather than cached.
-
-
-   .. py:method:: save_model_response(key, response, *, fingerprint)
+   An entry is a JSON-compatible dict. ``save_step`` returns whether the entry was
+   written: a backend may skip a write (a value it cannot store, a store write that
+   fails) without failing the step, which then runs again on retry.
 
 
-   .. py:method:: load_model_response(key)
+   .. py:method:: save_step(key, entry)
 
 
-   .. py:method:: save_tool_result(key, result, *, fingerprint)
+   .. py:method:: load_step(key)
 
 
-   .. py:method:: load_tool_result(key)
+   .. py:method:: delete_steps(keys)
 
+      Delete these entries. Best-effort: runs after the work succeeded, so it must not raise.
 
-   .. py:method:: cleanup()
 
 

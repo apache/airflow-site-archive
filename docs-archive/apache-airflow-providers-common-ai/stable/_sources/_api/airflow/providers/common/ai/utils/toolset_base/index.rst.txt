@@ -26,6 +26,7 @@ Classes
 
    airflow.providers.common.ai.utils.toolset_base.AirflowToolset
    airflow.providers.common.ai.utils.toolset_base.MaskingToolset
+   airflow.providers.common.ai.utils.toolset_base.MaskingCapability
 
 
 Functions
@@ -86,6 +87,12 @@ Module Contents
 
 
 
+   .. py:attribute:: replayable
+      :type:  bool
+      :value: True
+
+
+
    .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
       :abstractmethod:
 
@@ -142,6 +149,48 @@ Module Contents
           tool_args: The arguments to pass to the tool.
           ctx: The run context.
           tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+
+
+
+.. py:class:: MaskingCapability
+
+   Bases: :py:obj:`pydantic_ai.capabilities.AbstractCapability`\ [\ :py:obj:`Any`\ ]
+
+
+   Mask what every tool hands the model, however the tool reached the agent.
+
+   :class:`MaskingToolset` only covers a toolset the operator can find and wrap. A
+   capability can supply tools the operator never sees as a toolset: ``MCP``, a
+   ``Toolset`` built per run, or a ``Toolset`` inside ``PrefixTools`` or a
+   ``CombinedCapability``. This masks around every tool call instead.
+
+   :meth:`~airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.create_agent`
+   adds it to every agent it builds, so add it yourself only to an agent you build with
+   ``Agent(...)``, last in its ``capabilities``:
+
+   .. code-block:: python
+
+       agent = Agent(model, toolsets=[my_toolset], capabilities=[*my_capabilities, MaskingCapability()])
+
+   It declares the innermost position, and pydantic-ai breaks ties between capabilities
+   that declare it by list order, the last one innermost, so the agent's other capabilities
+   hooking tool execution see a result only after it is masked. Two kinds still see it
+   first: a capability passed to ``run(capabilities=...)``, which wraps inside the agent's
+   own, and a toolset wrapper a capability adds with ``get_wrapper_toolset``, which runs
+   below every capability's hooks.
+
+
+   .. py:method:: get_ordering()
+
+      Join the innermost capabilities; list order decides which of them is closest to the tool.
+
+
+
+   .. py:method:: wrap_tool_execute(ctx, *, call, tool_def, args, handler)
+      :async:
+
+
+      Run the tool and mask its result, or the error it raised, before anything else sees it.
 
 
 

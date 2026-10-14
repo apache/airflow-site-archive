@@ -1,0 +1,137 @@
+airflow.providers.common.ai.batch.output_schema
+===============================================
+
+.. py:module:: airflow.providers.common.ai.batch.output_schema
+
+.. autoapi-nested-parse::
+
+   Provider-neutral structured-output layer for ``@task.llm_batch``.
+
+   This module knows nothing about any provider -- it only knows Pydantic. It
+   turns ``output_type`` into a JSON Schema adapters can translate into their own
+   request shape (:class:`OutputSpec`), and turns an adapter's extracted
+   response back into a validated value or an explicit failure
+   (:class:`ValidationOutcome`).
+
+   Deliberately does **not** call
+   :func:`~airflow.providers.common.ai.utils.output_type.rehydrate_pydantic_output`:
+   that helper's failure mode is "validation failed -> return the raw string
+   unchanged", which is correct for the HITL round-trip it was built for but
+   wrong here -- a batch item that fails validation must be recorded as failed
+   (``status: "invalid_output"``), never silently downgraded into a
+   string that merely looks like a success.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.output_schema.OutputSpec
+   airflow.providers.common.ai.batch.output_schema.ValidationOutcome
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.output_schema.build_output_spec
+   airflow.providers.common.ai.batch.output_schema.validate_extracted_output
+
+
+Module Contents
+---------------
+
+.. py:class:: OutputSpec
+
+   The translation of ``output_type`` into a provider-agnostic structured-output request.
+
+   Built once per task execution (the schema is identical for every request
+   in the batch), then passed to the adapter's
+   :meth:`~airflow.providers.common.ai.batch.base.BatchAdapter.build_output_directive`
+   and, on the way back, to :func:`validate_extracted_output`.
+
+
+   .. py:attribute:: output_type
+      :type:  type
+
+
+   .. py:attribute:: is_structured
+      :type:  bool
+
+
+   .. py:attribute:: json_schema
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: schema_name
+      :type:  str
+
+
+   .. py:attribute:: type_adapter
+      :type:  pydantic.TypeAdapter[Any]
+
+
+   .. py:attribute:: wrapped
+      :type:  bool
+      :value: False
+
+
+
+.. py:function:: build_output_spec(output_type)
+
+   Build the :class:`OutputSpec` for a ``@task.llm_batch`` ``output_type``.
+
+   ``output_type is str`` (the default) produces an unstructured spec: no
+   schema is generated and adapters skip ``build_output_directive`` /
+   ``extract_output`` validation entirely. Any other type -- a ``BaseModel``
+   subclass, or another type ``TypeAdapter`` supports (``int``,
+   ``list[str]``, ...), matching what ``@task.llm``'s ``output_type``
+   already accepts -- produces a JSON Schema.
+
+   :raises LLMBatchOutputTypeError: ``output_type`` cannot produce a JSON
+       Schema at all (e.g. a bare class with no Pydantic-compatible fields).
+       Raised eagerly, before any request is built or submitted.
+
+
+.. py:class:: ValidationOutcome
+
+   The result of validating one item's :class:`ExtractedOutput` against an :class:`OutputSpec`.
+
+
+   .. py:attribute:: ok
+      :type:  bool
+
+
+   .. py:attribute:: value
+      :type:  Any | None
+      :value: None
+
+
+
+   .. py:attribute:: raw_text
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: error_message
+      :type:  str | None
+      :value: None
+
+
+
+.. py:function:: validate_extracted_output(extracted, spec)
+
+   Validate one item's extracted output against ``spec``, never raising.
+
+   "The model returned something that doesn't match ``output_type``" is
+   batch *data*, not an exception -- the caller records ``ok=False`` items as
+   ``status: "invalid_output"`` and keeps processing the rest of the stream.
+
+   When ``spec.is_structured`` is ``False`` (``output_type is str``), the
+   text passes through unchanged with no validation at all.
+
+

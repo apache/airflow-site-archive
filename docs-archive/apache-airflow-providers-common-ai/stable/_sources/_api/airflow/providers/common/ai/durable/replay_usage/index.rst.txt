@@ -9,6 +9,14 @@ airflow.providers.common.ai.durable.replay_usage
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.replay_usage.SUCCESSFUL_TOOL_RESULT_KINDS
+
+
 Classes
 -------
 
@@ -24,24 +32,27 @@ Functions
 
    airflow.providers.common.ai.durable.replay_usage.subtract_request_usage
    airflow.providers.common.ai.durable.replay_usage.fill_replayed_cost
+   airflow.providers.common.ai.durable.replay_usage.is_successful_tool_payload
 
 
 Module Contents
 ---------------
 
+.. py:data:: SUCCESSFUL_TOOL_RESULT_KINDS
+
 .. py:function:: subtract_request_usage(run_usage, usage)
 
-   Subtract one response's token usage and cost from a run's usage, in place.
+   Subtract one response's (or one durable operation's) usage and cost from a run's usage, in place.
 
 
 .. py:function:: fill_replayed_cost(response)
 
    Price a replayed response in place, the way pydantic-ai's graph is about to.
 
-   ``CachingModel`` stores a live response before the graph prices it, so a cached
+   The journal records a live response before the graph prices it, so a replayed
    response comes back with ``usage.cost=None`` even for a priced model. The graph fills
-   the cost right after ``CachingModel.request`` returns and only when it is still unset,
-   so pricing it here first means the cost this module subtracts is exactly the cost the
+   the cost right after the durable model request returns, and only when it is still
+   unset, by the same lookup, so the cost this module subtracts is exactly the cost the
    graph then adds. Uses the public ``ModelResponse.cost()``, which runs the same price
    lookup as the graph's own best-effort pricing; a response it cannot price stays
    unpriced, as it would in the graph.
@@ -51,25 +62,25 @@ Module Contents
 
    Nets durable replays out of the ``RunUsage`` a run is counted and limited against.
 
-   pydantic-ai counts a replayed step exactly like a live one: after
-   ``CachingModel.request`` returns, the graph does ``requests += 1`` and adds the
-   response's usage, and after ``CachingToolset.call_tool`` returns, the tool manager
-   does ``tool_calls += 1``. The ledger cancels each replay when it happens, so the run's
+   pydantic-ai counts a replayed step exactly like a live one: after a durable model
+   request returns, the graph does ``requests += 1`` and adds the response's usage, and
+   after a durable tool call returns successfully, the tool manager does
+   ``tool_calls += 1``. The ledger cancels each replay when it happens, so the run's
    counts only move for live work. Nothing here is persisted: the result is the same
-   whether the cache entry was written by the previous attempt, an attempt that failed
+   whether the journal entry was written by the previous attempt, an attempt that failed
    halfway through its own replay, or an attempt before a clear (which resets the budget
-   but keeps the durable cache).
+   but keeps the durable journal).
 
    Two of pydantic-ai's limit checks run before the durable layer sees the step it
    guards: ``check_before_request`` before each model request, and the up-front
    ``check_before_tool_call`` projection over a whole step's function-tool calls. For
    those, the ledger takes a credit ahead of time -- when a replayed model response is
-   followed in the cache by the next model step or by cached tool results -- and resolves
+   followed in the journal by the next model request or by recorded tool results -- and resolves
    each credit when the step runs: a replay keeps it, a live call gives it back and
    re-runs the check pydantic-ai made against the credited count. Credits that are never
    resolved (the run took a different path, or stopped) are given back by
    :meth:`settle`, so they never reach the persisted total; until then, a credit for a
-   stale cache entry the run never reaches has only loosened that one up-front check.
+   stale journal entry the run never reaches has only loosened that one up-front check.
 
    :param run_usage: The ``RunUsage`` passed to the run as ``usage=``.
    :param usage_limits: The limits passed to the run; ``None`` means pydantic-ai's
@@ -79,15 +90,65 @@ Module Contents
    .. py:attribute:: run_usage
 
 
+   .. py:method:: begin_model_request(messages)
+
+      Note the start of a model request and return whether it continues a suspended response.
+
+      pydantic-ai re-issues a suspended response (Anthropic ``pause_turn``, OpenAI
+      background mode) by sending it back as the last message; the graph counts the whole
+      chain as one request.
+
+
+
+   .. py:method:: track_chain(response, model_request_parameters)
+
+      Count the function-tool calls ``response`` issues, for crediting the steps after it.
+
+
+
+   .. py:method:: credit_first_replay(durable_run)
+
+      Credit the run's first model request if the journal holds a response for it.
+
+      Called before the run starts, because pydantic-ai checks ``request_limit`` before
+      the first request reaches the durable layer; without the credit, a retry whose
+      seeded ``requests`` already equals ``request_limit`` could not start even when
+      every step would replay for free. Steps recorded before the first model request
+      (tool discovery, capability operations) are skipped over.
+
+
+
+   .. py:method:: credit_successors(durable_run, position)
+
+      Credit what the replayed, complete response at ``position`` is followed by in the journal.
+
+      The response's function-tool calls took positions after it when they first ran, and
+      the next model request a position after them. Tool calls with a recorded successful
+      result are credited; the scan stops at the next model request, which is credited too.
+      A position with nothing recorded is a call that raised or was not recorded, and the
+      scan gives up once there are more of those than calls in the chain.
+
+
+
+   .. py:method:: record_capability_replay(payload)
+
+      Cancel the usage a replayed ``@durable_operation`` brings back with its result.
+
+      pydantic-ai adds the usage an operation accumulated (a summarization's model call,
+      say) to the run when the operation returns, including when it returns from the
+      journal; that usage was already counted by the attempt that ran it.
+
+
+
    .. py:method:: credit_request()
 
-      Credit the next model request, which the cache says will be a replay.
+      Credit the next model request, which the journal says will be a replay.
 
 
 
    .. py:method:: credit_tool_steps(steps, *, batch_calls)
 
-      Credit the tool calls at these step indices, which have cached results.
+      Credit the tool calls at these journal positions, which have recorded results.
 
       :param batch_calls: The number of function-tool calls this replayed response
           issued, i.e. the count pydantic-ai's up-front ``check_before_tool_call``
@@ -138,7 +199,7 @@ Module Contents
 
    .. py:method:: record_live_tool_call(step)
 
-      Give back a credit whose cached result did not replay, and re-check the limit.
+      Give back a credit whose recorded result did not replay, and re-check the limit.
 
       pydantic-ai's up-front check projected the whole batch this credited call
       belongs to as if every credited call in it would replay for free. With this one
@@ -165,5 +226,10 @@ Module Contents
       ``record_tool_call`` for calls of ``'unknown'`` kind, so it can't push the
       final count over the limit.
 
+
+
+.. py:function:: is_successful_tool_payload(payload)
+
+   Whether a recorded tool-call payload is a result pydantic-ai counts as a successful call.
 
 

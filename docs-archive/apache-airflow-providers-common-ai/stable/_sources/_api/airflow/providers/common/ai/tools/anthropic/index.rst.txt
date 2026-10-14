@@ -1,0 +1,122 @@
+airflow.providers.common.ai.tools.anthropic
+===========================================
+
+.. py:module:: airflow.providers.common.ai.tools.anthropic
+
+.. autoapi-nested-parse::
+
+   Give Airflow tools to an agent loop run by the Anthropic SDK's tool runner.
+
+   .. note:: Experimental; see :ref:`howto/stability`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.anthropic.AirflowTools
+   airflow.providers.common.ai.tools.anthropic.AsyncAirflowTools
+
+
+Module Contents
+---------------
+
+.. py:class:: AirflowTools(*sources)
+
+   Airflow's tools for the tool runner of a synchronous ``Anthropic`` client.
+
+   Pass toolsets that implement
+   :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``
+   and ``HookToolset``, or individual
+   :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. Give :attr:`tools`
+   to ``client.beta.messages.tool_runner`` and drive the runner with :meth:`run`:
+
+   .. code-block:: python
+
+       from anthropic import Anthropic
+
+       from airflow.providers.common.ai.tools.anthropic import AirflowTools
+       from airflow.providers.common.ai.toolsets import SQLToolset
+
+       client = Anthropic()
+       tools = AirflowTools(SQLToolset("warehouse", allowed_tables=["orders"]))
+       runner = client.beta.messages.tool_runner(
+           model="claude-opus-5-5",
+           max_tokens=16000,
+           tools=tools.tools,
+           messages=[...],
+       )
+       message = tools.run(runner)
+
+   Each tool keeps the source tool's name, description and argument schema, and every
+   result passes through Airflow's secret masker first. A failure the model can
+   correct, such as a query naming a missing column, reaches it as a ``tool_result``
+   with ``is_error: true``, counted against the tool's retry limit once per model
+   turn. A tool that is still failing once the limit is used up, or a failure the
+   model cannot fix, such as a hook raising, makes :meth:`run` raise
+   :class:`~airflow.providers.common.ai.tools.ToolCallError` before the next model
+   request, so the task fails and Airflow retries it. The runner on its own hands
+   every exception back to the model, so drive it with :meth:`run` rather than
+   ``until_done()``. A runner that reaches its ``max_iterations`` while the model is still
+   calling tools makes :meth:`run` raise
+   :class:`~airflow.providers.common.ai.exceptions.ToolRunnerMaxIterationsError`, since
+   its last message holds no answer. A runner created with ``stream=True`` is not
+   supported.
+
+   For an ``AsyncAnthropic`` client, use :class:`AsyncAirflowTools`.
+
+   :param sources: Toolsets and tools to add, in order.
+
+
+   .. py:attribute:: tools
+      :type:  list[anthropic.lib.tools.BetaFunctionTool[collections.abc.Callable[..., str]]]
+
+
+   .. py:method:: run(runner)
+
+      Drive ``runner`` to its final message.
+
+      :raises ToolCallError: when a tool failed in a way the model cannot fix.
+      :raises ToolRunnerMaxIterationsError: when the runner reached ``max_iterations``
+          while the model was still calling tools.
+
+
+
+.. py:class:: AsyncAirflowTools(*sources)
+
+   Airflow's tools for the tool runner of an ``AsyncAnthropic`` client.
+
+   The asynchronous counterpart of :class:`AirflowTools`, with the same behaviour:
+
+   .. code-block:: python
+
+       tools = AsyncAirflowTools(SQLToolset("warehouse", allowed_tables=["orders"]))
+       runner = AsyncAnthropic().beta.messages.tool_runner(
+           model="claude-opus-5-5",
+           max_tokens=16000,
+           tools=tools.tools,
+           messages=[...],
+       )
+       message = await tools.run(runner)
+
+   :param sources: Toolsets and tools to add, in order.
+
+
+   .. py:attribute:: tools
+      :type:  list[anthropic.lib.tools.BetaAsyncFunctionTool[collections.abc.Callable[..., collections.abc.Coroutine[Any, Any, str]]]]
+
+
+   .. py:method:: run(runner)
+      :async:
+
+
+      Drive ``runner`` to its final message.
+
+      :raises ToolCallError: when a tool failed in a way the model cannot fix.
+      :raises ToolRunnerMaxIterationsError: when the runner reached ``max_iterations``
+          while the model was still calling tools.
+
+
+

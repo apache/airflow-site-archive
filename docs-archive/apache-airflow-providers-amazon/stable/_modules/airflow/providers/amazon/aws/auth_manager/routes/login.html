@@ -851,14 +851,19 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
         <span class="n">response</span><span class="o">.</span><span class="n">delete_cookie</span><span class="p">(</span><span class="n">COOKIE_NAME_LOGIN_STATE</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">)</span>
         <span class="k">return</span>
     <span class="n">payload</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">urlsafe_b64encode</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">separators</span><span class="o">=</span><span class="p">(</span><span class="s2">","</span><span class="p">,</span> <span class="s2">":"</span><span class="p">))</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+    <span class="n">secure</span> <span class="o">=</span> <span class="n">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
     <span class="n">response</span><span class="o">.</span><span class="n">set_cookie</span><span class="p">(</span>
         <span class="n">COOKIE_NAME_LOGIN_STATE</span><span class="p">,</span>
         <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">payload</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">_sign_login_state</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
         <span class="n">max_age</span><span class="o">=</span><span class="n">LOGIN_STATE_MAX_AGE</span><span class="p">,</span>
         <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">,</span>
-        <span class="n">secure</span><span class="o">=</span><span class="n">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">),</span>
+        <span class="n">secure</span><span class="o">=</span><span class="n">secure</span><span class="p">,</span>
         <span class="n">httponly</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">samesite</span><span class="o">=</span><span class="s2">"lax"</span><span class="p">,</span>
+        <span class="c1"># The IdP sends the browser back to login_callback with a cross-site form POST. The</span>
+        <span class="c1"># browser sends a cookie on that request only if the cookie is SameSite=None. Browsers</span>
+        <span class="c1"># reject a SameSite=None cookie without Secure, so over plain http the cookie stays Lax.</span>
+        <span class="c1"># With a Lax cookie, the login completes only when the IdP is on the same site as Airflow.</span>
+        <span class="n">samesite</span><span class="o">=</span><span class="s2">"none"</span> <span class="k">if</span> <span class="n">secure</span> <span class="k">else</span> <span class="s2">"lax"</span><span class="p">,</span>
     <span class="p">)</span>
 
 

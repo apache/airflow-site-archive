@@ -742,7 +742,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">inject_parent_job_information_into_spark_properties</span><span class="p">,</span>
     <span class="n">inject_transport_information_into_emr_serverless_properties</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">mask_secret</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">exactly_one</span><span class="p">,</span> <span class="n">prune_dict</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -3270,6 +3270,82 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">session_details</span> <span class="o">=</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"session_details"</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"EMR Serverless session </span><span class="si">%s</span><span class="s2"> started"</span><span class="p">,</span> <span class="n">session_details</span><span class="p">[</span><span class="s2">"session_id"</span><span class="p">])</span>
         <span class="k">return</span> <span class="n">session_details</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EmrServerlessGetSessionEndpointOperator</span><span class="p">(</span><span class="n">AwsBaseOperator</span><span class="p">[</span><span class="n">EmrServerlessHook</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return a fresh Spark Connect endpoint and auth token for a running interactive session.</span>
+
+<span class="sd">    The returned ``auth_token`` is short-lived (about one hour), so this operator should run</span>
+<span class="sd">    immediately before the task that connects to the session. The token is registered with</span>
+<span class="sd">    Airflow's secrets masker, which only redacts it from this task's logs: downstream tasks</span>
+<span class="sd">    that read it from XCom must mask it themselves, and anyone who can read this task's XCom</span>
+<span class="sd">    can use it until it expires.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information on how to use this operator, take a look at the guide:</span>
+<span class="sd">        :ref:`howto/operator:EmrServerlessGetSessionEndpointOperator`</span>
+
+<span class="sd">    :param application_id: ID of the EMR Serverless application.</span>
+<span class="sd">    :param session_id: ID of the interactive session.</span>
+<span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
+<span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
+<span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
+<span class="sd">        empty, then default boto3 configuration would be used (and must be</span>
+<span class="sd">        maintained on each worker node).</span>
+<span class="sd">    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.</span>
+<span class="sd">    :param verify: Whether or not to verify SSL certificates. See:</span>
+<span class="sd">        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.aws_hook_class">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.aws_hook_class">[docs]</a>
+    <span class="n">aws_hook_class</span> <span class="o">=</span> <span class="n">EmrServerlessHook</span></div>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.template_fields">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.template_fields">[docs]</a>
+    <span class="n">template_fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">aws_template_fields</span><span class="p">(</span>
+        <span class="s2">"application_id"</span><span class="p">,</span>
+        <span class="s2">"session_id"</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">application_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.application_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.application_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span> <span class="o">=</span> <span class="n">application_id</span></div>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.session_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.session_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span> <span class="o">=</span> <span class="n">session_id</span></div>
+
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">_check_interactive_session_support</span><span class="p">()</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">get_session_endpoint</span><span class="p">(</span>
+            <span class="n">applicationId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span> <span class="n">sessionId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_id</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">auth_token</span> <span class="o">:=</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"authToken"</span><span class="p">):</span>
+            <span class="n">mask_secret</span><span class="p">(</span><span class="n">auth_token</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Resolved Spark Connect endpoint for session </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"endpoint"</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"endpoint"</span><span class="p">),</span>
+            <span class="s2">"auth_token"</span><span class="p">:</span> <span class="n">auth_token</span><span class="p">,</span>
+            <span class="s2">"auth_token_expires_at"</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"authTokenExpiresAt"</span><span class="p">),</span>
+        <span class="p">}</span></div>
 </div>
 
 </pre></div>

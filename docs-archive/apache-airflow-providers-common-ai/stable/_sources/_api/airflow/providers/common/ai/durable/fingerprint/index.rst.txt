@@ -22,9 +22,11 @@ airflow.providers.common.ai.durable.fingerprint
    longer match.
 
    Fields that pydantic-ai regenerates on every attempt (message-level
-   ``timestamp``/``run_id``/``conversation_id``, part-level ``timestamp``) and
-   capability ids are excluded from the fingerprint, and set-valued request
-   parameters are sorted.  Requests that cannot be serialized to JSON
+   ``timestamp``/``run_id``/``conversation_id``, part-level ``timestamp``, the
+   ``capability_id`` of a tool from a capability without an ``id``) are excluded
+   from the fingerprint, and set-valued request
+   parameters are sorted or dropped.  Registered secrets in the message history are
+   masked before hashing, as they are in the tool results the journal records.  Requests that cannot be serialized to JSON
    fingerprint as ``None``, which degrades that step to unverified positional
    replay (the pre-fingerprint behavior) rather than disabling caching.
 
@@ -58,7 +60,8 @@ Module Contents
 
    The ``ModelRequestParameters`` object is hashed (tool definitions, output
    mode and schema, native tools, ...) so any change to what is sent to the
-   model invalidates the cached response; only capability ids are left out.
+   model invalidates the cached response; only each tool's ``capability_id`` and
+   ``deferred_capability_ids`` are left out.
 
    Returns ``None`` when the request cannot be serialized; ``None`` compares
    equal to ``None``, so requests that cannot be fingerprinted degrade to

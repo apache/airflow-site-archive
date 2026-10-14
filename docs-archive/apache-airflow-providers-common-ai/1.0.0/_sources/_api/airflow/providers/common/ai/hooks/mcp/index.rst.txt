@@ -1,0 +1,148 @@
+airflow.providers.common.ai.hooks.mcp
+=====================================
+
+.. py:module:: airflow.providers.common.ai.hooks.mcp
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.hooks.mcp.MCPHook
+
+
+Module Contents
+---------------
+
+.. py:class:: MCPHook(mcp_conn_id = default_conn_name, tool_prefix = None, *, token_provider = None, env_provider = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Hook for connecting to MCP (Model Context Protocol) servers.
+
+   Manages connection configuration for MCP servers. Supports three
+   transport types: HTTP (Streamable HTTP), SSE, and stdio.
+
+   Connection fields:
+       - **host**: Server URL for HTTP/SSE transports (e.g. ``http://localhost:3001/mcp``)
+       - **password**: Auth token (optional)
+       - **Extra.transport**: Transport type — ``http`` (default), ``sse``, or ``stdio``
+       - **Extra.command**: Command to run for stdio transport (e.g. ``uvx``)
+       - **Extra.args**: Command arguments for stdio transport (e.g. ``["mcp-run-python"]``)
+       - **Extra.env**: Environment variables for the stdio subprocess (e.g.
+         ``{"API_KEY": "..."}``). Ignored for HTTP/SSE.
+       - **Extra.timeout**: Connection init timeout in seconds for stdio (default: 10)
+
+   For HTTP/SSE transports the ``Authorization`` header is, by default, a static
+   ``Bearer`` token taken from the connection ``password``. Endpoints that require
+   a freshly minted or short-lived token (e.g. a Snowflake managed MCP server
+   authenticated with a key-pair JWT, OAuth/refresh tokens, Workload Identity
+   Federation, or GitHub App installation tokens) can pass a ``token_provider``
+   callable instead. It is invoked once, the first time this hook establishes a
+   connection, and its return value is used as the bearer token, so a fresh token
+   is minted without storing a long-lived secret in the connection.
+
+   For the ``stdio`` transport, the subprocess environment is, by default, the
+   static ``Extra.env`` mapping -- a fine place for a value that genuinely
+   belongs to this connection. When the credential has no stable static form to
+   store here at all -- it lives in a different connection (e.g. a Splunk
+   credential a Splunk connection already manages), or is minted fresh per call
+   (e.g. a Vault lease) -- pass an ``env_provider`` callable instead. Its return
+   value is merged over ``Extra.env`` (``env_provider`` keys win on conflicts),
+   invoked once, the first time this hook establishes a connection.
+
+   :param mcp_conn_id: Airflow connection ID for the MCP server.
+   :param tool_prefix: Optional prefix prepended to tool names
+       (e.g. ``"weather"`` → ``"weather_get_forecast"``).
+   :param token_provider: Optional zero-argument callable returning a bearer
+       token string. When set, it overrides the connection ``password`` for the
+       ``Authorization`` header on HTTP/SSE transports. Called once, the first
+       time this hook establishes a connection (the result is then cached for
+       the hook's lifetime). Ignored for the ``stdio`` transport.
+   :param env_provider: Optional zero-argument callable returning a
+       ``dict[str, str]`` of environment variables for the ``stdio`` subprocess.
+       Merged over ``Extra.env`` (``env_provider`` wins on key conflicts). Called
+       once, the first time this hook establishes a connection (the result is
+       then cached for the hook's lifetime). Ignored for the ``http``/``sse``
+       transports.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'mcp_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'mcp_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'mcp'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'MCP Server'
+
+
+
+   .. py:attribute:: mcp_conn_id
+      :value: 'mcp_default'
+
+
+
+   .. py:attribute:: tool_prefix
+      :value: None
+
+
+
+   .. py:attribute:: token_provider
+      :value: None
+
+
+
+   .. py:attribute:: env_provider
+      :value: None
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+   .. py:method:: get_conn()
+
+      Return a configured PydanticAI MCP toolset instance.
+
+      Builds a :class:`~pydantic_ai.mcp.MCPToolset` over the FastMCP transport
+      matching the transport type in the connection's extra field:
+
+      - ``http`` (default): ``fastmcp.client.transports.StreamableHttpTransport``
+      - ``sse``: ``fastmcp.client.transports.SSETransport``
+      - ``stdio``: ``fastmcp.client.transports.StdioTransport``
+
+      When ``tool_prefix`` is set the toolset is wrapped via
+      :meth:`~pydantic_ai.toolsets.abstract.AbstractToolset.prefixed`, so a
+      prefix of ``"weather"`` yields tool names like ``weather_get_forecast``.
+
+      The result is cached for the lifetime of this hook instance.
+
+
+
+   .. py:method:: test_connection()
+
+      Test connection by verifying configuration is valid.
+
+      Validates that the connection has the required fields for the
+      configured transport type. Does NOT connect to the MCP server —
+      that requires an async context manager.
+
+
+
