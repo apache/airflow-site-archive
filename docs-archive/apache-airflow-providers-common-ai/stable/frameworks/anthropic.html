@@ -22,7 +22,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=fb71bbff" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
-            <link rel="next" title="Document and RAG pipelines" href="../rag_pipelines.html" />
+            <link rel="next" title="OpenAI Agents SDK" href="openai_agents.html" />
             <link rel="prev" title="Google ADK" href="adk.html" />
 
     <link rel="canonical" href="https://airflow.apache.org/docs/apache-airflow-providers-common-ai/stable/frameworks/anthropic.html" />
@@ -435,6 +435,7 @@
 <li class="toctree-l2"><a class="reference internal" href="strands.html">Strands Agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="adk.html">Google ADK</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Anthropic SDK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="openai_agents.html">OpenAI Agents SDK</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../rag_pipelines.html">Document and RAG pipelines</a></li>
@@ -575,6 +576,7 @@
 <li class="toctree-l2"><a class="reference internal" href="strands.html">Strands Agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="adk.html">Google ADK</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Anthropic SDK</a></li>
+<li class="toctree-l2"><a class="reference internal" href="openai_agents.html">OpenAI Agents SDK</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../rag_pipelines.html">Document and RAG pipelines</a></li>
@@ -746,6 +748,9 @@ if you route through one, come from an Airflow connection:</p>
             <span class="n">max_iterations</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="n">message</span> <span class="o">=</span> <span class="n">tools</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">runner</span><span class="p">)</span>
+        <span class="c1"># A refusal ends the run with no answer, so fail the task rather than return "".</span>
+        <span class="k">if</span> <span class="n">message</span><span class="o">.</span><span class="n">stop_reason</span> <span class="o">==</span> <span class="s2">"refusal"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"The model refused to answer: </span><span class="si">{</span><span class="n">question</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">block</span><span class="o">.</span><span class="n">text</span> <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">message</span><span class="o">.</span><span class="n">content</span> <span class="k">if</span> <span class="n">block</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"text"</span><span class="p">)</span>
 
     <span class="n">ask_the_warehouse</span><span class="p">()</span>
@@ -775,7 +780,9 @@ the runner still hands an exception from one of your own tools to the model. A r
 reaches <code class="docutils literal notranslate"><span class="pre">max_iterations</span></code> while the model is still calling tools has no answer, so
 <code class="docutils literal notranslate"><span class="pre">tools.run</span></code> raises
 <a class="reference internal" href="../_api/airflow/providers/common/ai/exceptions/index.html#airflow.providers.common.ai.exceptions.ToolRunnerMaxIterationsError" title="airflow.providers.common.ai.exceptions.ToolRunnerMaxIterationsError"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolRunnerMaxIterationsError</span></code></a> and the
-task fails rather than returning an empty result.</p>
+task fails rather than returning an empty result. A refusal has no answer either, but
+<code class="docutils literal notranslate"><span class="pre">tools.run</span></code> returns it like any final message, so the task above checks for
+<code class="docutils literal notranslate"><span class="pre">stop_reason</span> <span class="pre">==</span> <span class="pre">&quot;refusal&quot;</span></code> and raises, which fails the task.</p>
 <p>To reach Claude on Amazon Bedrock, Claude Platform on AWS, Google Vertex AI or Microsoft
 Foundry, build the
 client with <code class="docutils literal notranslate"><span class="pre">AnthropicHook(conn_id=...).get_conn()</span></code> from the Anthropic provider
@@ -886,11 +893,12 @@ pass the value rather than a Jinja expression.</p></li>
 </section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<p>Install this provider with its <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> extra:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"apache-airflow-providers-common-ai[anthropic]"</span>
+<p>Install this provider with its <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> and <code class="docutils literal notranslate"><span class="pre">sql</span></code> extras:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"apache-airflow-providers-common-ai[anthropic,sql]"</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> extra installs the SDK. Add <code class="docutils literal notranslate"><span class="pre">apache-airflow-providers-anthropic</span></code> if
+<p>The <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> extra installs the SDK, and <code class="docutils literal notranslate"><span class="pre">sql</span></code> installs what the example’s
+<code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> imports. Add <code class="docutils literal notranslate"><span class="pre">apache-airflow-providers-anthropic</span></code> if
 you build the client with <code class="docutils literal notranslate"><span class="pre">AnthropicHook</span></code>. <code class="docutils literal notranslate"><span class="pre">tool_runner</span></code> is a beta helper of the
 SDK. The adapter needs <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> 1.1.0 or later, which the extra requires,
 and is tested with 1.8.0.</p>
@@ -911,7 +919,7 @@ in Anthropic’s documentation, for the runner itself.</p></li>
             <a rel="prev" title="Google ADK" href="adk.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="p">Previous</button>
             </a>
-            <a rel="next" title="Document and RAG pipelines" href="../rag_pipelines.html" >
+            <a rel="next" title="OpenAI Agents SDK" href="openai_agents.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="n">Next</button>
             </a>
     </div>

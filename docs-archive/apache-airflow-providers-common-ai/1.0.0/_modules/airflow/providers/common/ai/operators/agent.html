@@ -927,6 +927,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_awaiting_input</span><span class="p">(</span><span class="n">error</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Whether ``error`` is the pause for tool approval, which only Airflow 3.3+ raises."""</span>
+    <span class="k">return</span> <span class="n">AIRFLOW_V_3_3_PLUS</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">TaskAwaitingInput</span><span class="p">)</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_declares_agent_template_fields</span><span class="p">(</span><span class="n">toolset</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Whether *toolset*, or a toolset it wraps or combines, has connection IDs to render."""</span>
     <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">toolset</span><span class="p">,</span> <span class="n">AbstractToolset</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
@@ -1068,8 +1073,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        Cannot be combined with a ``SandboxToolset`` (raises), attached or</span>
 <span class="sd">        not: a replayed tool result describes a workspace state the replay did</span>
 <span class="sd">        not reproduce, and the first call that misses the cache runs against</span>
-<span class="sd">        whatever the sandbox holds now. Cannot be combined with a pydantic-ai-harness</span>
-<span class="sd">        ``CodeMode`` capability (raises).</span>
+<span class="sd">        whatever the sandbox holds now. With a pydantic-ai-harness ``CodeMode``</span>
+<span class="sd">        capability, a retry runs each ``run_code`` snippet again and replays the</span>
+<span class="sd">        tool calls it makes; ``CodeMode``'s ``eager`` and ``speculate`` options are</span>
+<span class="sd">        off while the run is durable.</span>
 <span class="sd">    :param cache_prompt: When ``True`` (default), asks the provider to cache the</span>
 <span class="sd">        tool definitions, system prompt and conversation so far, so the next</span>
 <span class="sd">        request in the run -- and a mapped task's other instances within the</span>
@@ -1314,12 +1321,6 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">durable</span> <span class="ow">and</span> <span class="n">enable_hitl_review</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"durable=True and enable_hitl_review=True cannot be used together."</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">durable</span> <span class="ow">and</span> <span class="n">_contains_code_mode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_declared_capabilities</span><span class="p">):</span>
-            <span class="c1"># Code mode collapses tools into one ``run_code`` tool and lets the model emit</span>
-            <span class="c1"># arbitrary Python, whose nested tool calls the journal does not see as steps of</span>
-            <span class="c1"># their own. Reject the combination rather than replay a partial ``run_code``.</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"durable=True cannot be used with a CodeMode capability."</span><span class="p">)</span>
-
         <span class="k">if</span> <span class="n">durable</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span>
             <span class="nb">isinstance</span><span class="p">(</span><span class="n">capability</span><span class="p">,</span> <span class="n">AirflowDurability</span><span class="p">)</span> <span class="k">for</span> <span class="n">capability</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_declared_capabilities</span>
         <span class="p">):</span>
@@ -1410,6 +1411,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="s2">"Set it on the toolset itself, and pass a function that builds a toolset as "</span>
                 <span class="s2">"DynamicToolset(function, id=...); the id of a Toolset capability around a toolset "</span>
                 <span class="s2">"does not reach it."</span>
+            <span class="p">)</span>
+        <span class="c1"># One instance listed twice is one toolset to pydantic-ai; two instances sharing an id</span>
+        <span class="c1"># would have their recorded calls filed under one name.</span>
+        <span class="n">first_by_id</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">duplicates</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">toolset</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_running_toolsets</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">leaf</span> <span class="ow">in</span> <span class="n">iter_toolsets</span><span class="p">(</span><span class="n">toolset</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">DURABLE_UNIT_TOOLSETS</span><span class="p">)</span> <span class="ow">and</span> <span class="n">leaf</span><span class="o">.</span><span class="n">id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">first_by_id</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">leaf</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">leaf</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">leaf</span> <span class="ow">and</span> <span class="n">leaf</span><span class="o">.</span><span class="n">id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">duplicates</span><span class="p">:</span>
+                        <span class="n">duplicates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">leaf</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">duplicates</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"durable=True needs a unique id on each toolset, but more than one toolset has the id "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">' or '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">repr</span><span class="p">,</span><span class="w"> </span><span class="n">duplicates</span><span class="p">))</span><span class="si">}</span><span class="s2">: durable replay records each tool call "</span>
+                <span class="s2">"under its toolset's id, so a retry could not tell their calls apart."</span>
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_reject_sandbox_without_continuity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">durable</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">enable_hitl_review</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1611,13 +1627,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_agent_output_type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Return ``output_type``, plus ``DeferredToolRequests`` when tool approval is supported.</span>
+<span class="sd">        Return ``output_type``, plus ``DeferredToolRequests`` when tool approval is supported or ``durable``.</span>
 
 <span class="sd">        pydantic-ai drops ``DeferredToolRequests`` from the output schema the model sees;</span>
-<span class="sd">        it only lets the run end on a tool call awaiting approval. ``self.output_type`` is</span>
-<span class="sd">        left alone because it is part of the serialized Dag.</span>
+<span class="sd">        it only lets the run end on a tool call awaiting approval. A durable run cannot pause,</span>
+<span class="sd">        but ending it there lets ``_pause_for_tool_approval`` fail the task with</span>
+<span class="sd">        ``UnsupportedToolDeferralError`` instead of pydantic-ai's ``UserError``.</span>
+<span class="sd">        ``self.output_type`` is left alone because it is part of the serialized Dag.</span>
 <span class="sd">        """</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supports_tool_approval</span><span class="p">():</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_supports_tool_approval</span><span class="p">()</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">durable</span><span class="p">):</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_type</span>
         <span class="n">declared</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_type</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">))</span> <span class="k">else</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">]</span>
         <span class="k">return</span> <span class="p">[</span><span class="o">*</span><span class="n">declared</span><span class="p">,</span> <span class="n">DeferredToolRequests</span><span class="p">]</span>
@@ -1629,6 +1647,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">for</span> <span class="n">toolset</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">toolsets</span> <span class="ow">or</span> <span class="p">[]),</span> <span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">agent_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"toolsets"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]))</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">toolset</span><span class="p">,</span> <span class="n">AbstractToolset</span><span class="p">)</span>
         <span class="p">]</span>
+        <span class="k">for</span> <span class="n">capability</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_declared_capabilities</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">toolset</span> <span class="o">:=</span> <span class="n">_resolve_capability_toolset</span><span class="p">(</span><span class="n">capability</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">toolset</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">candidates</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_running_toolsets</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the toolsets ``_build_agent`` hands the agent.</span>
+
+<span class="sd">        Unlike ``_declared_toolsets``, ``agent_params["toolsets"]`` counts only when</span>
+<span class="sd">        ``toolsets=`` is empty, because ``_build_agent`` ignores it otherwise.</span>
+<span class="sd">        """</span>
+        <span class="n">listed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">toolsets</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">agent_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"toolsets"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">toolset</span> <span class="k">for</span> <span class="n">toolset</span> <span class="ow">in</span> <span class="n">listed</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">toolset</span><span class="p">,</span> <span class="n">AbstractToolset</span><span class="p">)]</span>
         <span class="k">for</span> <span class="n">capability</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_declared_capabilities</span><span class="p">:</span>
             <span class="k">if</span> <span class="p">(</span><span class="n">toolset</span> <span class="o">:=</span> <span class="n">_resolve_capability_toolset</span><span class="p">(</span><span class="n">capability</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">toolset</span><span class="p">)</span>
@@ -1815,7 +1847,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="w">        </span><span class="sd">"""Finish a run, or pause it when the agent is waiting on a tool call to be approved."""</span>
         <span class="n">log_run_summary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="n">DeferredToolRequests</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_pause_for_tool_approval</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">attempt_usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_pause_for_tool_approval</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">attempt_usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">BaseException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># The run itself ended normally, after _run_and_report_on_failure, so a refusal</span>
+                <span class="c1"># here is the first point this attempt is known to have failed.</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">run_usage</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_usage</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_is_awaiting_input</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_report_failed_run</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">run_usage</span><span class="p">,</span> <span class="n">run_id</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
+                <span class="k">raise</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_emit_run_metadata</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_usage_budget</span> <span class="ow">and</span> <span class="p">(</span><span class="n">run_usage</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_usage</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_log_cumulative_usage</span><span class="p">(</span><span class="n">run_usage</span><span class="p">)</span>
@@ -1887,7 +1926,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="n">pending_names</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">tool_name</span> <span class="k">for</span> <span class="n">call</span> <span class="ow">in</span> <span class="n">requests</span><span class="o">.</span><span class="n">approvals</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supports_tool_approval</span><span class="p">():</span>
-            <span class="c1"># DeferredToolRequests in a user-set output_type reaches here where approval is off.</span>
+            <span class="c1"># Reached under durable=True, or with DeferredToolRequests in a user-set output_type.</span>
             <span class="k">raise</span> <span class="n">UnsupportedToolDeferralError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"The agent called tools that need approval (</span><span class="si">{</span><span class="n">pending_names</span><span class="si">}</span><span class="s2">), but tool approval "</span>
                 <span class="s2">"needs Airflow 3.3+ and is not available with durable, enable_hitl_review, "</span>
@@ -2196,11 +2235,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="c1"># shared, is the seeded cumulative object, not what this call alone contributed.</span>
         <span class="n">log_run_summary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="n">regen_usage</span><span class="p">)</span>
 
-        <span class="n">output</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">output</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_output_under_review</span> <span class="o">=</span> <span class="n">output</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">()</span>
-        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">output</span><span class="p">),</span> <span class="n">result</span><span class="o">.</span><span class="n">all_messages</span><span class="p">()</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_output_under_review</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">output</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_string</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">output</span><span class="p">),</span> <span class="n">result</span><span class="o">.</span><span class="n">all_messages</span><span class="p">()</span></div>
 </div>
 
 </pre></div>
@@ -2470,363 +2506,5 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>
         <script src="../../../../../../_static/js/search.js"></script>
         <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
-        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
-
-
-
-
-
-const initStyles = () => {
-    const defaultStyle = document.createElement('style');
-    defaultStyle.textContent = "pre.mermaid {\n    /* Same as .mermaid-container > pre */\n    display: block;\n    width: 100%;\n}\n\npre.mermaid > svg {\n    /* Same as .mermaid-container > pre > svg */\n    height: 500px;\n    width: 100%;\n    max-width: 100% !important;\n}";
-    document.head.appendChild(defaultStyle);
-
-    const fullscreenStyle = document.createElement('style');
-    fullscreenStyle.textContent = ".mermaid-container {\n    position: relative;\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n}\n\n.mermaid-container > pre {\n    display: block;\n    width: 100%;\n}\n\n.mermaid-container > pre > svg {\n    height: 500px;\n    width: 100%;\n    max-width: 100% !important;\n}\n\n.mermaid-fullscreen-btn {\n    position: absolute;\n    width: 28px;\n    height: 28px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.3);\n    border-radius: 4px;\n    cursor: pointer;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    transition: all 0.2s;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);\n    font-size: 14px;\n    line-height: 1;\n    padding: 0;\n    color: #333;\n}\n\n.mermaid-fullscreen-btn:hover {\n    opacity: 100% !important;\n    background: rgba(255, 255, 255, 1);\n    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-btn.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.3);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-btn.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal {\n    display: none;\n    position: fixed !important;\n    top: 0 !important;\n    left: 0 !important;\n    width: 95vw;\n    height: 100vh;\n    background: rgba(255, 255, 255, 0.98);\n    z-index: 9999;\n    padding: 20px;\n    overflow: auto;\n}\n\n.mermaid-fullscreen-modal.dark-theme {\n    background: rgba(0, 0, 0, 0.98);\n}\n\n.mermaid-fullscreen-modal.active {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen {\n    position: relative;\n    width: 95vw;\n    height: 90vh;\n    max-width: 95vw;\n    max-height: 90vh;\n    background: white;\n    border-radius: 8px;\n    padding: 20px;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);\n    overflow: auto;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen.dark-theme {\n    background: #1a1a1a;\n    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);\n}\n\n.mermaid-container-fullscreen pre.mermaid {\n    width: 100%;\n    height: 100%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.mermaid-container-fullscreen .mermaid svg {\n    height: 100% !important;\n    width: 100% !important;\n    cursor: grab;\n}\n\n.mermaid-fullscreen-close {\n    position: fixed !important;\n    top: 20px !important;\n    right: 20px !important;\n    width: 40px;\n    height: 40px;\n    background: rgba(255, 255, 255, 0.95);\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    border-radius: 50%;\n    cursor: pointer;\n    z-index: 10000;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);\n    transition: all 0.2s;\n    font-size: 24px;\n    line-height: 1;\n    color: #333;\n}\n\n.mermaid-fullscreen-close:hover {\n    background: white;\n    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);\n    transform: scale(1.1);\n}\n\n.mermaid-fullscreen-close.dark-theme {\n    background: rgba(50, 50, 50, 0.95);\n    border: 1px solid rgba(255, 255, 255, 0.2);\n    color: #e0e0e0;\n}\n\n.mermaid-fullscreen-close.dark-theme:hover {\n    background: rgba(60, 60, 60, 1);\n    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);\n}\n\n.mermaid-fullscreen-modal .mermaid-fullscreen-btn {\n    display: none !important;\n}";
-    document.head.appendChild(fullscreenStyle);
-}
-
-// Detect if page has dark background
-const isDarkTheme = () => {
-    // We use a set of heuristics:
-    // 1. Check for common dark mode classes or attributes
-    // 2. Check computed background color brightness
-    if (document.documentElement.classList.contains('dark') ||
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.body.classList.contains('dark') ||
-        document.body.getAttribute('data-theme') === 'dark') {
-        // console.log("Dark theme detected via class/attribute");
-        return true;
-    }
-    if (document.documentElement.classList.contains('light') ||
-        document.documentElement.getAttribute('data-theme') === 'light' ||
-        document.body.classList.contains('light') ||
-        document.body.getAttribute('data-theme') === 'light') {
-        // console.log("Light theme detected via class/attribute");
-        return false;
-    }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // console.log("Dark theme detected via prefers-color-scheme");
-        return true;
-    }
-    const bgColor = window.getComputedStyle(document.body).backgroundColor;
-    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
-    if (match) {
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        // console.log("Background color brightness:", brightness);
-        return brightness < 128;
-    }
-    // console.log("No dark or light theme detected, defaulting to light theme");
-    return false;
-};
-
-let darkTheme = isDarkTheme();
-let modal = null;
-let modalContent = null;
-let previousScrollOffset = [window.scrollX, window.scrollY];
-let _lazyObserver = null;
-let _renderQueue = Promise.resolve();
-let closeModal = () => {};
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal?.classList.contains('active')) {
-        closeModal();
-    }
-});
-
-// Apply d3 zoom to each SVG. Idempotent: an SVG already wrapped is skipped,
-// so this is safe to call both for the initial batch and for diagrams that
-// render lazily once they become visible.
-const addZoomToSvgs = (svgs) => {
-    svgs.each(function() {
-        if (this.getAttribute('data-zoom-applied') === 'true') return;
-        var svg = d3.select(this);
-        svg.html("<g class='wrapper'>" + svg.html() + "</g>");
-        var inner = svg.select("g");
-        var zoom = d3.zoom().on("zoom", function(event) {
-            inner.attr("transform", event.transform);
-        });
-        svg.call(zoom);
-        this.setAttribute('data-zoom-applied', 'true');
-    });
-};
-
-const runMermaid = async (rerun) => {
-    console.log("Running mermaid diagrams, rerun =", rerun);
-    // clear all existing mermaid charts
-    let all_mermaids = document.querySelectorAll(".mermaid");
-
-    if (rerun) {
-        // Disconnect any previous lazy rendering observer
-        if (_lazyObserver) {
-            _lazyObserver.disconnect();
-            _lazyObserver = null;
-        }
-
-        all_mermaids.forEach((el) => {
-            el.removeAttribute('data-mermaid-deferred');
-            el.removeAttribute('data-mermaid-render-failed');
-            if(!el.hasAttribute("data-original-code")) {
-                // store original code
-                // console.log(`Storing original code for first run: `, el.innerHTML);
-                el.setAttribute('data-original-code', el.innerHTML);
-            }
-            if(el.getAttribute("data-processed") === "true") {
-                // remove and restore original
-                el.removeAttribute("data-processed");
-                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
-                el.innerHTML = el.getAttribute('data-original-code');
-            } else {
-                // store original code
-                // console.log(`Storing original code for re-run: `, el.innerHTML);
-                el.setAttribute('data-original-code', el.innerHTML);
-            }
-        });
-
-        // Separate visible and hidden elements. Mermaid's layout engine measures
-        // text dimensions via the DOM, which fails for elements hidden by a parent
-        // (e.g., Reveal.js non-active slides, sphinx-design unopened tabs),
-        // producing broken SVGs. Render visible elements now, defer hidden ones.
-        const visible = [];
-        const hidden = [];
-        all_mermaids.forEach((el) => {
-            // offsetParent is null for display:none ancestors.
-            // getClientRects().length > 0 catches position:fixed elements
-            // (which also have null offsetParent but are still visible).
-            if (el.offsetParent !== null || el.getClientRects().length > 0) {
-                visible.push(el);
-            } else {
-                hidden.push(el);
-                el.setAttribute('data-mermaid-deferred', 'true');
-            }
-        });
-
-        if (visible.length > 0) {
-            try {
-                await mermaid.run({ nodes: visible });
-            } catch (e) {
-                console.error("Mermaid rendering failed:", e);
-            }
-        }
-
-        // Lazily render hidden elements when they become visible.
-        // Uses a promise chain (_renderQueue) to serialize rendering,
-        // since IntersectionObserver may report multiple entries at once
-        // and mermaid.run() is not safe to call concurrently.
-        if (hidden.length > 0) {
-            if (typeof IntersectionObserver === 'undefined') {
-                console.warn("IntersectionObserver not available; hidden mermaid diagrams will not render.");
-            } else {
-                _renderQueue = Promise.resolve();
-                _lazyObserver = new IntersectionObserver((entries) => {
-                    for (const entry of entries) {
-                        if (entry.isIntersecting && entry.target.getAttribute("data-processed") !== "true") {
-                            _lazyObserver.unobserve(entry.target);
-                            const el = entry.target;
-                            _renderQueue = _renderQueue.then(async () => {
-                                try {
-                                    await mermaid.run({ nodes: [el] });
-                                    el.removeAttribute('data-mermaid-deferred');
-                                    // Apply zoom to the now-rendered diagram, matching
-                                    // the decoration visible diagrams receive.
-                                    if (false) {
-                                        addZoomToSvgs(d3.selectAll("").select(function() {
-                                            return this.querySelector("svg");
-                                        }));
-                                    }
-                                } catch (e) {
-                                    console.error("Mermaid deferred rendering failed:", e);
-                                    el.removeAttribute('data-mermaid-deferred');
-                                    el.setAttribute('data-mermaid-render-failed', 'true');
-                                }
-                            });
-                        }
-                    }
-                });
-                hidden.forEach((el) => _lazyObserver.observe(el));
-            }
-        }
-    }
-
-    all_mermaids = document.querySelectorAll(".mermaid");
-    // Exclude deferred (hidden) and render-failed elements from completion checks
-    const mermaids_active = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])");
-    const mermaids_processed = document.querySelectorAll(".mermaid:not([data-mermaid-deferred]):not([data-mermaid-render-failed])[data-processed='true']");
-
-    if (false) {
-        const mermaids_to_add_zoom = 0 === -1 ? mermaids_active.length : 0;
-        if(mermaids_to_add_zoom > 0) {
-            var svgs = d3.selectAll("").select(function() {
-                return this.querySelector("svg");
-            });
-            // Wait until every active (visible) diagram has rendered. Deferred
-            // diagrams are excluded, so a fixed d3_node_count that counts a
-            // hidden diagram no longer loops forever waiting for its SVG.
-            if(mermaids_active.length !== mermaids_processed.length) {
-                setTimeout(() => runMermaid(false), 200);
-                return;
-            }
-            addZoomToSvgs(svgs);
-        }
-    } else if(mermaids_active.length !== mermaids_processed.length) {
-        // Wait for mermaid to process all diagrams
-        setTimeout(() => runMermaid(false), 200);
-        return;
-    }
-
-    // Stop here if not adding fullscreen capability
-    if (!true) return;
-
-    if (modal !== null ) {
-        // Destroy existing modal
-        modal.remove();
-        modal = null;
-        modalContent = null;
-    }
-
-    modal = document.createElement('div');
-    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
-    modal.innerHTML = `
-        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
-        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
-    `;
-    document.body.appendChild(modal);
-
-    modalContent = modal.querySelector('.mermaid-container-fullscreen');
-    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
-
-    closeModal = () => {
-        modal.classList.remove('active');
-        modalContent.innerHTML = '';
-        document.body.style.overflow = ''
-        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
-    };
-
-    closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
-    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
-        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
-            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
-            // Already processed, adjust button class if needed
-            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
-            if (existingBtn) {
-                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
-            }
-            return;
-        }
-
-        const container = document.createElement('div');
-        container.className = 'mermaid-container';
-        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
-        container.appendChild(mermaidDiv);
-
-        const fullscreenBtn = document.createElement('button');
-        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
-        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
-        fullscreenBtn.textContent = "\u26f6";
-        fullscreenBtn.style.opacity = "50%";
-
-        // Calculate dynamic position based on diagram's margin and padding
-        const diagramStyle = window.getComputedStyle(mermaidDiv);
-        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
-        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
-        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
-        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
-        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
-        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
-
-        fullscreenBtn.addEventListener('click', () => {
-            previousScrollOffset = [window.scrollX, window.scrollY];
-            const clone = mermaidDiv.cloneNode(true);
-            modalContent.innerHTML = '';
-            modalContent.appendChild(clone);
-
-            const svg = clone.querySelector('svg');
-            if (svg) {
-                svg.removeAttribute('width');
-                svg.removeAttribute('height');
-                svg.style.width = '100%';
-                svg.style.height = 'auto';
-                svg.style.maxWidth = '100%';
-                svg.style.display = 'block';
-
-                if (false) {
-                    setTimeout(() => {
-                        const g = svg.querySelector('g');
-                        if (g) {
-                            var svgD3 = d3.select(svg);
-                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
-                            var inner = svgD3.select("g");
-                            var zoom = d3.zoom().on("zoom", function(event) {
-                                inner.attr("transform", event.transform);
-                            });
-                            svgD3.call(zoom);
-                        }
-                    }, 100);
-                }
-            }
-
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        });
-        container.appendChild(fullscreenBtn);
-    });
-};
-
-
-
-const load = async () => {
-    initStyles();
-
-
-    await runMermaid(true);
-
-    const reRunIfThemeChanges = async () => {
-        const newDarkTheme = isDarkTheme();
-        if (newDarkTheme !== darkTheme) {
-            darkTheme = newDarkTheme;
-            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
-            await mermaid.initialize(
-                {...{"startOnLoad": false},
-                ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
-                }
-            );
-            await runMermaid(true);
-        }
-    };
-
-    // Update theme classes when theme changes
-    const themeObserver = new MutationObserver(reRunIfThemeChanges);
-    themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class', 'style', 'data-theme']
-    });
-    themeObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class', 'style', 'data-theme']
-    });
-};
-
-
-
-
-
-console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
-mermaid.initialize(
-    {...{"startOnLoad": false},
-    ...{ darkMode: darkTheme, theme: darkTheme ? "dark" : "default" },
-    }
-);
-
-window.addEventListener("load", load);
-window.runMermaid = runMermaid;</script>
 </body>
 </html>

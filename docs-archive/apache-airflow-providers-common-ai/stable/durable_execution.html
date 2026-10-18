@@ -714,7 +714,8 @@ them again. Only the steps the failed attempt never finished run live.</p>
 <p>Durable execution only helps a task that has retries. To decide <em>whether</em> a failure is
 worth retrying, see <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a>; a retried <code class="docutils literal notranslate"><span class="pre">LLMBatchOperator</span></code> re-attaches to
 its running batch instead (<a class="reference internal" href="operators/llm_batch.html#llm-batch-reattach"><span class="std std-ref">Retries re-attach instead of re-submitting</span></a>). To resume a Strands Agents agent on a
-retry, see <a class="reference internal" href="frameworks/strands.html#howto-frameworks-strands-durable"><span class="std std-ref">Durable execution with Strands</span></a>.</p>
+retry, see <a class="reference internal" href="frameworks/strands.html#howto-frameworks-strands-durable"><span class="std std-ref">Durable execution with Strands</span></a>; for an OpenAI Agents SDK agent, see
+<a class="reference internal" href="frameworks/openai_agents.html#howto-frameworks-openai-agents-durable"><span class="std std-ref">Durable execution</span></a>.</p>
 <section id="turn-it-on">
 <h2>Turn it on<a class="headerlink" href="#turn-it-on" title="Link to this heading">¶</a></h2>
 <p>Set <code class="docutils literal notranslate"><span class="pre">durable=True</span></code> on <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code>:</p>
@@ -814,6 +815,8 @@ the id on the toolset itself:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: durable=True needs a unique id on every FunctionToolset, such as FunctionToolset(..., id='orders'): durable replay records each tool call under it. Set it on the toolset itself, and pass a function that builds a toolset as DynamicToolset(function, id=...); the id of a Toolset capability around a toolset does not reach it.
 </pre></div>
 </div>
+<p>It also refuses two different toolsets with the same id, which would file their calls
+under one name; passing one toolset object in two places is fine.</p>
 <p>Keep an id stable once tasks run with it: a retry finds its recorded tool calls by it.
 The provider’s own toolsets (<code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code> and the rest) and tools
 passed as <code class="docutils literal notranslate"><span class="pre">agent_params={&quot;tools&quot;:</span> <span class="pre">[...]}</span></code> need nothing. A capability that contributes
@@ -909,6 +912,72 @@ In a plain <code class="docutils literal notranslate"><span class="pre">&#64;tas
 as soon as that run succeeds: after a failure, only the run that failed replays, and
 the agents that ran before it run again.</p>
 </section>
+<section id="values-that-are-not-plain-json">
+<h2>Values that are not plain JSON<a class="headerlink" href="#values-that-are-not-plain-json" title="Link to this heading">¶</a></h2>
+<p>Plain JSON tool arguments and settings are hashed as they are. Anything else is
+fingerprinted from pydantic’s JSON rendering, so ordinary types that are not JSON, such
+as a <code class="docutils literal notranslate"><span class="pre">datetime</span></code> or <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> tool argument, a dataclass in <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code>, the
+bytes in a <code class="docutils literal notranslate"><span class="pre">BinaryContent</span></code> or a dict keyed by date, fingerprint normally. Bytes in
+tool arguments and settings are rendered as base64, so binary data that is not valid
+UTF-8 fingerprints too; bytes inside a pydantic model follow that model’s
+<code class="docutils literal notranslate"><span class="pre">ser_json_bytes</span></code> setting instead, which renders them as UTF-8 text by default. Because
+a tool call is fingerprinted from how its arguments render, a field excluded from
+serialization and a secret value, which renders masked, take no part in it.</p>
+<p>The members of a <code class="docutils literal notranslate"><span class="pre">set</span></code> are ordered before hashing. A set of strings iterates in an
+order that changes from one process to the next, and every attempt is a new process, so
+without this a step holding one would never match on retry. A list that a serializer
+produces is hashed as the serializer produced it, so a set that a serializer turns into
+a list may not match on retry. The one list that is re-sorted is the output of a
+JSON-only serializer (<code class="docutils literal notranslate"><span class="pre">when_used=&quot;json&quot;</span></code>) that returns the members of a set: it cannot
+be told from the set itself, so <code class="docutils literal notranslate"><span class="pre">[&quot;z-first&quot;,</span> <span class="pre">&quot;a&quot;]</span></code> hashes as <code class="docutils literal notranslate"><span class="pre">[&quot;a&quot;,</span> <span class="pre">&quot;z-first&quot;]</span></code>.</p>
+<p>A request cannot be fingerprinted when:</p>
+<ul class="simple">
+<li><p>two distinct dict keys render alike, such as <code class="docutils literal notranslate"><span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code>, since the fingerprint
+could then not tell those payloads apart;</p></li>
+<li><p>a set whose order changes between processes cannot be found in the rendering, because
+its members have different shapes, or because a JSON-only serializer renamed or
+reshaped it, even one that also sorts it;</p></li>
+<li><p>a value would render through an iterator, since rendering would consume it. A
+parameter annotated <code class="docutils literal notranslate"><span class="pre">Iterable[...]</span></code> is the usual case: pydantic validates it lazily,
+and reading it to hash it would consume input the tool has not read yet. Tool
+arguments are rendered from copies, so fingerprinting never changes what the tool
+receives, and an argument that cannot be copied is not fingerprinted either;</p></li>
+<li><p>pydantic cannot render a value at all.</p></li>
+</ul>
+<p>Such a step is handled like a step with no request to fingerprint: it replays on its
+name, and only when the step before it replayed. The task log names it with a
+<code class="docutils literal notranslate"><span class="pre">could</span> <span class="pre">not</span> <span class="pre">fingerprint</span> <span class="pre">model</span> <span class="pre">request</span></code> or <code class="docutils literal notranslate"><span class="pre">could</span> <span class="pre">not</span> <span class="pre">fingerprint</span> <span class="pre">tool</span> <span class="pre">call</span></code> warning.
+On the model path the cause is rarely confined to one step. <code class="docutils literal notranslate"><span class="pre">model_settings</span></code> and the
+tool definitions travel with every request, and a value that enters the message
+history, for example in a tool return, is carried into every later request, so every
+model step from that point on is replayed without verification.</p>
+<p>A set of models or dataclass instances, and from pydantic 2.13 a dict keyed by a model
+or dataclass instance, is a special case. In a tool argument or a setting it cannot be
+fingerprinted. In the message history it is rendered, and the history is then hashed
+from its JSON rendering alone: nothing in it is ordered and nothing is refused, so a set
+of strings elsewhere in that history can make the run diverge at that step on retry.</p>
+</section>
+<section id="code-mode">
+<span id="durable-code-mode"></span><h2>Code mode<a class="headerlink" href="#code-mode" title="Link to this heading">¶</a></h2>
+<p>With pydantic-ai-harness’s <code class="docutils literal notranslate"><span class="pre">CodeMode</span></code> (<a class="reference internal" href="code_mode.html"><span class="doc">Code mode</span></a>), the model sends Python to one
+<code class="docutils literal notranslate"><span class="pre">run_code</span></code> tool, and the snippet calls the agent’s tools as functions. <code class="docutils literal notranslate"><span class="pre">run_code</span></code> is
+not a step of its own: the retry runs each snippet again, and the tool calls the snippet
+makes replay from the journal one by one, so a snippet that called three tools is three
+recorded steps. When the snippet returns what it returned before, the model request after
+it replays too.</p>
+<p>A call the snippet makes replays only when the call at that position in the journal has
+the same tool, arguments and call id. Code mode numbers a snippet’s calls in the order the
+snippet makes them, so when calls under <code class="docutils literal notranslate"><span class="pre">asyncio.gather</span></code> reach the journal in another
+order on the retry, the first call out of place and every step after it run live. A call
+never gets the result recorded for another one.</p>
+<p>The snippet’s own code is not recorded. Whatever it does outside a tool call happens again
+on the retry, such as writing to a directory shared through <code class="docutils literal notranslate"><span class="pre">mount</span></code> or calling an
+<code class="docutils literal notranslate"><span class="pre">os_access</span></code> handler, and if what it reads that way has changed, the tool calls it makes
+next differ and run live. Keep side effects in tools, whose results are recorded.</p>
+<p><code class="docutils literal notranslate"><span class="pre">CodeMode</span></code>’s <code class="docutils literal notranslate"><span class="pre">eager</span></code> and <code class="docutils literal notranslate"><span class="pre">speculate</span></code> options start tool calls while the model is
+still writing the snippet. Both are off while the run is durable, so a retry runs the
+finished snippet the way the previous attempt did.</p>
+</section>
 <section id="what-the-task-log-shows">
 <h2>What the task log shows<a class="headerlink" href="#what-the-task-log-shows" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> logs a summary at the end of every attempt, including the one that
@@ -976,9 +1045,9 @@ the step, and a retry runs it again.</p>
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> cannot be combined with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, a pydantic-ai-harness
-<code class="docutils literal notranslate"><span class="pre">CodeMode</span></code> capability, a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code> or tool approval. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> raises
-<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for the first three when the Dag is parsed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> cannot be combined with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code>
+or tool approval. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for the first two when the Dag
+is parsed.</p></li>
 <li><p>A task instance that is retried across an upgrade of this provider from a version
 without <code class="docutils literal notranslate"><span class="pre">AirflowDurability</span></code> runs its steps live once: the journal keys changed.</p></li>
 </ul>
@@ -1073,6 +1142,8 @@ without <code class="docutils literal notranslate"><span class="pre">AirflowDura
 <li><a class="reference internal" href="#give-every-toolset-an-id">Give every toolset an id</a></li>
 <li><a class="reference internal" href="#where-the-journal-is-kept">Where the journal is kept</a></li>
 <li><a class="reference internal" href="#how-a-retry-replays">How a retry replays</a></li>
+<li><a class="reference internal" href="#values-that-are-not-plain-json">Values that are not plain JSON</a></li>
+<li><a class="reference internal" href="#code-mode">Code mode</a></li>
 <li><a class="reference internal" href="#what-the-task-log-shows">What the task log shows</a></li>
 <li><a class="reference internal" href="#the-agent-s-run-id-and-conversation-id">The agent’s <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code></a></li>
 <li><a class="reference internal" href="#usage-and-limits">Usage and limits</a></li>

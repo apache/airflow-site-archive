@@ -440,6 +440,8 @@
 <li class="toctree-l2"><a class="reference internal" href="managed_agent.html">Vendor-managed agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="langchain.html">LangChain tools</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.html">Tool call logging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="progressive_disclosure.html">Progressive tool disclosure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom.html">Writing your own toolset</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../frameworks/index.html">Agent frameworks</a></li>
@@ -586,6 +588,8 @@
 <li class="toctree-l2"><a class="reference internal" href="managed_agent.html">Vendor-managed agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="langchain.html">LangChain tools</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.html">Tool call logging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="progressive_disclosure.html">Progressive tool disclosure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom.html">Writing your own toolset</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../frameworks/index.html">Agent frameworks</a></li>
@@ -774,13 +778,14 @@ vendor</p></td>
 </tr>
 </tbody>
 </table>
-<p>Two controls work on every toolset. <code class="docutils literal notranslate"><span class="pre">.approval_required()</span></code> pauses the task before a
+<p>Three controls work on every toolset. <code class="docutils literal notranslate"><span class="pre">.approval_required()</span></code> pauses the task before a
 matching call runs, until a person approves or rejects it on the <strong>Required Actions</strong>
 page. It needs Airflow 3.3 or later, pauses at every step that calls a matching tool on
 Airflow 3.4 and later (once per Dag run on 3.3), and does not combine with <code class="docutils literal notranslate"><span class="pre">durable=True</span></code> or a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code> that provisions its
 own sandbox (<a class="reference internal" href="../tool_approval.html"><span class="doc">Approve an agent’s tool calls</span></a> lists every limit). <code class="docutils literal notranslate"><span class="pre">.filtered()</span></code> drops tools
 from what the model is offered, as the <a class="reference internal" href="mcp.html#howto-toolset-mcp-filtered"><span class="std std-ref">MCP guide</span></a>
-shows.</p>
+shows. <code class="docutils literal notranslate"><span class="pre">.defer_loading()</span></code> hides a toolset’s tools from the model until it searches for
+them, which pays off on a toolset with many tools (see <a class="reference internal" href="progressive_disclosure.html"><span class="doc">Progressive tool disclosure</span></a>).</p>
 <p><a class="reference internal" href="logging.html"><span class="doc">Tool call logging: LoggingToolset</span></a> and <a class="reference internal" href="langchain.html"><span class="doc">LangChain tools in both directions</span></a> do not reach a system of their own: one wraps a
 toolset to log its calls, the other converts a toolset for a LangChain agent.</p>
 <div class="toctree-wrapper compound">
@@ -809,7 +814,8 @@ when the toolset first connects to the MCP server.</p>
 <a class="reference external" href="https://ai.pydantic.dev/toolsets/">AbstractToolset</a> interface, so it works in any
 pydantic-ai <code class="docutils literal notranslate"><span class="pre">Agent</span></code>. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> accepts any <code class="docutils literal notranslate"><span class="pre">AbstractToolset</span></code> too, such as
 pydantic-ai’s own <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> or a third-party toolset; those miss the connection
-handling the toolsets on this page add.</p>
+handling the toolsets on this page add. To write a toolset of your own on the same base
+class, see <a class="reference internal" href="custom.html"><span class="doc">Writing your own toolset</span></a>.</p>
 </section>
 <section id="choosing-a-toolset">
 <h2>Choosing a toolset<a class="headerlink" href="#choosing-a-toolset" title="Link to this heading">¶</a></h2>
@@ -1000,8 +1006,8 @@ used to allow exactly one correction whatever <code class="docutils literal notr
 <code class="docutils literal notranslate"><span class="pre">retries</span></code> now applies it to them too: <code class="docutils literal notranslate"><span class="pre">retries=0</span></code> fails the run on the first bad
 query, and a large integer <code class="docutils literal notranslate"><span class="pre">retries</span></code> meant for output validation also lets a failing
 database be queried that many times. Pass <code class="docutils literal notranslate"><span class="pre">max_retries=1</span></code> to a toolset to keep the old
-behaviour. Outside a pydantic-ai agent (the LangChain, Strands, Google ADK and Anthropic
-tool runner bridges) there is no agent budget, so each tool gets one correction unless its
+behaviour. Outside a pydantic-ai agent (the LangChain, Strands, Google ADK, Anthropic
+tool runner and OpenAI Agents SDK bridges) there is no agent budget, so each tool gets one correction unless its
 toolset sets <code class="docutils literal notranslate"><span class="pre">max_retries</span></code>.</p>
 </section>
 <section id="layering">

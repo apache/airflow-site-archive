@@ -9,30 +9,49 @@ airflow.providers.common.ai.utils.output_type
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.output_type.log
+
+
 Functions
 ---------
 
 .. autoapisummary::
 
+   airflow.providers.common.ai.utils.output_type.dump_output_to_json
+   airflow.providers.common.ai.utils.output_type.dump_output_for_display
    airflow.providers.common.ai.utils.output_type.rehydrate_pydantic_output
 
 
 Module Contents
 ---------------
 
-.. py:function:: rehydrate_pydantic_output(output_type, raw, *, serialize_output)
+.. py:data:: log
 
-   Turn a JSON string back into a value of ``output_type``.
+.. py:function:: dump_output_to_json(output)
 
-   Used by the HITL/approval paths in ``LLMOperator`` and ``AgentOperator``
-   that round-trip the output through a string when deferring to a human
-   reviewer. ``str`` outputs pass through unchanged; any other ``output_type``
-   (``BaseModel`` subclass, ``int``, ``list[str]``, ...) is validated with a
-   pydantic ``TypeAdapter``. When validation fails (reviewer edited the string
-   into something the type rejects), returns ``raw`` unchanged.
+   Serialize an output as JSON that ``rehydrate_pydantic_output`` validates back, or ``str()`` if pydantic cannot.
 
-   When ``serialize_output`` is ``True``, returns the model dumped to a
-   ``dict`` -- matches the operator's ``serialize_output=True`` opt-in for
-   consumers that want the dict shape.
+
+.. py:function:: dump_output_for_display(output)
+
+   Serialize an output as JSON for a reviewer to read, or ``str()`` if pydantic cannot.
+
+
+.. py:function:: rehydrate_pydantic_output(output_type, raw, *, serialize_output, is_edited = True)
+
+   Turn the reviewed string back into ``output_type``.
+
+   ``raw`` is JSON, or bare text for types pydantic builds from a string. ``str`` outputs, output
+   functions, pydantic-ai output markers such as ``ToolOutput`` and types pydantic has no schema for
+   return ``raw`` unchanged, and so does an unedited output that does not validate back (with a warning).
+
+   :param is_edited: ``False`` when ``raw`` is the unmodified generated output.
+
+   :raises ReviewedOutputValidationError: If a reviewer's edit does not validate against ``output_type``.
 
 

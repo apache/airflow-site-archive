@@ -783,8 +783,8 @@ human-feedback regeneration’s, since <code class="docutils literal notranslate
 <code class="docutils literal notranslate"><span class="pre">LLMSchemaCompareOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code> – don’t publish it yet;
 this is upcoming work.</p></li>
 <li><p><strong>Scope.</strong> The <code class="docutils literal notranslate"><span class="pre">run_id</span></code> / <code class="docutils literal notranslate"><span class="pre">usage</span></code> XComs come only from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>, and so do the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code> identity attributes, apart from a Strands or
-ADK agent run inside <code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code> (see below). <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> /
+<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>, and so do the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code> identity attributes, apart from a Strands,
+ADK or OpenAI Agents SDK agent run inside <code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code> (see below). <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> /
 <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> additionally pushes the model name above. The other LLM
 operators still emit GenAI spans correlated to the task span by nesting, but
 without the identity attributes, the run join key, or the model name.</p></li>
@@ -852,11 +852,16 @@ outputs (<code class="docutils literal notranslate"><span class="pre">gen_ai.inp
 <p>With <code class="docutils literal notranslate"><span class="pre">capture_content</span></code> enabled, prompts, completions, and tool arguments are
 exported to your tracing backend <strong>without redaction</strong>. Airflow’s secret masking
 applies to logs and rendered template fields, not to OpenTelemetry span
-attributes. The one exception is what a function tool returns or raises while it
-runs in an agent this provider builds, which is masked before the span records it.
-An output function’s result is not (see <a class="reference internal" href="agent_security.html"><span class="doc">Securing agent tools</span></a>). Enable it only for
-debugging in a trusted environment. It has no effect unless <code class="docutils literal notranslate"><span class="pre">otel_export_enabled</span></code>
-is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+attributes, with two exceptions:</p>
+<ul class="simple">
+<li><p>What a function tool returns or raises while it runs in an agent this provider
+builds, which is masked before the span records it. An output function’s result
+is not (see <a class="reference internal" href="agent_security.html"><span class="doc">Securing agent tools</span></a>).</p></li>
+<li><p>The content <code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> records for an OpenAI Agents SDK agent,
+which passes through the masker first.</p></li>
+</ul>
+<p>Enable it only for debugging in a trusted environment. It has no effect unless
+<code class="docutils literal notranslate"><span class="pre">otel_export_enabled</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </div>
 </section>
 <section id="agents-built-with-other-frameworks">
@@ -898,6 +903,22 @@ holds.</p>
 starts, so set up the framework’s own telemetry, such as <code class="docutils literal notranslate"><span class="pre">StrandsTelemetry</span></code>, before
 entering it. They follow the task through <code class="docutils literal notranslate"><span class="pre">asyncio</span></code>; ADK’s synchronous <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code>
 runs the agent on a thread of its own that they do not reach, so use <code class="docutils literal notranslate"><span class="pre">run_async</span></code>.</p>
+<p>The OpenAI Agents SDK traces runs with a system of its own, not OpenTelemetry. Register
+<a class="reference internal" href="_api/airflow/providers/common/ai/tools/openai_agents/index.html#airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor" title="airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code></a> with it,
+and run the agent inside the block, to record its traces as spans under the task’s span
+with the same identity attributes and the same content rule:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span><span class="p">,</span> <span class="n">set_trace_processors</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTraceProcessor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.tracing</span><span class="w"> </span><span class="kn">import</span> <span class="n">agent_framework_tracing</span>
+
+<span class="n">set_trace_processors</span><span class="p">([</span><span class="n">AirflowTraceProcessor</span><span class="p">()])</span>
+<span class="k">with</span> <span class="n">agent_framework_tracing</span><span class="p">():</span>
+    <span class="n">answer</span> <span class="o">=</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">question</span><span class="p">)</span><span class="o">.</span><span class="n">final_output</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">set_trace_processors</span></code> also stops the SDK sending the traces to OpenAI, which it does by
+default; use <code class="docutils literal notranslate"><span class="pre">add_trace_processor</span></code> to keep both. See <a class="reference internal" href="frameworks/openai_agents.html"><span class="doc">OpenAI Agents SDK</span></a>.</p>
 </section>
 <section id="counting-tool-calls">
 <h2>Counting tool calls<a class="headerlink" href="#counting-tool-calls" title="Link to this heading">¶</a></h2>
@@ -928,8 +949,8 @@ carries three tags:</p>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">framework</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pydantic_ai</span></code> for <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and your own Pydantic AI agents;
-<code class="docutils literal notranslate"><span class="pre">strands</span></code>, <code class="docutils literal notranslate"><span class="pre">adk</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain</span></code> or <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> for a call through that
-framework’s adapter;
+<code class="docutils literal notranslate"><span class="pre">strands</span></code>, <code class="docutils literal notranslate"><span class="pre">adk</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain</span></code>, <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> or <code class="docutils literal notranslate"><span class="pre">openai_agents</span></code> for a call
+through that framework’s adapter;
 <code class="docutils literal notranslate"><span class="pre">none</span></code> for a call to a toolset’s <code class="docutils literal notranslate"><span class="pre">airflow_tools()</span></code> made without an adapter.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">outcome</span></code></p></td>

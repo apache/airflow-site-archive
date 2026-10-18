@@ -996,7 +996,8 @@ had left, so the category that ends the task deserves the higher bar.
     <span class="c1"># demands more certainty than the rest. Under a bar the answer is discarded and the</span>
     <span class="c1"># fallback rules, then the task's own retry settings, decide instead. The bars come from</span>
     <span class="c1"># a calibration run on jev-1.13.0: correct picks landed at 0.89 and above, wrong ones</span>
-    <span class="c1"># at 0.47 to 0.69, with one wrong ``permanent`` at 0.90 that no sensible bar catches.</span>
+    <span class="c1"># at 0.47 to 0.69, with one wrong ``permanent`` at 0.90 that no bar catches here without</span>
+    <span class="c1"># also discarding correct picks.</span>
     <span class="n">snowflake_policy</span> <span class="o">=</span> <span class="n">ClassifierRetryPolicy</span><span class="p">(</span>
         <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"decision_default"</span><span class="p">,</span>
         <span class="n">min_confidence</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
@@ -1053,16 +1054,22 @@ is not guaranteed to mean the same thing after the next. See
 <p>A classifier is cheap and fast, and a text model can reason about a failure it
 has never seen a category for. <code class="docutils literal notranslate"><span class="pre">fallback_policy</span></code> puts one behind the other.
 <code class="docutils literal notranslate"><span class="pre">snowflake_policy</span></code> is the classifier policy from the previous section; the
-chain reuses its category table:</p>
+chain reuses its category table with a stricter bar on <code class="docutils literal notranslate"><span class="pre">permanent</span></code>:</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_llm_retry_policy.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/ai/example_dags/example_llm_retry_policy.html"><span class="viewcode-link">[source]</span></a></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="c1"># The three layers chained. The decision model answers the clear cases cheaply. When it is</span>
     <span class="c1"># unsure or unreachable, a text model reasons about the failure and decides retry and delay</span>
-    <span class="c1"># itself. When that model is unreachable too, the rules decide.</span>
+    <span class="c1"># itself. When that model is unreachable too, the rules decide. With a text model to ask, a</span>
+    <span class="c1"># wrong ``permanent`` costs more than an escalation, so its bar goes up to 0.95. That catches</span>
+    <span class="c1"># the wrong ``permanent`` at 0.90 from the calibration run, and a correct pick under 0.95</span>
+    <span class="c1"># costs one text-model call rather than the task.</span>
     <span class="n">escalating_policy</span> <span class="o">=</span> <span class="n">ClassifierRetryPolicy</span><span class="p">(</span>
         <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"decision_default"</span><span class="p">,</span>
         <span class="n">min_confidence</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
-        <span class="n">categories</span><span class="o">=</span><span class="n">snowflake_policy</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span>
+        <span class="n">categories</span><span class="o">=</span><span class="p">{</span>
+            <span class="o">**</span><span class="n">snowflake_policy</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span>
+            <span class="s2">"permanent"</span><span class="p">:</span> <span class="n">replace</span><span class="p">(</span><span class="n">snowflake_policy</span><span class="o">.</span><span class="n">categories</span><span class="p">[</span><span class="s2">"permanent"</span><span class="p">],</span> <span class="n">min_confidence</span><span class="o">=</span><span class="mf">0.95</span><span class="p">),</span>
+        <span class="p">},</span>
         <span class="n">fallback_policy</span><span class="o">=</span><span class="n">LLMRetryPolicy</span><span class="p">(</span><span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">30.0</span><span class="p">),</span>
         <span class="n">fallback_rules</span><span class="o">=</span><span class="p">[</span>
             <span class="n">RetryRule</span><span class="p">(</span><span class="n">exception</span><span class="o">=</span><span class="ne">ConnectionError</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="n">RetryAction</span><span class="o">.</span><span class="n">RETRY</span><span class="p">,</span> <span class="n">retry_delay</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)),</span>
@@ -1083,7 +1090,7 @@ answer was not: <code class="docutils literal notranslate"><span class="pre">esc
 <span class="pre">Retry-After</span> <span class="pre">header</span></code>.</p></li>
 <li><p>If that policy returns DEFAULT, whatever reason it attached, it decided
 nothing: the outer <code class="docutils literal notranslate"><span class="pre">fallback_rules</span></code> apply, then the task’s own retry
-behaviour. Only a RETRY or FAIL from <code class="docutils literal notranslate"><span class="pre">fallback_policy</span></code> ends the chain, so an
+behaviour. Any other decision from <code class="docutils literal notranslate"><span class="pre">fallback_policy</span></code> ends the chain, so an
 outer rule such as <code class="docutils literal notranslate"><span class="pre">PermissionError</span> <span class="pre">-&gt;</span> <span class="pre">FAIL</span></code> still holds when both models
 are unreachable.</p></li>
 </ol>
@@ -1134,7 +1141,7 @@ Beyond your <code class="docutils literal notranslate"><span class="pre">instruc
 message (or, with <code class="docutils literal notranslate"><span class="pre">include_traceback=True</span></code>, the formatted traceback; either
 after redaction and truncation), how many attempts are left,
 and, under <code class="docutils literal notranslate"><span class="pre">ClassifierRetryPolicy</span></code>, the category names and descriptions. The prompt says
-<code class="docutils literal notranslate"><span class="pre">attempt</span> <span class="pre">{try_number}</span> <span class="pre">of</span> <span class="pre">{max_tries}</span></code>, so the model knows the limit and not
+<code class="docutils literal notranslate"><span class="pre">attempt</span> <span class="pre">2</span> <span class="pre">of</span> <span class="pre">4</span></code> on the second try of a task with <code class="docutils literal notranslate"><span class="pre">retries=3</span></code>, so the model knows the limit and not
 just where it is right now; an instruction like “after two attempts treat an
 expired token as <code class="docutils literal notranslate"><span class="pre">auth</span></code> rather than <code class="docutils literal notranslate"><span class="pre">transient</span></code>” works because the model
 can see which attempt this is.</p>
@@ -1299,7 +1306,7 @@ for that category.</p></td>
 <td><p>None</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">ClassifierRetryPolicy</span></code> only. A <code class="docutils literal notranslate"><span class="pre">RetryPolicy</span></code> to consult when the
 classifier is under its bar, reports no confidence, or cannot be
-reached; typically an <code class="docutils literal notranslate"><span class="pre">LLMRetryPolicy</span></code> on a text model. Its RETRY or FAIL
+reached; typically an <code class="docutils literal notranslate"><span class="pre">LLMRetryPolicy</span></code> on a text model. Its decision
 is used; a DEFAULT, whatever its reason, means the outer <code class="docutils literal notranslate"><span class="pre">fallback_rules</span></code>
 apply.</p></td>
 </tr>

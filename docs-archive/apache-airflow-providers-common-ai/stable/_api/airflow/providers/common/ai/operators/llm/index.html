@@ -840,9 +840,10 @@ cap. This matches building a <code class="docutils literal notranslate"><span cl
 usage from earlier attempts counts against it. See
 <a class="reference internal" href="../../../../../../../operators/llm.html#howto-operator-llm"><span class="std std-ref">Single prompts: LLMOperator and &#64;task.llm</span></a> for the full set of caveats.</p>
 </p></li>
-<li><p><strong>require_approval</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, the task defers after generating
-output and waits for a human reviewer to approve or reject via the
-HITL interface.  Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Needs Airflow 3.1+.</p></li>
+<li><p><strong>require_approval</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, the task pauses after generating
+output (<code class="docutils literal notranslate"><span class="pre">awaiting_input</span></code> on Airflow 3.3+, deferred on 3.1 and 3.2)
+and waits for a human reviewer to approve or reject via the HITL
+interface.  Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Needs Airflow 3.1+.</p></li>
 <li><p><strong>approval_timeout</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.timedelta" title="(in Python v3.15)"><em>datetime.timedelta</em></a><em> | </em><em>None</em>) – Maximum time to wait for a review.  When
 exceeded, <code class="docutils literal notranslate"><span class="pre">on_approval_timeout</span></code> decides the outcome.</p></li>
 <li><p><strong>on_approval_timeout</strong> (<em>Literal</em><em>[</em><em>'fail'</em><em>, </em><em>'approve'</em><em>, </em><em>'reject'</em><em>]</em>) – What to do when <code class="docutils literal notranslate"><span class="pre">approval_timeout</span></code> expires
@@ -854,17 +855,22 @@ form.  Requires a review path (<code class="docutils literal notranslate"><span 
 <code class="docutils literal notranslate"><span class="pre">decision_policy</span></code> that reviews) and a positive
 <code class="docutils literal notranslate"><span class="pre">approval_timeout</span></code>.</p></li>
 <li><p><strong>allow_modifications</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, the reviewer can edit the output
-before approving.  The modified value is returned as the task result.
+before approving.  The edit is converted back into <code class="docutils literal notranslate"><span class="pre">output_type</span></code> and returned
+as the task result.  For a type pydantic can validate, an edit that does not validate
+fails the task with <code class="docutils literal notranslate"><span class="pre">ReviewedOutputValidationError</span></code>; a retry runs the model again.
 Default <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 <li><p><strong>approval_notifiers</strong> (<em>airflow.providers.common.compat.notifier.BaseNotifier</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable" title="(in Python v3.15)"><em>collections.abc.Iterable</em></a><em>[</em><em>airflow.providers.common.compat.notifier.BaseNotifier</em><em>] </em><em>| </em><em>None</em>) – Notifiers called once the review is open, so a
 reviewer is told about it.  Only takes effect when a review is
-opened.  A retry re-notifies with the regenerated
-output while the open review keeps the original subject and body.
-Default <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+opened.  A retry re-notifies with the regenerated output.  On
+Airflow 3.4+ the reopened review shows it too; on Airflow 3.1 to 3.3
+the review keeps the original subject, body and editable output, so
+approving it unedited returns the first attempt’s output.  Default
+<code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
 <li><p><strong>approval_assigned_users</strong> (<em>airflow.sdk.execution_time.hitl.HITLUser</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable" title="(in Python v3.15)"><em>collections.abc.Iterable</em></a><em>[</em><em>airflow.sdk.execution_time.hitl.HITLUser</em><em>] </em><em>| </em><em>None</em>) – Users allowed to answer the review, as
 <code class="docutils literal notranslate"><span class="pre">{&quot;id&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;name&quot;:</span> <span class="pre">...}</span></code> dicts where <code class="docutils literal notranslate"><span class="pre">id</span></code> is the auth manager’s
 user id.  <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) lets any user with the permission respond.
-The list is fixed when the review is first created.  Needs Airflow 3.1+.</p></li>
+On Airflow 3.1 to 3.3 the list is fixed when the review is first
+created; on 3.4+ a cleared or retried task replaces it.  Needs Airflow 3.1+.</p></li>
 <li><p><strong>decision_policy</strong> (<a class="reference internal" href="../../policies/decision/index.html#airflow.providers.common.ai.policies.decision.DecisionPolicy" title="airflow.providers.common.ai.policies.decision.DecisionPolicy"><em>airflow.providers.common.ai.policies.decision.DecisionPolicy</em></a><em> | </em><em>None</em>) – Experimental. A
 <a class="reference internal" href="../../policies/decision/index.html#airflow.providers.common.ai.policies.decision.DecisionPolicy" title="airflow.providers.common.ai.policies.decision.DecisionPolicy"><code class="xref py py-class docutils literal notranslate"><span class="pre">DecisionPolicy</span></code></a>
 saying how confident the model has to be for the operator to return its answer by
@@ -1013,8 +1019,11 @@ as when rendering jinja templates.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.operators.llm.LLMOperator.execute_complete">
 <span class="sig-name descname"><span class="pre">execute_complete</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">context</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generated_output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decision</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/operators/llm.html#LLMOperator.execute_complete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.operators.llm.LLMOperator.execute_complete" title="Link to this definition">¶</a></dt>
-<dd><p>Resume after human review and restore the Pydantic model for XCom consumers.</p>
+<dd><p>Resume after human review and convert the output back into <code class="docutils literal notranslate"><span class="pre">output_type</span></code>.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../exceptions/index.html#airflow.providers.common.ai.exceptions.ReviewedOutputValidationError" title="airflow.providers.common.ai.exceptions.ReviewedOutputValidationError"><strong>ReviewedOutputValidationError</strong></a> – If a reviewer’s edit does not validate against <code class="docutils literal notranslate"><span class="pre">output_type</span></code>.</p>
+</dd>
 </dl>
 </dd></dl>
 
