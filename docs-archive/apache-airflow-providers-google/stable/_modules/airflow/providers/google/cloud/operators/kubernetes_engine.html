@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -706,7 +706,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">KubernetesDeleteResourceOperator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.utils.pod_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">OnFinishAction</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AirflowException</span><span class="p">,</span>
+    <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span>
+    <span class="n">BaseOperator</span><span class="p">,</span>
+    <span class="n">conf</span><span class="p">,</span>
+    <span class="n">timezone</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.hooks.kubernetes_engine</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">GKEHook</span><span class="p">,</span>
     <span class="n">GKEKubernetesHook</span><span class="p">,</span>
@@ -727,10 +733,22 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProvidersManager</span>
 
 <span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.operators.pod_exec</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesPodExecOperator</span>
+<span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">_pod_exec_import_error</span> <span class="o">=</span> <span class="n">e</span>
+
+    <span class="k">class</span><span class="w"> </span><span class="nc">KubernetesPodExecOperator</span><span class="p">(</span><span class="n">BaseOperator</span><span class="p">):</span>  <span class="c1"># type: ignore[no-redef]</span>
+<span class="w">        </span><span class="sd">"""Keep existing GKE operators importable with older Kubernetes providers."""</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
+                <span class="s2">"GKEPodExecOperator requires apache-airflow-providers-cncf-kubernetes&gt;=10.22.0."</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">_pod_exec_import_error</span>
+
+
+<span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.operators.job</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesDeleteJobOperator</span>
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
-
     <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
         <span class="s2">"Failed to import KubernetesDeleteJobOperator. This operator is only available in cncf-kubernetes "</span>
         <span class="s2">"provider version &gt;=8.1.0"</span>
@@ -1536,6 +1554,143 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">"Cluster doesn't have ability to autoscale, will not install Kueue inside. Aborting"</span>
             <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="GKEPodExecOperator">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GKEPodExecOperator</span><span class="p">(</span><span class="n">GKEOperatorMixin</span><span class="p">,</span> <span class="n">KubernetesPodExecOperator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Execute a command in a running container of an existing Pod on Google Kubernetes Engine.</span>
+
+<span class="sd">    The operator authenticates with Google Cloud and delegates command execution to</span>
+<span class="sd">    :class:`~airflow.providers.cncf.kubernetes.operators.pod_exec.KubernetesPodExecOperator`.</span>
+<span class="sd">    It does not create, restart, or delete the target Pod.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information on how to use this operator, take a look at the guide:</span>
+<span class="sd">        :ref:`howto/operator:GKEPodExecOperator`</span>
+
+<span class="sd">    :param location: The Google Kubernetes Engine zone or region in which the cluster resides.</span>
+<span class="sd">        (templated)</span>
+<span class="sd">    :param cluster_name: The name of the Google Kubernetes Engine cluster. (templated)</span>
+<span class="sd">    :param pod_name: Name of the existing Kubernetes Pod. (templated)</span>
+<span class="sd">    :param command: Command and arguments to execute in the container. (templated)</span>
+<span class="sd">    :param namespace: Namespace containing the Pod. Defaults to ``default``. (templated)</span>
+<span class="sd">    :param container_name: Name of the container in which to execute the command. When omitted, the</span>
+<span class="sd">        ``kubectl.kubernetes.io/default-container`` annotation or the first container is used.</span>
+<span class="sd">        Defaults to ``None``. (templated)</span>
+<span class="sd">    :param use_internal_ip: Use the internal IP address as the endpoint. Defaults to ``False``.</span>
+<span class="sd">        (templated)</span>
+<span class="sd">    :param use_dns_endpoint: Use the DNS address as the endpoint. Defaults to ``False``. This must be</span>
+<span class="sd">        set to ``True`` for Sovereign Cloud from Google. (templated)</span>
+<span class="sd">    :param project_id: The Google Cloud project ID. Defaults to the project inferred from the Google</span>
+<span class="sd">        Cloud connection. (templated)</span>
+<span class="sd">    :param gcp_conn_id: The Google Cloud connection ID to use. Defaults to ``google_cloud_default``.</span>
+<span class="sd">        (templated)</span>
+<span class="sd">    :param impersonation_chain: Optional service account to impersonate using short-term credentials,</span>
+<span class="sd">        or a sequence of accounts required to impersonate the final account. Defaults to ``None``.</span>
+<span class="sd">        (templated)</span>
+<span class="sd">    :param do_xcom_push: Return standard output through XCom when ``True``. Defaults to ``False``.</span>
+<span class="sd">    :param max_xcom_output_size: Maximum UTF-8 byte size retained for XCom. Defaults to 49,344 bytes.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="GKEPodExecOperator.template_fields">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.template_fields">[docs]</a>
+    <span class="n">template_fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="nb">set</span><span class="p">(</span><span class="n">GKEOperatorMixin</span><span class="o">.</span><span class="n">template_fields</span><span class="p">)</span>
+        <span class="o">|</span> <span class="p">(</span>
+            <span class="nb">set</span><span class="p">(</span><span class="n">KubernetesPodExecOperator</span><span class="o">.</span><span class="n">template_fields</span><span class="p">)</span>
+            <span class="o">-</span> <span class="p">{</span><span class="s2">"cluster_context"</span><span class="p">,</span> <span class="s2">"config_file"</span><span class="p">,</span> <span class="s2">"kubernetes_conn_id"</span><span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.operator_extra_links">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.operator_extra_links">[docs]</a>
+    <span class="n">operator_extra_links</span> <span class="o">=</span> <span class="p">(</span><span class="n">KubernetesEnginePodLink</span><span class="p">(),)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">location</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cluster_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">pod_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">command</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"default"</span><span class="p">,</span>
+        <span class="n">container_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">use_internal_ip</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">use_dns_endpoint</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
+        <span class="n">gcp_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"google_cloud_default"</span><span class="p">,</span>
+        <span class="n">impersonation_chain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"config_file"</span><span class="p">,</span> <span class="s2">"kubernetes_conn_id"</span><span class="p">,</span> <span class="s2">"in_cluster"</span><span class="p">,</span> <span class="s2">"cluster_context"</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"`</span><span class="si">{</span><span class="n">parameter</span><span class="si">}</span><span class="s2">` is not allowed for GKEPodExecOperator because authentication is managed "</span>
+                    <span class="s2">"through `gcp_conn_id`."</span>
+                <span class="p">)</span>
+        <span class="k">if</span> <span class="n">gcp_conn_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"`gcp_conn_id` must not be None. To use Application Default Credentials, configure an "</span>
+                <span class="s2">"empty `google_cloud_default` connection."</span>
+            <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">pod_name</span><span class="o">=</span><span class="n">pod_name</span><span class="p">,</span>
+            <span class="n">command</span><span class="o">=</span><span class="n">command</span><span class="p">,</span>
+            <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
+            <span class="n">container_name</span><span class="o">=</span><span class="n">container_name</span><span class="p">,</span>
+            <span class="n">kubernetes_conn_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">in_cluster</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">cluster_context</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">config_file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+<div class="viewcode-block" id="GKEPodExecOperator.project_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.project_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span> <span class="o">=</span> <span class="n">project_id</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.location">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.location">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">location</span> <span class="o">=</span> <span class="n">location</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.cluster_name">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.cluster_name">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cluster_name</span> <span class="o">=</span> <span class="n">cluster_name</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.gcp_conn_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.gcp_conn_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gcp_conn_id</span> <span class="o">=</span> <span class="n">gcp_conn_id</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.use_internal_ip">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.use_internal_ip">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_internal_ip</span> <span class="o">=</span> <span class="n">use_internal_ip</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.use_dns_endpoint">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.use_dns_endpoint">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_dns_endpoint</span> <span class="o">=</span> <span class="n">use_dns_endpoint</span></div>
+
+<div class="viewcode-block" id="GKEPodExecOperator.impersonation_chain">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.impersonation_chain">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">impersonation_chain</span> <span class="o">=</span> <span class="n">impersonation_chain</span></div>
+
+
+<div class="viewcode-block" id="GKEPodExecOperator.execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/operators/kubernetes_engine/index.html#airflow.providers.google.cloud.operators.kubernetes_engine.GKEPodExecOperator.execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">namespace</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_namespace</span><span class="p">()</span>
+        <span class="n">KubernetesEnginePodLink</span><span class="o">.</span><span class="n">persist</span><span class="p">(</span>
+            <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+            <span class="n">project_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span>
+            <span class="n">location</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">location</span><span class="p">,</span>
+            <span class="n">cluster_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cluster_name</span><span class="p">,</span>
+            <span class="n">namespace</span><span class="o">=</span><span class="n">namespace</span><span class="p">,</span>
+            <span class="n">pod_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pod_name</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">context</span><span class="p">)</span></div>
 </div>
 
 
@@ -3039,9 +3194,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

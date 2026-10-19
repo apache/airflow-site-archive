@@ -20,9 +20,9 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: HookToolset(hook, *, allowed_methods, tool_name_prefix = '')
+.. py:class:: HookToolset(hook, *, allowed_methods, tool_prefix = '', tool_name_prefix = None, pinned_arguments = None, max_retries = None)
 
-   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`\ [\ :py:obj:`Any`\ ]
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
 
 
    Expose selected methods of an Airflow Hook as pydantic-ai tools.
@@ -39,8 +39,24 @@ Module Contents
        is not modified; each task instance gets a copy.
    :param allowed_methods: Method names to expose as tools. Required —
        auto-discovery is intentionally not supported for safety.
-   :param tool_name_prefix: Optional prefix prepended to each tool name
-       (e.g. ``"s3_"`` → ``"s3_list_keys"``).
+   :param tool_prefix: Optional prefix joined to each tool name with an underscore
+       (e.g. ``"s3"`` → ``"s3_list_keys"``). Must be a valid Python identifier.
+   :param tool_name_prefix: Deprecated. Concatenated to each tool name as given
+       (``"s3_"`` → ``"s3_list_keys"``, ``"s3"`` → ``"s3list_keys"``) and not validated.
+       Passing it with ``tool_prefix`` raises ``ValueError`` unless it equals
+       ``"<tool_prefix>_"``.
+   :param pinned_arguments: Arguments the Dag author fixes, such as the bucket a
+       storage hook may use: ``{"bucket_name": "reports"}``. Each is left out of the
+       arguments the model sees, refused if the model supplies it anyway, and passed to
+       every allowed method as it is written here, not rendered as a template. Every allowed
+       method must take each pinned argument as a named parameter: one that does not, such
+       as a method taking ``bucket`` or only ``**kwargs``, raises ``ValueError``, because
+       the model could still choose the value through it. Expose such a method from a
+       second ``HookToolset``.
+   :param max_retries: How many times the model may correct a call with invalid arguments,
+       or one that supplies a pinned argument, before the run fails. An exception from the
+       hook itself fails the run straight away. ``None`` (the default) uses the agent's
+       tool retry budget, its ``retries``, as pydantic-ai's own toolsets do.
 
 
    .. py:attribute:: agent_template_fields
@@ -81,17 +97,15 @@ Module Contents
 
 
 
-   .. py:method:: call_tool(name, tool_args, ctx, tool)
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
       :async:
 
 
-      Call a tool with the given arguments.
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
 
-      Args:
-          name: The name of the tool to call.
-          tool_args: The arguments to pass to the tool.
-          ctx: The run context.
-          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
 
 
 

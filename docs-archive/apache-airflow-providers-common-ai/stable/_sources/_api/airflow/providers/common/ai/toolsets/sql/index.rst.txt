@@ -20,9 +20,9 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: SQLToolset(db_conn_id, *, allowed_tables = _UNSET, allowed_functions = None, schema = None, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES)
+.. py:class:: SQLToolset(db_conn_id, *, allowed_tables = _UNSET, allowed_functions = None, schema = None, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES, max_columns = DEFAULT_MAX_COLUMNS, max_retries = None)
 
-   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`\ [\ :py:obj:`Any`\ ]
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
 
 
    Curated toolset that gives an LLM agent safe access to a SQL database.
@@ -101,7 +101,8 @@ Module Contents
        the time the first row is read, so only the per-row Python conversion is
        skipped. Treat this as a bound on what the agent is shown, not as a guarantee
        that ``SELECT * FROM huge_table`` is cheap.
-   :param max_result_bytes: Budget for the serialized ``query`` result, in bytes.
+   :param max_result_bytes: Budget for the serialized ``query`` result, in bytes, and the
+       byte backstop that also triggers the ``get_schema`` summary (see ``max_columns``).
        Default 64 KiB. ``max_rows`` bounds rows, which says nothing about size: one
        row of a 3000-column table is larger than a thousand rows of a narrow one, and
        a tool result stays in the model's message history for the rest of the run, so
@@ -110,6 +111,14 @@ Module Contents
        rather than skipping it and packing later ones, so one wide row early in the
        result ends it. The result reports which limit it hit so the agent can narrow
        its projection rather than page through the table.
+   :param max_columns: Maximum number of columns ``get_schema`` returns in full. Default
+       ``100``. Above it -- or when the serialized columns exceed ``max_result_bytes`` --
+       the full list is replaced by a bounded summary (column count, a type histogram, a
+       sample of columns) that points the agent at the ``name_contains`` filter, so a
+       several-thousand-column table cannot exhaust the context before a query is written.
+   :param max_retries: How many times the model may correct a failed call to one of these
+       tools before the run fails. ``None`` (the default) uses the agent's tool retry
+       budget, its ``retries``, as pydantic-ai's own toolsets do.
 
 
    .. py:attribute:: agent_template_fields
@@ -142,17 +151,15 @@ Module Contents
 
 
 
-   .. py:method:: call_tool(name, tool_args, ctx, tool)
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
       :async:
 
 
-      Call a tool with the given arguments.
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
 
-      Args:
-          name: The name of the tool to call.
-          tool_args: The arguments to pass to the tool.
-          ctx: The run context.
-          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
 
 
 

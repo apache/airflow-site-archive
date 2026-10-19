@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -701,7 +701,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">UTC</span><span class="p">,</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">threading</span><span class="w"> </span><span class="kn">import</span> <span class="n">Event</span><span class="p">,</span> <span class="n">Thread</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
@@ -798,25 +798,27 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/utils/task_log_fetcher/index.html#airflow.providers.amazon.aws.utils.task_log_fetcher.AwsTaskLogFetcher.run">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">continuation_token</span> <span class="o">=</span> <span class="n">AwsLogsHook</span><span class="o">.</span><span class="n">ContinuationToken</span><span class="p">()</span>
-        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_stopped</span><span class="p">():</span>
-            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fetch_interval</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">())</span>
-            <span class="n">log_events</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_log_events</span><span class="p">(</span><span class="n">continuation_token</span><span class="p">)</span>
-            <span class="n">prev_timestamp_event</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">for</span> <span class="n">log_event</span> <span class="ow">in</span> <span class="n">log_events</span><span class="p">:</span>
-                <span class="n">current_timestamp_event</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span>
-                    <span class="n">log_event</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">]</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span>
-                <span class="p">)</span>
-                <span class="k">if</span> <span class="n">current_timestamp_event</span> <span class="o">==</span> <span class="n">prev_timestamp_event</span><span class="p">:</span>
-                    <span class="c1"># When multiple events have the same timestamp, somehow, only one event is logged</span>
-                    <span class="c1"># As a consequence, some logs are missed in the log group (in case they have the same</span>
-                    <span class="c1"># timestamp)</span>
-                    <span class="c1"># When a slight delay is added before logging the event, that solves the issue</span>
-                    <span class="c1"># See https://github.com/apache/airflow/issues/40875</span>
-                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.001</span><span class="p">)</span>
-                <span class="n">level</span> <span class="o">=</span> <span class="n">_parse_log_level</span><span class="p">(</span><span class="n">log_event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">])</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_str</span><span class="p">(</span><span class="n">log_event</span><span class="p">))</span>
-                <span class="n">prev_timestamp_event</span> <span class="o">=</span> <span class="n">current_timestamp_event</span></div>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_event</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fetch_interval</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_forward_log_events</span><span class="p">(</span><span class="n">continuation_token</span><span class="p">)</span>
+        <span class="c1"># `stop()` is called once the task or job has ended, so the events written between the last</span>
+        <span class="c1"># fetch above and that moment have not been read yet: read them before the thread exits.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_forward_log_events</span><span class="p">(</span><span class="n">continuation_token</span><span class="p">)</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_log_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">continuation_token</span><span class="p">:</span> <span class="n">AwsLogsHook</span><span class="o">.</span><span class="n">ContinuationToken</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">prev_timestamp_event</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">log_event</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_log_events</span><span class="p">(</span><span class="n">continuation_token</span><span class="p">):</span>
+            <span class="n">current_timestamp_event</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">log_event</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">]</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="n">UTC</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">current_timestamp_event</span> <span class="o">==</span> <span class="n">prev_timestamp_event</span><span class="p">:</span>
+                <span class="c1"># When multiple events have the same timestamp, somehow, only one event is logged</span>
+                <span class="c1"># As a consequence, some logs are missed in the log group (in case they have the same</span>
+                <span class="c1"># timestamp)</span>
+                <span class="c1"># When a slight delay is added before logging the event, that solves the issue</span>
+                <span class="c1"># See https://github.com/apache/airflow/issues/40875</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.001</span><span class="p">)</span>
+            <span class="n">level</span> <span class="o">=</span> <span class="n">_parse_log_level</span><span class="p">(</span><span class="n">log_event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_str</span><span class="p">(</span><span class="n">log_event</span><span class="p">))</span>
+            <span class="n">prev_timestamp_event</span> <span class="o">=</span> <span class="n">current_timestamp_event</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_log_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skip_token</span><span class="p">:</span> <span class="n">AwsLogsHook</span><span class="o">.</span><span class="n">ContinuationToken</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">skip_token</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -845,7 +847,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="AwsTaskLogFetcher.event_to_str">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/utils/task_log_fetcher/index.html#airflow.providers.amazon.aws.utils.task_log_fetcher.AwsTaskLogFetcher.event_to_str">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">event_to_str</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="n">event_dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">]</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+        <span class="n">event_dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">]</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="n">UTC</span><span class="p">)</span>
         <span class="n">formatted_event_dt</span> <span class="o">=</span> <span class="n">event_dt</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">"%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S,</span><span class="si">%f</span><span class="s2">"</span><span class="p">)[:</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span>
         <span class="n">message</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">]</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">formatted_event_dt</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">"</span></div>
@@ -1150,9 +1152,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

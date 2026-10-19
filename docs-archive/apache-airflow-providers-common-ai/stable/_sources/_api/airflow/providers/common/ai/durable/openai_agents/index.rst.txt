@@ -1,0 +1,84 @@
+airflow.providers.common.ai.durable.openai_agents
+=================================================
+
+.. py:module:: airflow.providers.common.ai.durable.openai_agents
+
+.. autoapi-nested-parse::
+
+   Replay an OpenAI Agents SDK agent's completed model and tool calls when Airflow retries its task.
+
+   .. note:: Experimental; see :ref:`howto/stability`.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.openai_agents.run_durably
+   airflow.providers.common.ai.durable.openai_agents.run_durably_sync
+
+
+Module Contents
+---------------
+
+.. py:function:: run_durably(starting_agent, input, *, run_config = None, **kwargs)
+   :async:
+
+
+   Run an agent like ``Runner.run``, so that a retry of the task replays what already completed.
+
+   Each model call and each function tool call the run makes is recorded in the task's
+   durable journal as it completes. When the task fails and Airflow retries it, the agent
+   runs again from the start, and every call that asks what the previous attempt asked,
+   in the same order, returns the recorded result instead of calling the model or the tool
+   again. From the first call that differs, such as a model answer that changed, that call
+   and every call after it run live. Once the run succeeds what was recorded is deleted, so
+   clearing the task later starts the agent over.
+
+   .. code-block:: python
+
+       from agents import Agent
+
+       from airflow.providers.common.ai.durable.openai_agents import run_durably_sync
+       from airflow.providers.common.ai.tools.openai_agents import AirflowTools
+       from airflow.sdk import task
+
+
+       @task(retries=3)
+       def research(question: str) -> str:
+           agent = Agent(name="analyst", model=model, tools=AirflowTools(warehouse))
+           return run_durably_sync(agent, question).final_output
+
+   Recorded are the calls of every model given by name or in ``run_config``, the model and
+   function tools of the starting agent and of the agents in its ``handoffs`` list, and an
+   agent used through ``as_tool``, as one call. These run live on every attempt: tools
+   other than function tools (hosted tools such as web search, the tools of
+   ``mcp_servers``, shell and computer tools), a function tool whose ``needs_approval`` is
+   a function, since the SDK checks its arguments only through its own invoker, the
+   function tools of an agent reached through ``handoff()``, and its model too unless the
+   agent's ``model`` is a model name or not set, and streamed runs. A tool call that fails,
+   including one whose exception ``failure_error_function`` turns into text for the model,
+   is not recorded either, so a retry runs it again. A replayed model call reports no
+   usage, since it costs nothing.
+
+   A ``session`` makes every retry run live: the SDK adds the failed try's prompt to it
+   before the first model call, so that call no longer asks what it asked then.
+
+   Outside a task there is no journal, and this is ``Runner.run``.
+
+   :param starting_agent: The agent to run.
+   :param input: The prompt, as for ``Runner.run``.
+   :param run_config: As for ``Runner.run``.
+   :param kwargs: Passed to ``Runner.run``, such as ``max_turns`` or ``context``.
+   :raises ValueError: When ``previous_response_id``, ``conversation_id`` or
+       ``auto_previous_response_id`` is passed: a replayed call never reaches the
+       conversation OpenAI keeps for them.
+
+
+.. py:function:: run_durably_sync(starting_agent, input, *, run_config = None, **kwargs)
+
+   Run :func:`run_durably` from synchronous code, such as a plain ``@task``.
+
+

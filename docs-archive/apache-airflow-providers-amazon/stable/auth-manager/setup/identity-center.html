@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -787,6 +787,44 @@ If you use the default Identity Center directory as identity source, you can use
 <span class="nb">export</span><span class="w"> </span><span class="nv">AIRFLOW__AWS_AUTH_MANAGER__SAML_METADATA_URL</span><span class="o">=</span><span class="s1">'&lt;saml_metadata_file_url&gt;'</span>
 </pre></div>
 </div>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Serve the Airflow UI over HTTPS. Identity Center sends the SAML response back to
+<code class="docutils literal notranslate"><span class="pre">&lt;base_url&gt;/auth/login_callback</span></code> from another site, and the browser only sends the login state
+cookie with that request when the cookie is <code class="docutils literal notranslate"><span class="pre">SameSite=None</span></code>, which requires <code class="docutils literal notranslate"><span class="pre">Secure</span></code>. Airflow
+sets it that way only when the API server sees the request as HTTPS. If TLS ends at a load
+balancer or reverse proxy in front of Airflow, run <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">api-server</span> <span class="pre">--proxy-headers</span></code> and set
+<code class="docutils literal notranslate"><span class="pre">FORWARDED_ALLOW_IPS</span></code> so the API server trusts <code class="docutils literal notranslate"><span class="pre">X-Forwarded-Proto</span></code>, as described in
+<a class="reference external" href="/docs/apache-airflow/stable/howto/run-behind-proxy.html" title="(in apache-airflow v3.4.0)"><span>Running Airflow behind a reverse proxy</span></a>. Otherwise every login started from Airflow fails
+with “No login in progress for this browser”.</p>
+</div>
+</section>
+<section id="logging-in-from-the-access-portal-idp-initiated-sso">
+<span id="identity-center-idp-initiated-login"></span><h2>Logging in from the access portal (IdP-initiated SSO)<a class="headerlink" href="#logging-in-from-the-access-portal-idp-initiated-sso" title="Link to this heading">¶</a></h2>
+<p>By default the AWS auth manager only accepts a SAML response that answers a login started from
+Airflow itself. When you open <code class="docutils literal notranslate"><span class="pre">&lt;base_url&gt;/auth/login</span></code>, Airflow sends an AuthnRequest to Identity
+Center and remembers its id in a short-lived, signed, <code class="docutils literal notranslate"><span class="pre">HttpOnly</span></code> cookie; the response is accepted
+only if it echoes that id back in <code class="docutils literal notranslate"><span class="pre">InResponseTo</span></code>.</p>
+<p>This binding matters because a SAML assertion is signed by the identity provider, which
+authenticates <em>the identity in the response</em> — it says nothing about <em>which browser asked for it</em>.
+Without the binding, an assertion issued for one login would be accepted by a browser that never
+started it, signing that browser in as the assertion’s subject rather than as the person using it.</p>
+<p>The cost is that clicking the Airflow tile in the AWS IAM Identity Center access portal no longer
+works: that flow produces an assertion nobody asked for, and Airflow cannot tell it apart from a
+replayed one. If you need it, enable it explicitly:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[aws_auth_manager]</span>
+<span class="na">allow_idp_initiated_login</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">True</span>
+</pre></div>
+</div>
+<p>or</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">AIRFLOW__AWS_AUTH_MANAGER__ALLOW_IDP_INITIATED_LOGIN</span><span class="o">=</span><span class="s1">'True'</span>
+</pre></div>
+</div>
+<p>With this enabled, Airflow still requires the assertion to be signed by the configured identity
+provider, and still refuses one that carries an <code class="docutils literal notranslate"><span class="pre">InResponseTo</span></code> value — an unsolicited assertion
+answers no request, so a response that names one is a solicited assertion being replayed. What it
+gives up is the guarantee that the browser receiving the response is the one that asked for it.
+Leave it disabled unless the access portal flow is required.</p>
 </section>
 </section>
 
@@ -873,6 +911,7 @@ If you use the default Identity Center directory as identity source, you can use
 </li>
 <li><a class="reference internal" href="#attribute-mappings-configuration">Attribute mappings configuration</a></li>
 <li><a class="reference internal" href="#configure-airflow">Configure Airflow</a></li>
+<li><a class="reference internal" href="#logging-in-from-the-access-portal-idp-initiated-sso">Logging in from the access portal (IdP-initiated SSO)</a></li>
 </ul>
 </li>
 </ul>
@@ -1092,9 +1131,9 @@ If you use the default Identity Center directory as identity source, you can use
     <script src="../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../_static/js/globaltoc.js?v=32f50df6"></script>

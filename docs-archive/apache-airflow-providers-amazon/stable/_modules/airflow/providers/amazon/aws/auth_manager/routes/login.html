@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -694,13 +694,20 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">binascii</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">hmac</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">secrets</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">hashlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">sha256</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">anyio</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">status</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">RedirectResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span><span class="p">,</span> <span class="n">RedirectResponse</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.app</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AUTH_MANAGER_FASTAPI_APP_PREFIX</span><span class="p">,</span>
@@ -708,7 +715,11 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.managers.base_auth_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">COOKIE_NAME_JWT_TOKEN</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.common.router</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowRouter</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.auth_manager.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_SAML_METADATA_URL_KEY</span><span class="p">,</span> <span class="n">CONF_SECTION_NAME</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.auth_manager.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CONF_ALLOW_IDP_INITIATED_LOGIN_KEY</span><span class="p">,</span>
+    <span class="n">CONF_SAML_METADATA_URL_KEY</span><span class="p">,</span>
+    <span class="n">CONF_SECTION_NAME</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.auth_manager.datamodels.login</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoginResponse</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.auth_manager.user</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsAuthManagerUser</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_1_1_PLUS</span><span class="p">,</span> <span class="n">AIRFLOW_V_3_1_8_PLUS</span>
@@ -745,6 +756,127 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="n">login_router</span> <span class="o">=</span> <span class="n">AirflowRouter</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"AWSAuthManagerLogin"</span><span class="p">])</span></div>
 
 
+<span class="c1"># Name of the short-lived cookie recording which logins this browser has started.</span>
+<div class="viewcode-block" id="COOKIE_NAME_LOGIN_STATE">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.COOKIE_NAME_LOGIN_STATE">[docs]</a>
+<span class="n">COOKIE_NAME_LOGIN_STATE</span> <span class="o">=</span> <span class="s2">"_awsam_login_state"</span></div>
+
+
+<span class="c1"># The login flow is a redirect to the IdP and back. Ten minutes is generous for that and</span>
+<span class="c1"># keeps a stale request id from lingering.</span>
+<div class="viewcode-block" id="LOGIN_STATE_MAX_AGE">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.LOGIN_STATE_MAX_AGE">[docs]</a>
+<span class="n">LOGIN_STATE_MAX_AGE</span> <span class="o">=</span> <span class="mi">600</span></div>
+
+
+<span class="c1"># One entry per login started and not yet completed, so opening a second tab does not</span>
+<span class="c1"># invalidate the first. The cap bounds the cookie; the oldest pending login is dropped.</span>
+<div class="viewcode-block" id="MAX_PENDING_LOGINS">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.MAX_PENDING_LOGINS">[docs]</a>
+<span class="n">MAX_PENDING_LOGINS</span> <span class="o">=</span> <span class="mi">5</span></div>
+
+
+<div class="viewcode-block" id="LOGIN_MODE_REDIRECT">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.LOGIN_MODE_REDIRECT">[docs]</a>
+<span class="n">LOGIN_MODE_REDIRECT</span> <span class="o">=</span> <span class="s2">"login-redirect"</span></div>
+
+<div class="viewcode-block" id="LOGIN_MODE_TOKEN">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.LOGIN_MODE_TOKEN">[docs]</a>
+<span class="n">LOGIN_MODE_TOKEN</span> <span class="o">=</span> <span class="s2">"login-token"</span></div>
+
+<div class="viewcode-block" id="LOGIN_MODES">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.LOGIN_MODES">[docs]</a>
+<span class="n">LOGIN_MODES</span> <span class="o">=</span> <span class="p">(</span><span class="n">LOGIN_MODE_REDIRECT</span><span class="p">,</span> <span class="n">LOGIN_MODE_TOKEN</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NO_LOGIN_IN_PROGRESS">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.NO_LOGIN_IN_PROGRESS">[docs]</a>
+<span class="n">NO_LOGIN_IN_PROGRESS</span> <span class="o">=</span> <span class="s2">"No login in progress for this browser. Start the login from Airflow and try again."</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">request</span><span class="o">.</span><span class="n">base_url</span><span class="o">.</span><span class="n">scheme</span> <span class="o">==</span> <span class="s2">"https"</span> <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"ssl_cert"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_allows_idp_initiated_login</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="n">CONF_SECTION_NAME</span><span class="p">,</span> <span class="n">CONF_ALLOW_IDP_INITIATED_LOGIN_KEY</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_sign_login_state</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="c1"># The API server secret key is already required to be identical across API servers, so a</span>
+    <span class="c1"># login may start on one instance and finish on another.</span>
+    <span class="n">secret</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"secret_key"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">secret</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">payload</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">sha256</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the logins this browser started and has not yet completed.</span>
+
+<span class="sd">    This cookie is the browser's half of the binding: it states that *this* browser asked for</span>
+<span class="sd">    these AuthnRequests. A SAML assertion is signed by the identity provider, which</span>
+<span class="sd">    authenticates *the identity in the response* -- it says nothing about *which browser</span>
+<span class="sd">    asked*. Without this, an assertion issued for one login would be accepted in a browser</span>
+<span class="sd">    that never started it, signing that browser in as the assertion's subject.</span>
+
+<span class="sd">    Entries are signed so a response cannot contribute one of its own, and each carries its</span>
+<span class="sd">    own deadline so an abandoned tab expires without affecting the others.</span>
+<span class="sd">    """</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">COOKIE_NAME_LOGIN_STATE</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">raw</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">payload</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">signature</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">rpartition</span><span class="p">(</span><span class="s2">"."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">hmac</span><span class="o">.</span><span class="n">compare_digest</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">_sign_login_state</span><span class="p">(</span><span class="n">payload</span><span class="p">)):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Ignoring a login state cookie that this deployment did not sign."</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">urlsafe_b64decode</span><span class="p">(</span><span class="n">payload</span><span class="p">))</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">binascii</span><span class="o">.</span><span class="n">Error</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Ignoring a login state cookie that could not be decoded."</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">entry</span>
+        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"exp"</span><span class="p">),</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">))</span> <span class="ow">and</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"exp"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">now</span>
+    <span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_write_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">entries</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">cookie_path</span> <span class="o">=</span> <span class="n">get_cookie_path</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">entries</span><span class="p">:</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">delete_cookie</span><span class="p">(</span><span class="n">COOKIE_NAME_LOGIN_STATE</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">urlsafe_b64encode</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">separators</span><span class="o">=</span><span class="p">(</span><span class="s2">","</span><span class="p">,</span> <span class="s2">":"</span><span class="p">))</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+    <span class="n">secure</span> <span class="o">=</span> <span class="n">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="n">response</span><span class="o">.</span><span class="n">set_cookie</span><span class="p">(</span>
+        <span class="n">COOKIE_NAME_LOGIN_STATE</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">payload</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">_sign_login_state</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">max_age</span><span class="o">=</span><span class="n">LOGIN_STATE_MAX_AGE</span><span class="p">,</span>
+        <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">,</span>
+        <span class="n">secure</span><span class="o">=</span><span class="n">secure</span><span class="p">,</span>
+        <span class="n">httponly</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># The IdP sends the browser back to login_callback with a cross-site form POST. The</span>
+        <span class="c1"># browser sends a cookie on that request only if the cookie is SameSite=None. Browsers</span>
+        <span class="c1"># reject a SameSite=None cookie without Secure, so over plain http the cookie stays Lax.</span>
+        <span class="c1"># With a Lax cookie, the login completes only when the IdP is on the same site as Airflow.</span>
+        <span class="n">samesite</span><span class="o">=</span><span class="s2">"none"</span> <span class="k">if</span> <span class="n">secure</span> <span class="k">else</span> <span class="s2">"lax"</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_match_pending_login</span><span class="p">(</span><span class="n">pending</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">relay_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Find which of this browser's pending logins a response claims to answer."""</span>
+    <span class="n">mode</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">nonce</span> <span class="o">=</span> <span class="n">relay_state</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">nonce</span> <span class="ow">or</span> <span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">LOGIN_MODES</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">pending</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"mode"</span><span class="p">)</span> <span class="o">==</span> <span class="n">mode</span> <span class="ow">and</span> <span class="n">hmac</span><span class="o">.</span><span class="n">compare_digest</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"nonce"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)),</span> <span class="n">nonce</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">entry</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_read_form</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FormData</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Read the request form from a synchronous context running in a worker thread."""</span>
@@ -755,14 +887,40 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">anyio</span><span class="o">.</span><span class="n">from_thread</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">_form</span><span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_start_login</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RedirectResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Begin a login, remembering enough about it to recognise its response later.</span>
+
+<span class="sd">    The nonce travels to the IdP in ``RelayState`` and returns with the response, naming</span>
+<span class="sd">    which of this browser's pending logins that response answers. It is only an index into</span>
+<span class="sd">    the signed cookie; the binding itself is the AuthnRequest id, which the IdP echoes in</span>
+<span class="sd">    ``InResponseTo`` and which whoever posts the response cannot choose. The return mode is</span>
+<span class="sd">    read back from the matched entry rather than from the form, so a response cannot select</span>
+<span class="sd">    a mode the browser did not ask for.</span>
+<span class="sd">    """</span>
+    <span class="n">saml_auth</span> <span class="o">=</span> <span class="n">_init_saml_auth</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="n">nonce</span> <span class="o">=</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_urlsafe</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span>
+    <span class="n">callback_url</span> <span class="o">=</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">nonce</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">callback_url</span><span class="p">)</span>
+    <span class="n">pending</span> <span class="o">=</span> <span class="n">_read_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">)[</span><span class="o">-</span><span class="p">(</span><span class="n">MAX_PENDING_LOGINS</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="p">:]</span>
+    <span class="n">pending</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">"nonce"</span><span class="p">:</span> <span class="n">nonce</span><span class="p">,</span>
+            <span class="s2">"request_id"</span><span class="p">:</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">get_last_request_id</span><span class="p">(),</span>
+            <span class="s2">"mode"</span><span class="p">:</span> <span class="n">mode</span><span class="p">,</span>
+            <span class="s2">"exp"</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">+</span> <span class="n">LOGIN_STATE_MAX_AGE</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+    <span class="n">_write_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="n">pending</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span>
+
+
 <span class="nd">@login_router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/login"</span><span class="p">)</span>
 <div class="viewcode-block" id="login">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.login">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">login</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Initiate the authentication."""</span>
-    <span class="n">saml_auth</span> <span class="o">=</span> <span class="n">_init_saml_auth</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-    <span class="n">callback_url</span> <span class="o">=</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="s2">"login-redirect"</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">callback_url</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_start_login</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">LOGIN_MODE_REDIRECT</span><span class="p">)</span></div>
 
 
 
@@ -771,9 +929,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.login_token">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">login_token</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RedirectResponse</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Initiate the authentication to create a token."""</span>
-    <span class="n">saml_auth</span> <span class="o">=</span> <span class="n">_init_saml_auth</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-    <span class="n">callback_url</span> <span class="o">=</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="s2">"login-token"</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">callback_url</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_start_login</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">LOGIN_MODE_TOKEN</span><span class="p">)</span></div>
 
 
 
@@ -782,9 +938,30 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.login_callback">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">login_callback</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Authenticate the user."""</span>
+    <span class="n">form_data</span> <span class="o">=</span> <span class="n">_read_form</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="n">pending</span> <span class="o">=</span> <span class="n">_read_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="n">relay_state</span> <span class="o">=</span> <span class="n">form_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"RelayState"</span><span class="p">)</span>
+    <span class="c1"># A multipart upload posted under this name is not a relay state, so it matches nothing.</span>
+    <span class="n">matched</span> <span class="o">=</span> <span class="n">_match_pending_login</span><span class="p">(</span><span class="n">pending</span><span class="p">,</span> <span class="n">relay_state</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">relay_state</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="n">matched</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="n">matched</span><span class="p">[</span><span class="s2">"mode"</span><span class="p">]</span>
+        <span class="n">expected_request_id</span> <span class="o">=</span> <span class="n">matched</span><span class="p">[</span><span class="s2">"request_id"</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">_allows_idp_initiated_login</span><span class="p">():</span>
+        <span class="c1"># Opted in: this deployment accepts assertions that no login from this browser asked</span>
+        <span class="c1"># for, so the Identity Center access portal tile keeps working. Nothing ties such a</span>
+        <span class="c1"># response to the browser receiving it -- that is the trade the option names.</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="n">LOGIN_MODE_REDIRECT</span>
+        <span class="n">expected_request_id</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"SAML response received that answers no login started by this browser."</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">NO_LOGIN_IN_PROGRESS</span><span class="p">)</span>
+
     <span class="n">saml_auth</span> <span class="o">=</span> <span class="n">_init_saml_auth</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">saml_auth</span><span class="o">.</span><span class="n">process_response</span><span class="p">()</span>
+        <span class="c1"># Passing the request id makes python3-saml enforce InResponseTo. Without it the</span>
+        <span class="c1"># check is skipped entirely and any valid assertion is accepted.</span>
+        <span class="n">saml_auth</span><span class="o">.</span><span class="n">process_response</span><span class="p">(</span><span class="n">request_id</span><span class="o">=</span><span class="n">expected_request_id</span><span class="p">)</span>
     <span class="k">except</span> <span class="n">OneLogin_Saml2_Error</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
         <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_500_INTERNAL_SERVER_ERROR</span><span class="p">,</span> <span class="s2">"Failed to authenticate"</span><span class="p">)</span>
@@ -797,6 +974,13 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
         <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Error reason: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">error_reason</span><span class="p">)</span>
         <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_500_INTERNAL_SERVER_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Failed to authenticate: </span><span class="si">{</span><span class="n">error_reason</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
+    <span class="k">if</span> <span class="n">expected_request_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">get_last_response_in_response_to</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># An unsolicited assertion answers no request, so one carrying InResponseTo is a</span>
+        <span class="c1"># solicited assertion being replayed here. python3-saml skips the comparison entirely</span>
+        <span class="c1"># when it is given no request id, so this is checked rather than assumed.</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Unsolicited SAML response carries InResponseTo; refusing it as a replay."</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="s2">"Invalid SAML response"</span><span class="p">)</span>
+
     <span class="n">attributes</span> <span class="o">=</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">get_attributes</span><span class="p">()</span>
     <span class="n">user</span> <span class="o">=</span> <span class="n">AwsAuthManagerUser</span><span class="p">(</span>
         <span class="n">user_id</span><span class="o">=</span><span class="n">attributes</span><span class="p">[</span><span class="s2">"id"</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
@@ -807,23 +991,27 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <span class="n">url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"base_url"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">"/"</span><span class="p">)</span>
     <span class="n">token</span> <span class="o">=</span> <span class="n">get_auth_manager</span><span class="p">()</span><span class="o">.</span><span class="n">generate_jwt</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
 
-    <span class="n">form_data</span> <span class="o">=</span> <span class="n">_read_form</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-    <span class="n">relay_state</span> <span class="o">=</span> <span class="n">form_data</span><span class="p">[</span><span class="s2">"RelayState"</span><span class="p">]</span>
-
-    <span class="k">if</span> <span class="n">relay_state</span> <span class="o">==</span> <span class="s2">"login-redirect"</span><span class="p">:</span>
+    <span class="n">response</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="n">LOGIN_MODE_REDIRECT</span><span class="p">:</span>
         <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">303</span><span class="p">)</span>
-        <span class="n">secure</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">base_url</span><span class="o">.</span><span class="n">scheme</span> <span class="o">==</span> <span class="s2">"https"</span> <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"ssl_cert"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">""</span><span class="p">))</span>
+        <span class="n">cookie_path</span> <span class="o">=</span> <span class="n">get_cookie_path</span><span class="p">()</span>
+        <span class="n">secure</span> <span class="o">=</span> <span class="n">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
         <span class="c1"># In Airflow 3.1.1 authentication changes, front-end no longer handle the token</span>
         <span class="c1"># See https://github.com/apache/airflow/pull/55506</span>
-        <span class="n">cookie_path</span> <span class="o">=</span> <span class="n">get_cookie_path</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">AIRFLOW_V_3_1_1_PLUS</span><span class="p">:</span>
             <span class="n">response</span><span class="o">.</span><span class="n">set_cookie</span><span class="p">(</span><span class="n">COOKIE_NAME_JWT_TOKEN</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">,</span> <span class="n">secure</span><span class="o">=</span><span class="n">secure</span><span class="p">,</span> <span class="n">httponly</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">response</span><span class="o">.</span><span class="n">set_cookie</span><span class="p">(</span><span class="n">COOKIE_NAME_JWT_TOKEN</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">cookie_path</span><span class="p">,</span> <span class="n">secure</span><span class="o">=</span><span class="n">secure</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">response</span>
-    <span class="k">if</span> <span class="n">relay_state</span> <span class="o">==</span> <span class="s2">"login-token"</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">LoginResponse</span><span class="p">(</span><span class="n">access_token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_500_INTERNAL_SERVER_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Invalid relay state: </span><span class="si">{</span><span class="n">relay_state</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Returned as a JSONResponse rather than the bare model so the consumed login state</span>
+        <span class="c1"># can be cleared on this path too. Left in place, the same assertion could be reposted</span>
+        <span class="c1"># to mint further tokens until the cookie expired.</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">JSONResponse</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">LoginResponse</span><span class="p">(</span><span class="n">access_token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span><span class="o">.</span><span class="n">model_dump</span><span class="p">())</span>
+
+    <span class="k">if</span> <span class="n">matched</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># One response per request. Logins started in other tabs keep theirs.</span>
+        <span class="n">_write_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="p">[</span><span class="n">entry</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">pending</span> <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">matched</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">response</span></div>
 
 
 
@@ -1128,9 +1316,9 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

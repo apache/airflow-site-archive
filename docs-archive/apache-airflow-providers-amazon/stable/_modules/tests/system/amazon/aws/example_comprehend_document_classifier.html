@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -818,13 +818,28 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="c1"># [END howto_sensor_create_document_classifier]</span>
 
     <span class="nd">@task</span><span class="p">(</span><span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">)</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_classifier</span><span class="p">(</span><span class="n">document_classifier_arn</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-        <span class="n">ComprehendHook</span><span class="p">()</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">delete_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">document_classifier_arn</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_classifier</span><span class="p">(</span><span class="n">classifier_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">hook</span> <span class="o">=</span> <span class="n">ComprehendHook</span><span class="p">()</span>
+        <span class="n">classifiers</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">list_document_classifiers</span><span class="p">(</span>
+            <span class="n">Filter</span><span class="o">=</span><span class="p">{</span><span class="s2">"DocumentClassifierName"</span><span class="p">:</span> <span class="n">classifier_name</span><span class="p">},</span>
+        <span class="p">)[</span><span class="s2">"DocumentClassifierPropertiesList"</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">classifier</span> <span class="ow">in</span> <span class="n">classifiers</span><span class="p">:</span>
+            <span class="n">classifier_arn</span> <span class="o">=</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"DocumentClassifierArn"</span><span class="p">]</span>
+
+            <span class="c1"># A classifier can only be deleted from a terminal state.</span>
+            <span class="k">if</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"Status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"DELETING"</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">classifier</span><span class="p">[</span><span class="s2">"Status"</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"SUBMITTED"</span><span class="p">,</span> <span class="s2">"TRAINING"</span><span class="p">):</span>
+                <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">stop_training_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
+
+            <span class="n">hook</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="s2">"document_classifier_deletable"</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
+            <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">delete_document_classifier</span><span class="p">(</span><span class="n">DocumentClassifierArn</span><span class="o">=</span><span class="n">classifier_arn</span><span class="p">)</span>
 
     <span class="n">chain</span><span class="p">(</span>
         <span class="n">create_document_classifier</span><span class="p">,</span>
         <span class="n">await_create_document_classifier</span><span class="p">,</span>
-        <span class="n">delete_classifier</span><span class="p">(</span><span class="n">create_document_classifier</span><span class="o">.</span><span class="n">output</span><span class="p">),</span>
+        <span class="n">delete_classifier</span><span class="p">(</span><span class="n">classifier_name</span><span class="p">),</span>
     <span class="p">)</span></div>
 
 
@@ -1203,9 +1218,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

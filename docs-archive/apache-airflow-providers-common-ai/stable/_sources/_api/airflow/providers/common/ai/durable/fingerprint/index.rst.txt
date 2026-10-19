@@ -22,11 +22,59 @@ airflow.providers.common.ai.durable.fingerprint
    longer match.
 
    Fields that pydantic-ai regenerates on every attempt (message-level
-   ``timestamp``/``run_id``/``conversation_id`` and part-level ``timestamp``)
-   are excluded from the fingerprint.  Requests that cannot be serialized to
-   JSON fingerprint as ``None``, which degrades that step to unverified
-   positional replay (the pre-fingerprint behavior) rather than disabling
-   caching.
+   ``timestamp``/``run_id``/``conversation_id``, part-level ``timestamp``, and the
+   timestamps of the nested calls code mode records on a ``run_code`` return) are
+   excluded from the fingerprint, and registered secrets in the message history are
+   masked before hashing, as they are in the tool results the journal records.
+   Plain JSON tool arguments and settings are hashed exactly as before.  Everything
+   else is rendered by pydantic: the message history and the request parameters by
+   their json-mode dump, which is also what they were always hashed from, and other
+   tool arguments and settings by ``to_jsonable_python``, with bytes outside a model
+   as base64.  So a value that is not a JSON type but renders the same way on every
+   attempt -- a ``datetime`` or ``Decimal`` tool argument, a dataclass in
+   ``tool_choice`` -- still produces a usable fingerprint.
+   The ``capability_id`` of a tool from a capability without an ``id`` is left out
+   of the request parameters, since it is random per run, and so is
+   ``deferred_capability_ids`` (see ``_normalize_params``).
+
+   That rendering is hashed as it is, with two exceptions.  Both are found by
+   dumping the payload a second time in pydantic's python mode, which has the same
+   shape as the JSON rendering but keeps sets as sets and dict keys as they are, and
+   wraps an iterator instead of reading it (see ``_check_guide``).  The members of a
+   set are sorted by their JSON encoding, because a set of strings iterates in an
+   order that follows the interpreter's hash seed and every task attempt is a fresh
+   process (see ``_order_sets``).  A list is sorted only where it holds exactly the
+   members of the set found at its place, so a list that a serializer produced is
+   left as the serializer produced it; a set that cannot be found in the rendering
+   is refused if its order follows the hash seed, since the digest would not be
+   reproduced on retry.  And a payload is refused rather than hashed if it would
+   render through an iterator, since rendering consumes it, or if distinct dict keys
+   render alike, such as ``1`` and ``"1"``, since two different payloads would then
+   share a digest.  Sorting changes the digest of a set whose order was already
+   stable, such as a set of integers, so a history holding one can re-run from that
+   step once after upgrading.
+
+   Python mode cannot dump a set of models or dataclass instances, because it turns
+   them into dicts, which cannot be hashed; from pydantic 2.13 the same goes for a
+   dict keyed by one.  The message history and the request parameters are then
+   hashed from their JSON rendering alone, as they were before, with nothing sorted
+   and nothing refused anywhere in them, so a set of strings elsewhere in the same
+   history hashes in hash-seed order again.
+
+   Tool arguments are rendered from deep copies, so nothing that rendering runs -- a
+   computed field, a cached property, a serializer -- reaches the objects the tool is
+   about to receive.  An argument that cannot be copied, such as a lazily validated
+   ``Iterable``, is refused.
+
+   A request that cannot be fingerprinted fingerprints as ``None``.  The journal
+   replays such a step without verification, and only when its name matches and the
+   step before it replayed, so it is never matched against a different preceding
+   conversation (see ``DurableRun.claim``).  On the model path this is seldom
+   confined to one step, because model settings, the tool definitions and the
+   message history are usually carried into every later request, so the model steps
+   from that point on lose verification too.  A tool call is fingerprinted from its
+   name, arguments and call id alone, so it cannot stop another step from being
+   fingerprinted.
 
 
 
@@ -52,25 +100,37 @@ Module Contents
 
 .. py:data:: log
 
-.. py:function:: fingerprint_model_request(model_identifier, messages, model_settings, model_request_parameters)
+.. py:function:: fingerprint_model_request(model_identifier, messages, model_settings, model_request_parameters, *, step = None)
 
    Fingerprint a model request: model identity, message history, settings, and request parameters.
 
-   The full ``ModelRequestParameters`` object is hashed (tool definitions,
-   output mode and schema, native tools, ...) so any change to what is sent
-   to the model invalidates the cached response.
+   The ``ModelRequestParameters`` object is hashed (tool definitions, output
+   mode and schema, native tools, ...) so any change to what is sent to the
+   model invalidates the cached response; only each tool's ``capability_id`` and
+   ``deferred_capability_ids`` are left out.
 
-   Returns ``None`` when the request cannot be serialized; ``None`` compares
-   equal to ``None``, so requests that cannot be fingerprinted degrade to
-   unverified positional replay rather than disabling caching.
+   Returns ``None`` when the request cannot be fingerprinted. The journal then
+   replays the step without verification, and only right after a step that
+   replayed. Model settings, the tool definitions in the request parameters and
+   the message history are normally carried into every later request, so such a
+   value in any of them usually degrades every subsequent model step of the run
+   the same way. ``step`` is attached to the warning so the log names where it
+   began.
 
 
-.. py:function:: fingerprint_tool_call(name, tool_args, tool_call_id)
+.. py:function:: fingerprint_tool_call(name, tool_args, tool_call_id, *, step = None)
 
    Fingerprint a tool call: tool name, arguments, and the model-issued call id.
 
    ``tool_call_id`` round-trips through the model-response cache, so it is
    stable under faithful replay but regenerated whenever a live model call
    replaces a cached response -- chaining invalidation to downstream tool steps.
+
+   Only the name, arguments and call id are hashed, so neither model settings
+   nor the message history can affect a tool fingerprint. Arguments arrive as
+   live objects pydantic has already validated, and the tool has not run yet,
+   so they are rendered from copies (see ``_render``): hashing must neither order
+   a ``set`` unpredictably nor consume a lazily validated ``Iterable`` the tool
+   has not read, and must not change what the tool will see.
 
 

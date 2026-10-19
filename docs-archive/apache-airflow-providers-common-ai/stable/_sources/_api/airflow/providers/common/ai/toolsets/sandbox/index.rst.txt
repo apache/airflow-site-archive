@@ -50,12 +50,17 @@ Module Contents
    :value: 'list_directory'
 
 
-.. py:class:: SandboxToolset(backend, *, spec = None, default_command_timeout = 60.0, max_command_timeout = 300.0, max_output_lines = 2000, max_output_bytes = 50 * 1024, max_read_bytes = 5 * 1024 * 1024, tool_prefix = '')
+.. py:class:: SandboxToolset(backend, *, spec = None, default_command_timeout = 60.0, max_command_timeout = 300.0, max_output_lines = 2000, max_output_bytes = 50 * 1024, max_read_bytes = 5 * 1024 * 1024, tool_prefix = '', attach_to = None, owner = None, exports = None, export_conn_id = None, max_export_bytes = 1024 * 1024 * 1024)
 
-   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`\ [\ :py:obj:`Any`\ ]
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
 
 
    Give an agent shell and file access inside a disposable sandbox, off the Airflow worker.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
 
    Exposes four tools -- ``run_command``, ``read_file``, ``write_file`` and
    ``list_directory`` -- against a sandbox provisioned by the given
@@ -73,6 +78,27 @@ Module Contents
    within one agent run, and destroyed when that run ends. A run that never
    calls a tool never provisions one. Files persist between calls in a run;
    each ``run_command`` is a fresh shell, so shell variables do not.
+
+   **Or the sandbox is someone else's.** With ``attach_to`` set to the handle
+   another task provisioned, the toolset uses that sandbox for the run and does
+   not destroy it: the task that created it decides its environment, its network
+   policy and its lifetime, and reads out whatever the agent left behind. The
+   handle alone is not enough. The sandbox has to carry the owner the toolset
+   presents, by default the current Dag run, so a wrong handle from an upstream
+   XCom is refused rather than used, and one agent run holds a sandbox at a time.
+   ``attach_to`` is templated when the toolset is passed through
+   ``AgentOperator(toolsets=...)``, wherever it sits in that list, which is how
+   the handle travels from the provisioning task:
+   ``attach_to="{{ ti.xcom_pull('provision') }}"``.
+
+   **Files the agent builds can leave.** ``exports`` maps a path in the sandbox to
+   an object-storage destination, and when the run ends the toolset copies each
+   file there before it destroys the sandbox. The copy streams through the worker
+   in bounded pieces and never passes through the model's context or XCom, so a
+   parquet file, a chart, or a trained model is as easy to hand downstream as a
+   line of text. The destinations are templated the same way ``attach_to`` is. A
+   promised file that cannot be exported fails the task, and a failed run exports
+   nothing; a sandbox that cannot be destroyed afterwards does not fail the task.
 
    A non-zero exit or a timeout is normal tool output -- the model reads it and
    corrects itself. A recoverable sandbox failure becomes a bounded retry. Only
@@ -95,6 +121,39 @@ Module Contents
    :param tool_prefix: Prefix for the four tool names, e.g. ``"local"`` gives
        ``local_run_command``. Set this when one agent has more than one
        ``SandboxToolset``, since duplicate tool names are rejected.
+   :param attach_to: Handle of a sandbox another task provisioned, to use instead
+       of creating one. Needs a backend that can find a sandbox from another
+       process (an :class:`~airflow.providers.common.ai.sandbox.AttachableSandboxBackend`,
+       which ``ModalSandboxBackend`` is and ``SbxSandboxBackend`` is not), and
+       cannot be combined with ``spec``, since the sandbox is already provisioned.
+       The toolset never destroys an attached sandbox.
+   :param exports: Files to copy out of the sandbox when the run ends, as a
+       mapping from a path in the sandbox (relative paths resolve the way the
+       ``read_file`` tool resolves them) to an object-storage URL such as
+       ``"s3://bucket/{{ run_id }}/report.parquet"``, anything
+       :class:`~airflow.sdk.ObjectStoragePath` can open. Only a regular file is
+       exported. Cannot be combined with ``attach_to``: the task that owns an
+       attached sandbox collects its files itself.
+   :param export_conn_id: Airflow connection for the export destinations, or
+       ``None`` for the storage's default credentials. Only meaningful with
+       ``exports``.
+   :param max_export_bytes: Largest file an export will copy. Default 1 GiB.
+   :param owner: The owner the attached sandbox must carry. Defaults to the Dag
+       run the task is part of, which is what a provisioning task in the same run
+       stamps with ``SandboxSpec(owner=dag_run_owner(context))``. Set it only when
+       the sandbox was provisioned under another name, or when the toolset runs
+       outside an Airflow task. Only meaningful with ``attach_to``.
+
+
+   .. py:attribute:: agent_template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('attach_to', '_exports', '_export_conn_id')
+
+
+
+   .. py:attribute:: attach_to
+      :value: None
+
 
 
    .. py:property:: id
@@ -144,6 +203,15 @@ Module Contents
 
 
 
+   .. py:method:: __enter__()
+
+      Own the sandbox's lifetime from synchronous code, such as a task running a native agent.
+
+
+
+   .. py:method:: __exit__(*args)
+
+
    .. py:method:: get_tools(ctx)
       :async:
 
@@ -152,17 +220,15 @@ Module Contents
 
 
 
-   .. py:method:: call_tool(name, tool_args, ctx, tool)
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
       :async:
 
 
-      Call a tool with the given arguments.
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
 
-      Args:
-          name: The name of the tool to call.
-          tool_args: The arguments to pass to the tool.
-          ctx: The run context.
-          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
 
 
 

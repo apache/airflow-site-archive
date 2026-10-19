@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -730,6 +730,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">GoogleBaseAsyncHook</span><span class="p">,</span>
     <span class="n">GoogleBaseHook</span><span class="p">,</span>
     <span class="n">get_field</span><span class="p">,</span>
+    <span class="n">is_operation_in_progress_exception</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.log.logging_mixin</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoggingMixin</span>
 
@@ -753,6 +754,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="CLOUD_SQL_PROXY_VERSION_REGEX">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_sql/index.html#airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_VERSION_REGEX">[docs]</a>
 <span class="n">CLOUD_SQL_PROXY_VERSION_REGEX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"^v?(\d+\.\d+\.\d+)(-\w*.?\d?)?$"</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CloudSQLImportError">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_sql/index.html#airflow.providers.google.cloud.hooks.cloud_sql.CloudSQLImportError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CloudSQLImportError</span><span class="p">(</span><span class="n">AirflowException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Raised when importing data into a Cloud SQL instance fails."""</span></div>
 
 
 
@@ -1068,11 +1076,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
+    <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">operation_in_progress_retry</span><span class="p">()</span>
 <div class="viewcode-block" id="CloudSQLHook.export_instance">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_sql/index.html#airflow.providers.google.cloud.hooks.cloud_sql.CloudSQLHook.export_instance">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">export_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Export data from a Cloud SQL instance to a Cloud Storage bucket as a SQL dump or CSV file.</span>
+
+<span class="sd">        Cloud SQL runs one admin operation at a time per instance, so this submit can come back</span>
+<span class="sd">        409 — hence the retry decorator.</span>
 
 <span class="sd">        :param instance: Database instance ID of the Cloud SQL instance. This does not include the</span>
 <span class="sd">            project ID.</span>
@@ -1092,12 +1104,46 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">operation_name</span></div>
 
 
+    <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">operation_in_progress_retry</span><span class="p">()</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_submit_import</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Submit an import request for a Cloud SQL instance, retrying while an operation is in progress.</span>
+
+<span class="sd">        Cloud SQL runs one admin operation at a time per instance, so this submit can come back 409.</span>
+<span class="sd">        The retry covers the submit only: repeating a rejected submit is safe, repeating an accepted</span>
+<span class="sd">        one is not.</span>
+
+<span class="sd">        :param instance: Database instance ID. This does not include the project ID.</span>
+<span class="sd">        :param body: The request body, as described in</span>
+<span class="sd">            https://cloud.google.com/sql/docs/mysql/admin-api/v1beta4/instances/import#request-body</span>
+<span class="sd">        :param project_id: Project ID of the project that contains the instance.</span>
+<span class="sd">        :return: The name of the accepted import operation.</span>
+<span class="sd">        """</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">instances</span><span class="p">()</span>
+                <span class="o">.</span><span class="n">import_</span><span class="p">(</span><span class="n">project</span><span class="o">=</span><span class="n">project_id</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">instance</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>
+                <span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">num_retries</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_retries</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">response</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span>
+        <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+            <span class="c1"># The decorator retries HttpError, not CloudSQLImportError, so don't wrap the 409.</span>
+            <span class="k">if</span> <span class="n">is_operation_in_progress_exception</span><span class="p">(</span><span class="n">ex</span><span class="p">):</span>
+                <span class="k">raise</span>
+            <span class="k">raise</span> <span class="n">CloudSQLImportError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Importing instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">ex</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="o">=</span><span class="s1">'replace'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
 <div class="viewcode-block" id="CloudSQLHook.import_instance">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/hooks/cloud_sql/index.html#airflow.providers.google.cloud.hooks.cloud_sql.CloudSQLHook.import_instance">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">import_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">project_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Import data into a Cloud SQL instance from a SQL dump or CSV file in Cloud Storage.</span>
+
+<span class="sd">        The submit retries on 409 (see ``_submit_import``). The polling below stays outside that</span>
+<span class="sd">        retry: re-submitting an accepted import would load the same data twice.</span>
 
 <span class="sd">        :param instance: Database instance ID. This does not include the</span>
 <span class="sd">            project ID.</span>
@@ -1107,17 +1153,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">            to None or missing, the default project_id from the Google Cloud connection is used.</span>
 <span class="sd">        :return: None</span>
 <span class="sd">        """</span>
+        <span class="n">operation_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_submit_import</span><span class="p">(</span><span class="n">instance</span><span class="o">=</span><span class="n">instance</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">project_id</span><span class="o">=</span><span class="n">project_id</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">response</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
-                <span class="o">.</span><span class="n">instances</span><span class="p">()</span>
-                <span class="o">.</span><span class="n">import_</span><span class="p">(</span><span class="n">project</span><span class="o">=</span><span class="n">project_id</span><span class="p">,</span> <span class="n">instance</span><span class="o">=</span><span class="n">instance</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>
-                <span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">num_retries</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_retries</span><span class="p">)</span>
-            <span class="p">)</span>
-            <span class="n">operation_name</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_operation_to_complete</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="n">project_id</span><span class="p">,</span> <span class="n">operation_name</span><span class="o">=</span><span class="n">operation_name</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Importing instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">ex</span><span class="o">.</span><span class="n">content</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
+            <span class="k">raise</span> <span class="n">CloudSQLImportError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Importing instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">ex</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="o">=</span><span class="s1">'replace'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
@@ -1147,7 +1189,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">operation_name</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_wait_for_operation_to_complete</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="n">project_id</span><span class="p">,</span> <span class="n">operation_name</span><span class="o">=</span><span class="n">operation_name</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Cloning of instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">ex</span><span class="o">.</span><span class="n">content</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
+            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Cloning of instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">ex</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
     <span class="nd">@GoogleBaseHook</span><span class="o">.</span><span class="n">fallback_to_default_project_id</span>
@@ -2594,9 +2636,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

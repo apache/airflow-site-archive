@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -695,6 +695,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.neptune_analytics</span><span class="w"> </span><span class="kn">import</span> <span class="n">NeptuneAnalyticsHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.operators.neptune_analytics</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -731,6 +732,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="n">NEPTUNE_IMPORT_ROLE_ARN_KEY</span> <span class="o">=</span> <span class="s2">"NEPTUNE_IMPORT_ROLE_ARN"</span></div>
 
 
+<span class="c1"># neptune-graph uses account-id-based endpoints. The botocore version pinned by the</span>
+<span class="c1"># aiobotocore extra (installed for deferrable mode) mis-signs those endpoints, so AWS</span>
+<span class="c1"># rejects the request with "Unable to determine service/operation name to be authorized".</span>
+<span class="c1"># Forcing the standard regional endpoint keeps the test working across botocore versions.</span>
+<div class="viewcode-block" id="NEPTUNE_BOTOCORE_CONFIG">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_neptune_analytics/index.html#tests.system.amazon.aws.example_neptune_analytics.NEPTUNE_BOTOCORE_CONFIG">[docs]</a>
+<span class="n">NEPTUNE_BOTOCORE_CONFIG</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"account_id_endpoint_mode"</span><span class="p">:</span> <span class="s2">"disabled"</span><span class="p">}</span></div>
+
+
 <div class="viewcode-block" id="sys_test_context_task">
 <a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_neptune_analytics/index.html#tests.system.amazon.aws.example_neptune_analytics.sys_test_context_task">[docs]</a>
 <span class="n">sys_test_context_task</span> <span class="o">=</span> <span class="n">SystemTestContextBuilder</span><span class="p">()</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="n">NEPTUNE_IMPORT_ROLE_ARN_KEY</span><span class="p">)</span><span class="o">.</span><span class="n">build</span><span class="p">()</span></div>
@@ -756,9 +766,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="nd">@task</span><span class="p">(</span><span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">)</span>
 <div class="viewcode-block" id="delete_graph_if_exists">
 <a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_neptune_analytics/index.html#tests.system.amazon.aws.example_neptune_analytics.delete_graph_if_exists">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">delete_graph_if_exists</span><span class="p">(</span><span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">delete_graph_if_exists</span><span class="p">(</span><span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Safety net to clean up the graph in case a previous task failed."""</span>
-    <span class="n">hook</span> <span class="o">=</span> <span class="n">NeptuneAnalyticsHook</span><span class="p">()</span>
+    <span class="n">hook</span> <span class="o">=</span> <span class="n">NeptuneAnalyticsHook</span><span class="p">(</span><span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">Config</span><span class="p">(</span><span class="o">**</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">))</span>
     <span class="k">with</span> <span class="n">contextlib</span><span class="o">.</span><span class="n">suppress</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
         <span class="c1"># List graphs and find by name</span>
         <span class="n">paginator</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s2">"list_graphs"</span><span class="p">)</span>
@@ -807,6 +817,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">import_graph_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-import-graph"</span>
     <span class="n">bucket_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-neptune-analytics"</span>
     <span class="n">import_role_arn</span> <span class="o">=</span> <span class="n">test_context</span><span class="p">[</span><span class="n">NEPTUNE_IMPORT_ROLE_ARN_KEY</span><span class="p">]</span>
+    <span class="c1"># neptune-graph must be pinned to an explicit region: with account_id_endpoint_mode disabled</span>
+    <span class="c1"># botocore builds the standard regional endpoint, which it cannot resolve when region is None.</span>
     <span class="n">region</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span><span class="o">.</span><span class="n">region_name</span>
 
     <span class="c1"># --- TEST SETUP ---</span>
@@ -847,6 +859,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">deferrable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_create_graph]</span>
 
@@ -855,6 +869,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">task_id</span><span class="o">=</span><span class="s2">"create_endpoint"</span><span class="p">,</span>
         <span class="n">graph_identifier</span><span class="o">=</span><span class="s2">"{{ ti.xcom_pull(task_ids='create_graph')['graph_id']}}"</span><span class="p">,</span>
         <span class="n">wait_for_completion</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_create_private_endpoint]</span>
 
@@ -867,6 +883,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">deferrable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_delete_private_endpoint]</span>
 
@@ -882,6 +900,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">deferrable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_start_import_task]</span>
 
@@ -891,6 +911,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">import_task_id</span><span class="o">=</span><span class="s2">"{{ ti.xcom_pull(task_ids='start_import')['import_task_id']}}"</span><span class="p">,</span>
         <span class="n">wait_for_completion</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="n">aws_conn_id</span><span class="o">=</span><span class="s2">"aws_default"</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_cancel_import_task]</span>
 
@@ -903,6 +925,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">deferrable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_delete_graph]</span>
 
@@ -924,6 +948,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">deferrable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_create_graph_with_import]</span>
 
@@ -937,6 +963,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="o">=</span><span class="n">NEPTUNE_BOTOCORE_CONFIG</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># [END howto_operator_neptune_analytics_delete_import_graph]</span>
 
@@ -949,8 +977,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">force_delete</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="n">cleanup_graph</span> <span class="o">=</span> <span class="n">delete_graph_if_exists</span><span class="o">.</span><span class="n">override</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cleanup_graph"</span><span class="p">)(</span><span class="n">graph_name</span><span class="p">)</span>
-    <span class="n">cleanup_import_graph</span> <span class="o">=</span> <span class="n">delete_graph_if_exists</span><span class="o">.</span><span class="n">override</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cleanup_import_graph"</span><span class="p">)(</span><span class="n">import_graph_name</span><span class="p">)</span>
+    <span class="n">cleanup_graph</span> <span class="o">=</span> <span class="n">delete_graph_if_exists</span><span class="o">.</span><span class="n">override</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cleanup_graph"</span><span class="p">)(</span><span class="n">graph_name</span><span class="p">,</span> <span class="n">region</span><span class="p">)</span>
+    <span class="n">cleanup_import_graph</span> <span class="o">=</span> <span class="n">delete_graph_if_exists</span><span class="o">.</span><span class="n">override</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"cleanup_import_graph"</span><span class="p">)(</span>
+        <span class="n">import_graph_name</span><span class="p">,</span> <span class="n">region</span>
+    <span class="p">)</span>
 
     <span class="n">chain</span><span class="p">(</span>
         <span class="c1"># TEST SETUP</span>
@@ -1244,9 +1274,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

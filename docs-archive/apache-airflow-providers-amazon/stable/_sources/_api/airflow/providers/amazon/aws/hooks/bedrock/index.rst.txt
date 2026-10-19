@@ -133,22 +133,87 @@ Module Contents
 
 .. py:class:: BedrockAgentCoreHook(*args, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
+   Bases: :py:obj:`airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`, :py:obj:`airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
 
 
    Interact with the Amazon Bedrock AgentCore runtime plane API.
 
    Provide thin wrapper around :external+boto3:py:class:`boto3.client("bedrock-agentcore") <BedrockAgentCore.Client>`.
 
-   Additional arguments (such as ``aws_conn_id``) may be specified and
-   are passed down to the underlying AwsBaseHook.
+   Additional arguments (such as ``aws_conn_id`` and ``config``) may be specified and
+   are passed down to the underlying AwsBaseHook; the connection's ``config_kwargs`` apply
+   as they do for every other AWS hook.
+
+   With the ``common.ai`` extra installed, the hook also implements the Common AI
+   managed-agent contract, so ``hook.agent(runtime_arn)`` can be handed to a
+   ``ManagedAgentToolset``. The agent is the runtime ARN; the session is AgentCore's
+   ``runtimeSessionId``, which the service requires to be 33 to 256 characters long. A request
+   carrying a ``prompt`` is sent as ``{"prompt": ...}`` and a request carrying ``messages`` as
+   ``{"messages": [...]}``, both as ``application/json``. The container behind the runtime
+   defines its own response shape, so the answer text is taken from the first of ``output``,
+   ``result``, ``text`` or ``response`` that holds a string, or from the ``text_key`` vendor
+   option when the container's contract is known; otherwise the whole JSON body is returned as
+   text. The decoded body is always available on ``ManagedAgentResponse.raw``.
+
+   A remote invocation may have unknown effects, so the contract methods disable botocore's
+   retries unless the connection or the caller configured them, and let failures propagate to
+   Airflow's task-level retry instead. ``ManagedAgentRequest.timeout`` is honored as the botocore
+   connect and read timeout of the call; a client is built per distinct timeout and reused.
+   AgentCore has no error that means "rephrase the prompt" (a container's own errors arrive
+   inside a successful body), so the hook raises terminal errors or lets transient ones
+   propagate, never :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected`.
+
+   .. code-block:: python
+
+       from airflow.providers.amazon.aws.hooks.bedrock import BedrockAgentCoreHook
+       from airflow.providers.common.ai.toolsets import ManagedAgentToolset
+
+       claims = BedrockAgentCoreHook(aws_conn_id="aws_prod", region_name="us-east-1").agent(
+           "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/claims"
+       )
+       toolset = ManagedAgentToolset(
+           claims, tool_name="ask_claims_agent", description="...", vendor_options={"text_key": "answer"}
+       )
+
+   Two ``vendor_options`` are read by the hook itself rather than forwarded to
+   ``InvokeAgentRuntime``: ``text_key`` names the response field that holds the answer text when
+   the container's contract is known (a body without a string there is an error), and
+   ``max_response_bytes`` bounds the body read into worker memory (default 1 MiB). Every other
+   option is passed to the API call as is.
 
    .. seealso::
        - :class:`airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
+       - :class:`airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
 
 
    .. py:attribute:: client_type
       :value: 'bedrock-agentcore'
+
+
+
+   .. py:attribute:: agent_platform
+      :value: 'aws.bedrock_agentcore'
+
+
+      The ``platform`` every :class:`ManagedAgentRef` from this hook carries.
+
+
+
+   .. py:method:: resolve_agent(agent)
+
+      Normalize ``agent`` into a platform-qualified reference. Must not make a network call.
+
+
+
+   .. py:method:: get_agent_capabilities(agent)
+
+      Report what ``agent`` on this connection can do. Must not make a network call.
+
+
+
+   .. py:method:: invoke_agent(agent, request)
+
+      Send ``request`` to ``agent`` and return its answer. Blocking.
 
 
 

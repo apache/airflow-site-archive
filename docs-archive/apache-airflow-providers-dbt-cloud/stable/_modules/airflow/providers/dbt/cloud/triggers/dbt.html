@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.10.0</span>
+        <span class="version-label">Version: </span><span class="version">4.11.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -424,7 +424,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.10.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.11.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-dbt-cloud/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -481,7 +481,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.10.0</span>
+        <span class="version-label">Version: </span><span class="version">4.11.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -539,7 +539,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.10.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.11.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-dbt-cloud/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -668,6 +668,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncIterator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
@@ -691,7 +692,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        the task is considered timed out.</span>
 <span class="sd">    :param account_id: The ID of a dbt Cloud account.</span>
 <span class="sd">    :param poll_interval:  polling period in seconds to check for the status.</span>
-<span class="sd">    :param hook_params: Extra arguments passed to the DbtCloudHook constructor.</span>
+<span class="sd">    :param hook_params: Extra arguments passed to the DbtCloudHook constructor. Airflow serializes</span>
+<span class="sd">        trigger arguments to store them in the metadata database, so the trigger keeps only the</span>
+<span class="sd">        arguments whose values can be serialized to JSON. For example, the trigger drops a</span>
+<span class="sd">        ``retry_args`` value that holds tenacity objects, and the hook in the trigger then retries</span>
+<span class="sd">        according to ``retry_limit`` and ``retry_delay``.</span>
 <span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -729,10 +734,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/dbt/cloud/triggers/dbt/index.html#airflow.providers.dbt.cloud.triggers.dbt.DbtCloudRunJobTrigger.poll_interval">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span> <span class="o">=</span> <span class="n">poll_interval</span></div>
 
+        <span class="c1"># Since Airflow 3.2, the task runner serializes trigger arguments with airflow.sdk.serde instead</span>
+        <span class="c1"># of BaseSerialization. When the task defers, serde raises TypeError for a type that it has no</span>
+        <span class="c1"># serializer for, such as a tenacity object. The operator has already started the dbt Cloud job</span>
+        <span class="c1"># before the task defers. Before 3.2, BaseSerialization stores the same value as a string.</span>
 <div class="viewcode-block" id="DbtCloudRunJobTrigger.hook_params">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/dbt/cloud/triggers/dbt/index.html#airflow.providers.dbt.cloud.triggers.dbt.DbtCloudRunJobTrigger.hook_params">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span> <span class="o">=</span> <span class="n">hook_params</span> <span class="ow">or</span> <span class="p">{}</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
 
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="n">hook_params</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">"The trigger drops hook_params[</span><span class="si">%r</span><span class="s2">] because the value cannot be serialized to JSON. "</span>
+                    <span class="s2">"The DbtCloudHook in the trigger uses the default value for this argument instead."</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 
 <div class="viewcode-block" id="DbtCloudRunJobTrigger.serialize">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/dbt/cloud/triggers/dbt/index.html#airflow.providers.dbt.cloud.triggers.dbt.DbtCloudRunJobTrigger.serialize">[docs]</a>
@@ -1091,9 +1111,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=92ff7de8"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e32a37b1"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

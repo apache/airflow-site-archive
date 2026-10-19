@@ -1,0 +1,234 @@
+airflow.providers.common.ai.toolsets.sandbox
+============================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.sandbox
+
+.. autoapi-nested-parse::
+
+   Toolset giving an agent shell and file access inside an isolated sandbox, off the worker.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sandbox.log
+   airflow.providers.common.ai.toolsets.sandbox.RUN_COMMAND
+   airflow.providers.common.ai.toolsets.sandbox.READ_FILE
+   airflow.providers.common.ai.toolsets.sandbox.WRITE_FILE
+   airflow.providers.common.ai.toolsets.sandbox.LIST_DIRECTORY
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sandbox.SandboxToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: RUN_COMMAND
+   :value: 'run_command'
+
+
+.. py:data:: READ_FILE
+   :value: 'read_file'
+
+
+.. py:data:: WRITE_FILE
+   :value: 'write_file'
+
+
+.. py:data:: LIST_DIRECTORY
+   :value: 'list_directory'
+
+
+.. py:class:: SandboxToolset(backend, *, spec = None, default_command_timeout = 60.0, max_command_timeout = 300.0, max_output_lines = 2000, max_output_bytes = 50 * 1024, max_read_bytes = 5 * 1024 * 1024, tool_prefix = '', attach_to = None, owner = None, exports = None, export_conn_id = None, max_export_bytes = 1024 * 1024 * 1024)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Give an agent shell and file access inside a disposable sandbox, off the Airflow worker.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   Exposes four tools -- ``run_command``, ``read_file``, ``write_file`` and
+   ``list_directory`` -- against a sandbox provisioned by the given
+   :class:`~airflow.providers.common.ai.sandbox.SandboxBackend`. The same four
+   names and shapes are what pydantic-ai's own sandbox capabilities use, so a
+   model that has seen one already knows this one.
+
+   **What the boundary covers.** Only what these tools do runs in the sandbox.
+   The agent loop, the LLM calls, and every other toolset on the same agent
+   still run in the Airflow worker process with its credentials. This contains
+   model-written code; it does not contain the agent. See the toolsets
+   documentation for the full picture of which boundary protects what.
+
+   The sandbox is created lazily on the first tool call, shared by every call
+   within one agent run, and destroyed when that run ends. A run that never
+   calls a tool never provisions one. Files persist between calls in a run;
+   each ``run_command`` is a fresh shell, so shell variables do not.
+
+   **Or the sandbox is someone else's.** With ``attach_to`` set to the handle
+   another task provisioned, the toolset uses that sandbox for the run and does
+   not destroy it: the task that created it decides its environment, its network
+   policy and its lifetime, and reads out whatever the agent left behind. The
+   handle alone is not enough. The sandbox has to carry the owner the toolset
+   presents, by default the current Dag run, so a wrong handle from an upstream
+   XCom is refused rather than used, and one agent run holds a sandbox at a time.
+   ``attach_to`` is templated when the toolset is passed through
+   ``AgentOperator(toolsets=...)``, wherever it sits in that list, which is how
+   the handle travels from the provisioning task:
+   ``attach_to="{{ ti.xcom_pull('provision') }}"``.
+
+   **Files the agent builds can leave.** ``exports`` maps a path in the sandbox to
+   an object-storage destination, and when the run ends the toolset copies each
+   file there before it destroys the sandbox. The copy streams through the worker
+   in bounded pieces and never passes through the model's context or XCom, so a
+   parquet file, a chart, or a trained model is as easy to hand downstream as a
+   line of text. The destinations are templated the same way ``attach_to`` is. A
+   promised file that cannot be exported fails the task, and a failed run exports
+   nothing; a sandbox that cannot be destroyed afterwards does not fail the task.
+
+   A non-zero exit or a timeout is normal tool output -- the model reads it and
+   corrects itself. A recoverable sandbox failure becomes a bounded retry. Only
+   a terminal failure (credentials rejected, daemon unreachable) fails the task,
+   so Airflow's own retry handles it.
+
+   :param backend: Backend that provisions and drives the sandbox.
+   :param spec: What to provision the sandbox with -- environment variables and
+       network policy. Defaults to no environment and no egress.
+   :param default_command_timeout: Seconds allowed for a ``run_command`` call
+       when the model does not ask for one. Default ``60``.
+   :param max_command_timeout: Hard ceiling in seconds for any single command,
+       including a model-supplied ``timeout_seconds``. Default ``300``.
+   :param max_output_lines: Maximum lines retained per output stream or file
+       read. Default ``2000``.
+   :param max_output_bytes: Maximum bytes retained per output stream or file
+       read. Default 50 KiB. Whichever cap is reached first wins.
+   :param max_read_bytes: Largest file ``read_file`` will transfer. Default
+       5 MiB; larger files are refused with a hint to slice them in the shell.
+   :param tool_prefix: Prefix for the four tool names, e.g. ``"local"`` gives
+       ``local_run_command``. Set this when one agent has more than one
+       ``SandboxToolset``, since duplicate tool names are rejected.
+   :param attach_to: Handle of a sandbox another task provisioned, to use instead
+       of creating one. Needs a backend that can find a sandbox from another
+       process (an :class:`~airflow.providers.common.ai.sandbox.AttachableSandboxBackend`,
+       which ``ModalSandboxBackend`` is and ``SbxSandboxBackend`` is not), and
+       cannot be combined with ``spec``, since the sandbox is already provisioned.
+       The toolset never destroys an attached sandbox.
+   :param exports: Files to copy out of the sandbox when the run ends, as a
+       mapping from a path in the sandbox (relative paths resolve the way the
+       ``read_file`` tool resolves them) to an object-storage URL such as
+       ``"s3://bucket/{{ run_id }}/report.parquet"``, anything
+       :class:`~airflow.sdk.ObjectStoragePath` can open. Only a regular file is
+       exported. Cannot be combined with ``attach_to``: the task that owns an
+       attached sandbox collects its files itself.
+   :param export_conn_id: Airflow connection for the export destinations, or
+       ``None`` for the storage's default credentials. Only meaningful with
+       ``exports``.
+   :param max_export_bytes: Largest file an export will copy. Default 1 GiB.
+   :param owner: The owner the attached sandbox must carry. Defaults to the Dag
+       run the task is part of, which is what a provisioning task in the same run
+       stamps with ``SandboxSpec(owner=dag_run_owner(context))``. Set it only when
+       the sandbox was provisioned under another name, or when the toolset runs
+       outside an Airflow task. Only meaningful with ``attach_to``.
+
+
+   .. py:attribute:: agent_template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('attach_to', '_exports', '_export_conn_id')
+
+
+
+   .. py:attribute:: attach_to
+      :value: None
+
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: for_run(ctx)
+      :async:
+
+
+      Return the toolset to use for this agent run.
+
+      Called once per run, before `__aenter__`. Override this to return a fresh instance
+      for per-run state isolation. Default: return `self` (shared across runs).
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+      Enter the toolset context.
+
+      This is where you can set up network connections in a concrete implementation.
+
+
+
+   .. py:method:: __aexit__(*args)
+      :async:
+
+
+      Exit the toolset context.
+
+      This is where you can tear down network connections in a concrete implementation.
+
+
+
+   .. py:method:: __enter__()
+
+      Own the sandbox's lifetime from synchronous code, such as a task running a native agent.
+
+
+
+   .. py:method:: __exit__(*args)
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+

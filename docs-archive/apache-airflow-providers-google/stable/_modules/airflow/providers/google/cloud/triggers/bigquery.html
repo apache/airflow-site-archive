@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -1349,18 +1349,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                         <span class="p">}</span>
                     <span class="p">)</span>
                     <span class="k">return</span>
-                <span class="k">elif</span> <span class="p">(</span>
-                    <span class="n">first_job_response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"pending"</span>
-                    <span class="ow">or</span> <span class="n">second_job_response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"pending"</span>
+                <span class="k">elif</span> <span class="s2">"error"</span> <span class="ow">in</span> <span class="p">(</span>
+                    <span class="n">first_job_response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">],</span>
+                    <span class="n">second_job_response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">],</span>
                 <span class="p">):</span>
+                    <span class="c1"># Report the job that failed, which is not necessarily the second one.</span>
+                    <span class="n">failed_job_response</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">first_job_response_from_hook</span>
+                        <span class="k">if</span> <span class="n">first_job_response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"error"</span>
+                        <span class="k">else</span> <span class="n">second_job_response_from_hook</span>
+                    <span class="p">)</span>
+                    <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="n">failed_job_response</span><span class="p">[</span><span class="s2">"message"</span><span class="p">],</span> <span class="s2">"data"</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+                    <span class="p">)</span>
+                    <span class="k">return</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Neither job failed, and at least one is still "pending" or "running".</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Query is still running..."</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Sleeping for </span><span class="si">%s</span><span class="s2"> seconds."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
                     <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">(</span>
-                        <span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="n">second_job_response_from_hook</span><span class="p">[</span><span class="s2">"message"</span><span class="p">],</span> <span class="s2">"data"</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
-                    <span class="p">)</span>
-                    <span class="k">return</span>
 
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Exception occurred while checking for query completion"</span><span class="p">)</span>
@@ -1470,15 +1477,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">hook</span><span class="o">.</span><span class="n">value_check</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pass_value</span><span class="p">,</span> <span class="n">_records</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tolerance</span><span class="p">)</span>
                     <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">({</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"success"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"Job completed"</span><span class="p">,</span> <span class="s2">"records"</span><span class="p">:</span> <span class="n">_records</span><span class="p">})</span>
                     <span class="k">return</span>
-                <span class="k">elif</span> <span class="n">response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"pending"</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Query is still running..."</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Sleeping for </span><span class="si">%s</span><span class="s2"> seconds."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
-                    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
+                <span class="k">elif</span> <span class="n">response_from_hook</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"error"</span><span class="p">:</span>
                     <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">(</span>
                         <span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="n">response_from_hook</span><span class="p">[</span><span class="s2">"message"</span><span class="p">],</span> <span class="s2">"records"</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
                     <span class="p">)</span>
                     <span class="k">return</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># The job is still "pending" or "running".</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Query is still running..."</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Sleeping for </span><span class="si">%s</span><span class="s2"> seconds."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
+                    <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">poll_interval</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Exception occurred while checking for query completion"</span><span class="p">)</span>
             <span class="k">yield</span> <span class="n">TriggerEvent</span><span class="p">({</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)})</span></div>
@@ -2098,9 +2106,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

@@ -35,50 +35,42 @@ Module Contents
 
    Convert a pydantic-ai toolset into a list of LangChain ``StructuredTool`` objects.
 
-   Each returned tool is backed by ``toolset.call_tool`` and carries the
-   ``args_schema`` derived from the tool's JSON schema, so a LangChain agent or
-   chain can call it the same way it calls any native LangChain tool.
+   .. note::
 
-   If a tool raises pydantic-ai's :exc:`~pydantic_ai.exceptions.ModelRetry`
-   (the bundled SQL toolsets do this to ask the model to correct its input,
-   e.g. an unknown column), the bridge returns the retry message as the tool's
-   output so the model sees it and tries again. ``ModelRetry`` is a
-   feed-the-model-and-retry signal, not a failure; returning it mirrors that and
-   works regardless of how the agent handles tool errors. Raising instead would
-   abort the run under ``create_agent``'s default tool-error handling.
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
 
-   Argument validation failures are handled the same way: each tool validates
-   its arguments with the toolset's ``args_validator`` before dispatch, and a
-   :exc:`pydantic.ValidationError` from that step is fed back to the model as
-   the tool output so it can correct the call. This mirrors pydantic-ai's
-   native two-stage behaviour: only arg-validation ``ValidationError`` is
-   retried; a ``ValidationError`` raised inside ``call_tool`` (for example from
-   a Hook method or MCP client) propagates rather than being fed back, so a
-   non-idempotent tool that already ran a side effect is not re-invoked.
+   Each returned tool carries the ``args_schema`` of the toolset's tool, so a
+   LangChain agent or chain can call it the same way it calls any native LangChain
+   tool. What it returns passes through Airflow's secret masker first.
 
-   The retry message is bounded by the tool's ``max_retries``: a tool that keeps
-   raising ``ModelRetry`` (or keeps failing arg validation) stops being fed back
-   and propagates once the budget is exhausted, so the run fails instead of
-   looping forever. The count resets after a successful call.
+   A failure the model can correct reaches it as an error result, a LangChain
+   ``ToolMessage`` with ``status="error"``, so it can try again: an argument that fails
+   the toolset's validation, or a pydantic-ai :exc:`~pydantic_ai.exceptions.ModelRetry`,
+   which the bundled SQL toolsets raise to ask for a corrected query. These retries are
+   bounded by
+   the tool's ``max_retries``: once they are used up, and for any other exception the
+   tool raises, the call raises
+   :class:`~airflow.providers.common.ai.tools.ToolCallError`, so the run fails
+   instead of looping. A ``ValidationError`` raised by the tool itself also
+   propagates, since the call may already have had a side effect.
 
    The toolset's ``get_tools`` is invoked eagerly here to enumerate the tools.
 
    .. warning::
-       The bridge does not hold a toolset session open across calls. ``get_tools``
-       and every ``call_tool`` each run under their own event loop, and pydantic-ai
-       opens and tears the connection down around each one. For ``MCPToolset`` this
-       means the server is reconnected on every tool call. That is fine for
-       stateless tools (and for HTTP/SSE servers, modulo per-call latency), but a
-       stdio server, or any server that keeps state between calls, will lose that
-       state because each call starts a fresh process/session.
+       The bridge does not keep a toolset open between calls, so an ``MCPToolset``
+       reconnects to its server on every call, on the sync and async paths alike, and a
+       stdio server loses any state it keeps between calls. A ``SandboxToolset`` has to be
+       used inside its ``with`` block.
 
    .. note::
        A pydantic-ai toolset is normally driven inside an agent run, where a
        live :class:`~pydantic_ai.RunContext` carries the model, usage, and
        message history. Outside an agent run there is no such context, so this
        bridge builds a minimal one with an inert placeholder model. The curated
-       common.ai toolsets (``SQLToolset``, ``HookToolset``, ``MCPToolset``)
-       ignore the context, so this works for them. A custom toolset that reads
+       common.ai toolsets (``SQLToolset``, ``HookToolset``, ``MCPToolset``) read
+       only its retry budget, which the bridge sets, so this works for them. A
+       custom toolset that reads
        live run state (``ctx.model``, ``ctx.messages``, ``ctx.usage``) will not
        behave correctly when bridged standalone.
 

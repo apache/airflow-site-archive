@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -685,8 +685,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">posixpath</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">PurePosixPath</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">tempfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">NamedTemporaryFile</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
@@ -752,7 +754,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param keep_directory_structure: (Optional) When set to False the path of the file</span>
 <span class="sd">        on the bucket is recreated within path passed in destination_path.</span>
 <span class="sd">    :param create_intermediate_dirs: (Optional) When set to True the intermediate directories</span>
-<span class="sd">        in the specified file path will be created.</span>
+<span class="sd">        in the specified file path will be created. It also controls folder markers (objects whose</span>
+<span class="sd">        name ends with ``/``): when True, each marker is created as a directory on the SFTP server;</span>
+<span class="sd">        when False, it is skipped and left in the bucket, even if ``move_object`` is True.</span>
 <span class="sd">    :param move_object: When move object is True, the object is moved instead</span>
 <span class="sd">        of copied to the new location. This is the equivalent of a mv command</span>
 <span class="sd">        as opposed to a cp command.</span>
@@ -887,25 +891,22 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_destination_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_object</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">keep_directory_structure</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">prefix</span><span class="p">:</span>
-                <span class="n">source_object</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">source_object</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">prefix</span><span class="p">)</span>
+                <span class="n">source_object</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">source_object</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">prefix</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">source_object</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">source_object</span><span class="p">)</span>
+                <span class="n">source_object</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">source_object</span><span class="p">)</span>
         <span class="c1"># GCS object names are arbitrary UTF-8 strings controlled by whoever can</span>
         <span class="c1"># write to the source bucket, so ``..`` segments or an absolute prefix</span>
         <span class="c1"># could canonicalise outside ``destination_path`` on the SFTP server.</span>
-        <span class="c1"># Resolve the join and require it to stay within the configured base.</span>
-        <span class="n">resolved</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_path</span><span class="p">,</span> <span class="n">source_object</span><span class="p">))</span>
-        <span class="n">base</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_path</span><span class="p">)</span>
-        <span class="n">escapes</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">resolved</span> <span class="o">==</span> <span class="s2">".."</span>
-            <span class="ow">or</span> <span class="n">resolved</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">".."</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span>
-            <span class="c1"># An absolute source_object absorbed a relative base entirely.</span>
-            <span class="ow">or</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isabs</span><span class="p">(</span><span class="n">resolved</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isabs</span><span class="p">(</span><span class="n">base</span><span class="p">))</span>
-            <span class="c1"># A configured base directory must remain the prefix of the result.</span>
-            <span class="c1"># ``base == "."`` is the SFTP login directory, where any non-escaping</span>
-            <span class="c1"># relative path is already in-bounds.</span>
-            <span class="ow">or</span> <span class="p">(</span><span class="n">base</span> <span class="o">!=</span> <span class="s2">"."</span> <span class="ow">and</span> <span class="n">resolved</span> <span class="o">!=</span> <span class="n">base</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">resolved</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="p">))</span>
-        <span class="p">)</span>
+        <span class="c1"># The trusted base may contain ".." and refers to the remote server's working directory.</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_path</span><span class="p">)</span>
+        <span class="n">resolved</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">posixpath</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">source_object</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">relative_path</span> <span class="o">=</span> <span class="n">PurePosixPath</span><span class="p">(</span><span class="n">resolved</span><span class="p">)</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">escapes</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Pure paths retain ".."; an extra parent beyond a base such as ".." still escapes.</span>
+            <span class="n">escapes</span> <span class="o">=</span> <span class="s2">".."</span> <span class="ow">in</span> <span class="n">relative_path</span><span class="o">.</span><span class="n">parts</span>
         <span class="k">if</span> <span class="n">escapes</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Refusing to copy GCS object </span><span class="si">{</span><span class="n">source_object</span><span class="si">!r}</span><span class="s2">: resolved destination "</span>
@@ -921,25 +922,44 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">destination_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Copy single object."""</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">"Executing copy of gs://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
-            <span class="n">source_object</span><span class="p">,</span>
-            <span class="n">destination_path</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="c1"># ``_resolve_destination_path`` strips the trailing slash, so storing a folder marker</span>
+        <span class="c1"># would write a file at the path its children need as a directory.</span>
+        <span class="k">if</span> <span class="n">source_object</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"/"</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_intermediate_dirs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">"Skipping folder marker gs://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> because create_intermediate_dirs is False"</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
+                    <span class="n">source_object</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span>
 
-        <span class="n">dir_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">destination_path</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_intermediate_dirs</span><span class="p">:</span>
-            <span class="n">sftp_hook</span><span class="o">.</span><span class="n">create_directory</span><span class="p">(</span><span class="n">dir_path</span><span class="p">)</span>
-
-        <span class="k">with</span> <span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tmp</span><span class="p">:</span>
-            <span class="n">gcs_hook</span><span class="o">.</span><span class="n">download</span><span class="p">(</span>
-                <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
-                <span class="n">object_name</span><span class="o">=</span><span class="n">source_object</span><span class="p">,</span>
-                <span class="n">filename</span><span class="o">=</span><span class="n">tmp</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">"Creating directory </span><span class="si">%s</span><span class="s2"> for folder marker gs://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">destination_path</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
+                <span class="n">source_object</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">sftp_hook</span><span class="o">.</span><span class="n">store_file</span><span class="p">(</span><span class="n">destination_path</span><span class="p">,</span> <span class="n">tmp</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">sftp_hook</span><span class="o">.</span><span class="n">create_directory</span><span class="p">(</span><span class="n">destination_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">"Executing copy of gs://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
+                <span class="n">source_object</span><span class="p">,</span>
+                <span class="n">destination_path</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">dir_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">destination_path</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_intermediate_dirs</span><span class="p">:</span>
+                <span class="n">sftp_hook</span><span class="o">.</span><span class="n">create_directory</span><span class="p">(</span><span class="n">dir_path</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tmp</span><span class="p">:</span>
+                <span class="n">gcs_hook</span><span class="o">.</span><span class="n">download</span><span class="p">(</span>
+                    <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span>
+                    <span class="n">object_name</span><span class="o">=</span><span class="n">source_object</span><span class="p">,</span>
+                    <span class="n">filename</span><span class="o">=</span><span class="n">tmp</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">sftp_hook</span><span class="o">.</span><span class="n">store_file</span><span class="p">(</span><span class="n">destination_path</span><span class="p">,</span> <span class="n">tmp</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">move_object</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Executing delete of gs://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">,</span> <span class="n">source_object</span><span class="p">)</span>
@@ -1236,9 +1256,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

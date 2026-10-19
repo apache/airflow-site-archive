@@ -58,12 +58,17 @@ Module Contents
 
 .. py:data:: EgressEnforcement
 
-.. py:class:: ModalSandboxBackend(*, image = DEFAULT_IMAGE, app_name = DEFAULT_APP_NAME, create_app_if_missing = True, sandbox_timeout = DEFAULT_SANDBOX_TIMEOUT, idle_timeout = DEFAULT_IDLE_TIMEOUT, workdir = DEFAULT_WORKDIR, cpu = None, memory = None, gpu = None, region = None, cloud = None, tags = None, egress_enforcement = 'strict')
+.. py:class:: ModalSandboxBackend(*, modal_conn_id = ModalHook.default_conn_name, image = DEFAULT_IMAGE, app_name = DEFAULT_APP_NAME, create_app_if_missing = True, sandbox_timeout = DEFAULT_SANDBOX_TIMEOUT, idle_timeout = DEFAULT_IDLE_TIMEOUT, workdir = DEFAULT_WORKDIR, cpu = None, memory = None, gpu = None, region = None, cloud = None, tags = None, egress_enforcement = 'strict')
 
-   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.AttachableSandboxBackend`
 
 
    Sandbox backend that runs agent commands in a `Modal <https://modal.com>`__ sandbox.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
 
    Each sandbox is a gVisor-isolated container in Modal's infrastructure, provisioned
    over the API. Nothing has to be installed on the Airflow worker and model-written
@@ -77,11 +82,20 @@ Module Contents
    tags are fixed when the backend is constructed, which is Dag-parse time, so they can
    identify the Dag but not the run, task or map index that leaked one.
 
-   **Credentials are ambient.** Modal is authenticated the same way its CLI is: run
-   ``modal token new`` once to write ``~/.modal.toml``, or set ``MODAL_TOKEN_ID`` and
-   ``MODAL_TOKEN_SECRET`` in the worker environment. Nothing is read until the first
-   sandbox is created, so a Dag file that constructs this backend parses without
-   credentials present.
+   **A sandbox can outlive the task that created it and be attached to later.** A
+   ``@task`` that calls :meth:`create` holds the returned id and stays in charge of
+   :meth:`destroy`; a ``SandboxToolset`` with ``attach_to=<id>`` uses that sandbox for
+   its run and leaves it running. The rules are those of
+   :class:`~airflow.providers.common.ai.sandbox.AttachableSandboxBackend`, kept in Modal
+   tags; keys starting with ``airflow_`` are reserved for them and overwrite any
+   ``tags`` of the same name.
+
+   **Credentials come from a** ``modal`` **connection**, resolved by
+   :class:`~airflow.providers.modal.hooks.modal.ModalHook` in the order the
+   :ref:`Modal connection page <howto/connection:modal>` sets out; without a
+   ``modal_default`` connection that is the worker's own Modal credentials. Nothing is
+   read until the first sandbox is created or attached to, so a Dag file that constructs
+   this backend parses without the connection or any credentials present.
 
    **What the network policy can and cannot promise.** ``SandboxSpec(block_network=True)``
    maps to Modal's own ``block_network``, which drops all outbound traffic including DNS.
@@ -116,6 +130,9 @@ Module Contents
    :meth:`read_file`, which deliberately stays on the base class's shell implementation
    (see that method). Any Debian or Ubuntu based image, including ``python:*-slim``, does.
 
+   :param modal_conn_id: The ``modal`` connection to authenticate with. Default
+       ``"modal_default"``. ``None`` uses the worker's Modal credentials without looking
+       for a connection.
    :param image: Registry tag for the sandbox image, or a prepared ``modal.Image``.
        Default ``"python:3.12-slim"``. An image carrying the packages an agent needs is
        the alternative to opening egress so it can install them:
@@ -154,8 +171,8 @@ Module Contents
    :param tags: Extra Modal tags to set on every sandbox, e.g. ``{"dag_id": "my_dag"}``.
        You can query them, which is the point: ``modal.Sandbox.list(app_id=..., tags={"dag_id":
        "my_dag"})`` returns exactly the sandboxes carrying them, which is how an operator
-       finds what a Dag left behind. ``airflow_sandbox`` is set by this backend and will
-       overwrite a key of that name.
+       finds what a Dag left behind. Keys starting with ``airflow_`` are set by this
+       backend and overwrite a tag of the same name.
    :param egress_enforcement: ``"strict"`` (default) refuses a ``SandboxSpec`` that
        names ``allow_egress_to``, because Modal cannot enforce a hostname allowlist
        below TLS. ``"sni"`` accepts it and applies Modal's SNI-matched allowlist, with
@@ -191,6 +208,40 @@ Module Contents
       ``create`` is not something it can work around; the toolset re-raises one
       as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
       attempts the provisioning again.
+
+
+
+   .. py:method:: read_tags(sandbox)
+
+      Return the tags on a sandbox.
+
+      Raise :class:`SandboxTerminalError` if the sandbox does not exist or has
+      ended: attaching to it can never succeed.
+
+
+
+   .. py:method:: write_tags(sandbox, tags)
+
+      Replace the sandbox's tags with ``tags``.
+
+
+
+   .. py:method:: attach(sandbox, *, owner, holder)
+
+      Claim ``sandbox`` for ``holder`` and report what the creator recorded about it.
+
+      Raises :class:`SandboxTerminalError` if the sandbox is not owned by ``owner``
+      or is held by someone else; either is a fact about the Dag that no retry of
+      the agent task can change.
+
+
+
+   .. py:method:: release(sandbox, *, holder)
+
+      Give up ``holder``'s claim on ``sandbox`` so another run may attach.
+
+      Idempotent, and never destroys anything: the sandbox belongs to the task
+      that created it. A claim held by someone else is left alone.
 
 
 

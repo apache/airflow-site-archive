@@ -64,7 +64,7 @@ Module Contents
 
 .. py:class:: AgentEngineHook(gcp_conn_id = 'google_cloud_default', impersonation_chain = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.google.common.hooks.base_google.GoogleBaseHook`
+   Bases: :py:obj:`airflow.providers.google.common.hooks.base_google.GoogleBaseHook`, :py:obj:`airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
 
 
    Hook for Google Cloud Vertex AI Agent Engine APIs.
@@ -72,6 +72,63 @@ Module Contents
    Wraps the ``agent_engines`` module of the Vertex AI SDK client and the
    Reasoning Engine Execution Service GAPIC client:
    https://docs.cloud.google.com/python/docs/reference/agentplatform/latest/vertexai._genai.agent_engines.AgentEngines
+
+   With the ``common.ai`` extra installed, the hook also implements the Common AI
+   managed-agent contract over the synchronous query path, so ``hook.agent(resource_name)``
+   can be handed to a ``ManagedAgentToolset``. The agent is the engine's full resource name,
+   ``projects/P/locations/L/reasoningEngines/ID``, so a single hook on one connection reaches
+   engines in several projects and regions. A request carrying a ``prompt`` is sent as
+   ``{input_key: prompt}`` to ``class_method`` (``query`` and ``input`` by default; both can be
+   set per request in ``vendor_options``, alongside ``retry`` and ``metadata``); a request
+   carrying ``messages`` is sent as ``{"messages": [...]}``. When the engine returns a mapping
+   with a string ``output``, that is the answer text; any other output is returned as JSON text
+   and kept on ``ManagedAgentResponse.structured``. The wire type is a protobuf ``Value``, so
+   integers come back as floats and an absent, null or empty output all read as an empty string.
+
+   Agent Engine reports an author-side mistake, such as an unknown ``class_method`` or an
+   input under the wrong key, as ``INVALID_ARGUMENT``. That is a configuration error, not
+   something a model rephrase could fix, so it is terminal here; the hook never raises
+   :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected`. The query path keeps
+   no conversation state, so a request with a ``session_id`` is refused rather than silently
+   sent as a fresh call. Query *jobs* remain the domain of
+   :class:`~airflow.providers.google.cloud.operators.vertex_ai.agent_engine.RunQueryJobOperator`,
+   which can defer.
+
+   .. code-block:: python
+
+       from airflow.providers.common.ai.toolsets import ManagedAgentToolset
+       from airflow.providers.google.cloud.hooks.vertex_ai.agent_engine import AgentEngineHook
+
+       analyst = AgentEngineHook(gcp_conn_id="google_cloud_default").agent(
+           "projects/my-project/locations/us-central1/reasoningEngines/1234567890"
+       )
+       toolset = ManagedAgentToolset(analyst, tool_name="ask_analyst", description="...")
+
+
+   .. py:attribute:: agent_platform
+      :value: 'gcp.vertex_agent_engine'
+
+
+      The ``platform`` every :class:`ManagedAgentRef` from this hook carries.
+
+
+
+   .. py:method:: resolve_agent(agent)
+
+      Normalize ``agent`` into a platform-qualified reference. Must not make a network call.
+
+
+
+   .. py:method:: get_agent_capabilities(agent)
+
+      Report what ``agent`` on this connection can do. Must not make a network call.
+
+
+
+   .. py:method:: invoke_agent(agent, request)
+
+      Send ``request`` to ``agent`` and return its answer. Blocking.
+
 
 
    .. py:method:: get_agent_engine_client(project_id, location)

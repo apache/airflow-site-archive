@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -879,6 +879,50 @@ the aiobotocore module to be installed.</p>
 </div>
 </div>
 </section>
+<section id="start-an-emr-serverless-interactive-session">
+<span id="howto-operator-emrserverlessstartsessionoperator"></span><h3>Start an EMR Serverless interactive session<a class="headerlink" href="#start-an-emr-serverless-interactive-session" title="Link to this heading">¶</a></h3>
+<p>To start an EMR Serverless interactive session that a Spark Connect client can attach to, use
+<a class="reference internal" href="../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator" title="airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmrServerlessStartSessionOperator</span></code></a>.
+Set <code class="docutils literal notranslate"><span class="pre">deferrable=True</span></code> to release the worker slot while the session warms up.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Interactive sessions require Amazon EMR release <code class="docutils literal notranslate"><span class="pre">emr-7.13.0</span></code> or later, and the session APIs
+are only available in <code class="docutils literal notranslate"><span class="pre">botocore&gt;=1.43.0</span></code>. Deferrable mode additionally needs
+<code class="docutils literal notranslate"><span class="pre">aiobotocore&gt;=3.6.0</span></code>, the first release whose <code class="docutils literal notranslate"><span class="pre">botocore</span></code> pin allows 1.43.0. The Amazon
+provider keeps a lower minimum for these libraries, so install compatible versions to use
+interactive sessions; the operator raises a clear error at runtime if the installed
+<code class="docutils literal notranslate"><span class="pre">botocore</span></code> is too old.</p>
+</div>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/amazon/aws/example_emr_serverless_session.py</span><a class="example-header-button viewcode-button reference internal" href="../../_modules/tests/system/amazon/aws/example_emr_serverless_session.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">start_session</span> <span class="o">=</span> <span class="n">EmrServerlessStartSessionOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"start_session"</span><span class="p">,</span>
+    <span class="n">application_id</span><span class="o">=</span><span class="n">application_id</span><span class="p">,</span>
+    <span class="n">execution_role_arn</span><span class="o">=</span><span class="n">role_arn</span><span class="p">,</span>
+    <span class="n">idle_timeout_minutes</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="get-an-interactive-session-endpoint">
+<span id="howto-operator-emrserverlessgetsessionendpointoperator"></span><h3>Get an interactive session endpoint<a class="headerlink" href="#get-an-interactive-session-endpoint" title="Link to this heading">¶</a></h3>
+<p>To resolve the Spark Connect endpoint and a short-lived auth token for a running session, use
+<a class="reference internal" href="../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator" title="airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">EmrServerlessGetSessionEndpointOperator</span></code></a>.
+The token expires (about one hour), so run this immediately before connecting. The token is only
+redacted from this task’s logs: downstream tasks that read it from XCom must mask it themselves,
+and anyone who can read the task’s XCom can use it until it expires.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/amazon/aws/example_emr_serverless_session.py</span><a class="example-header-button viewcode-button reference internal" href="../../_modules/tests/system/amazon/aws/example_emr_serverless_session.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">get_endpoint</span> <span class="o">=</span> <span class="n">EmrServerlessGetSessionEndpointOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"get_endpoint"</span><span class="p">,</span>
+    <span class="n">application_id</span><span class="o">=</span><span class="n">application_id</span><span class="p">,</span>
+    <span class="n">session_id</span><span class="o">=</span><span class="n">session_id</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</section>
 </section>
 <section id="reference">
 <h2>Reference<a class="headerlink" href="#reference" title="Link to this heading">¶</a></h2>
@@ -980,6 +1024,8 @@ the aiobotocore module to be installed.</p>
 <li><a class="reference internal" href="#sensors">Sensors</a><ul>
 <li><a class="reference internal" href="#wait-on-an-emr-serverless-job-state">Wait on an EMR Serverless Job state</a></li>
 <li><a class="reference internal" href="#wait-on-an-emr-serverless-application-state">Wait on an EMR Serverless Application state</a></li>
+<li><a class="reference internal" href="#start-an-emr-serverless-interactive-session">Start an EMR Serverless interactive session</a></li>
+<li><a class="reference internal" href="#get-an-interactive-session-endpoint">Get an interactive session endpoint</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#reference">Reference</a></li>
@@ -1202,9 +1248,9 @@ the aiobotocore module to be installed.</p>
     <script src="../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../_static/js/globaltoc.js?v=32f50df6"></script>

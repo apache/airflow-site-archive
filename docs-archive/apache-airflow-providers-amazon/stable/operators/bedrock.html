@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -853,6 +853,40 @@ through <code class="docutils literal notranslate"><span class="pre">botocore_co
 </pre></div>
 </div>
 </div>
+</section>
+<section id="consult-an-amazon-bedrock-agentcore-runtime-from-a-common-ai-agent">
+<span id="howto-hook-bedrockagentcorehook-managed-agent"></span><h3>Consult an Amazon Bedrock AgentCore Runtime from a Common AI agent<a class="headerlink" href="#consult-an-amazon-bedrock-agentcore-runtime-from-a-common-ai-agent" title="Link to this heading">¶</a></h3>
+<p>To let an agent running under Common AI’s <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> consult an AgentCore Runtime as one
+of its tools, use
+<a class="reference internal" href="../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook" title="airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook"><code class="xref py py-class docutils literal notranslate"><span class="pre">BedrockAgentCoreHook</span></code></a>.
+It implements the Common AI managed-agent contract, so <code class="docutils literal notranslate"><span class="pre">hook.agent(runtime_arn)</span></code> can be passed
+to a <code class="docutils literal notranslate"><span class="pre">ManagedAgentToolset</span></code> or combined with agents on other clouds in a
+<code class="docutils literal notranslate"><span class="pre">FailoverManagedAgentClient</span></code>. The hook needs the <code class="docutils literal notranslate"><span class="pre">common.ai</span></code> extra of this provider, which
+installs <code class="docutils literal notranslate"><span class="pre">apache-airflow-providers-common-ai</span></code> and therefore requires Airflow 3.</p>
+<p>The agent is the runtime ARN and the session is AgentCore’s <code class="docutils literal notranslate"><span class="pre">runtimeSessionId</span></code>, which the
+service requires to be 33 to 256 characters long. A prompt is
+sent as <code class="docutils literal notranslate"><span class="pre">{&quot;prompt&quot;:</span> <span class="pre">...}</span></code> in an <code class="docutils literal notranslate"><span class="pre">application/json</span></code> payload; the container behind the
+runtime defines the response shape, so pass <code class="docutils literal notranslate"><span class="pre">text_key</span></code> in <code class="docutils literal notranslate"><span class="pre">vendor_options</span></code> when you know which
+field holds the answer. The hook disables botocore retries unless the connection or caller configured them,
+because an invocation’s effects are unknown, and raises a terminal error for non-JSON responses
+or bodies over the size limit rather than returning something misleading.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.bedrock</span><span class="w"> </span><span class="kn">import</span> <span class="n">BedrockAgentCoreHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">ManagedAgentToolset</span>
+
+<span class="n">claims</span> <span class="o">=</span> <span class="n">BedrockAgentCoreHook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="s2">"aws_default"</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s2">"us-east-1"</span><span class="p">)</span><span class="o">.</span><span class="n">agent</span><span class="p">(</span>
+    <span class="s2">"arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/claims"</span>
+<span class="p">)</span>
+<span class="n">toolset</span> <span class="o">=</span> <span class="n">ManagedAgentToolset</span><span class="p">(</span>
+    <span class="n">claims</span><span class="p">,</span>
+    <span class="n">tool_name</span><span class="o">=</span><span class="s2">"ask_claims_agent"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"Reviews an insurance claim and returns a coverage determination."</span><span class="p">,</span>
+    <span class="n">vendor_options</span><span class="o">=</span><span class="p">{</span><span class="s2">"text_key"</span><span class="p">:</span> <span class="s2">"determination"</span><span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>For long-running invocations run as a pipeline step in their own right, use
+<a class="reference internal" href="../_api/airflow/providers/amazon/aws/operators/bedrock/index.html#airflow.providers.amazon.aws.operators.bedrock.BedrockInvokeAgentRuntimeOperator" title="airflow.providers.amazon.aws.operators.bedrock.BedrockInvokeAgentRuntimeOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">BedrockInvokeAgentRuntimeOperator</span></code></a>
+instead; a toolset call blocks a worker thread for the duration of the call.</p>
 </section>
 <section id="delete-an-amazon-bedrock-agentcore-runtime">
 <span id="howto-operator-bedrockdeleteagentruntimeoperator"></span><h3>Delete an Amazon Bedrock AgentCore Runtime<a class="headerlink" href="#delete-an-amazon-bedrock-agentcore-runtime" title="Link to this heading">¶</a></h3>
@@ -1401,6 +1435,7 @@ the service confirms that the job is in the queue, use TargetState.SCHEDULED.</p
 <li><a class="reference internal" href="#invoke-an-existing-amazon-bedrock-model">Invoke an existing Amazon Bedrock Model</a></li>
 <li><a class="reference internal" href="#create-an-amazon-bedrock-agentcore-runtime">Create an Amazon Bedrock AgentCore Runtime</a></li>
 <li><a class="reference internal" href="#invoke-an-amazon-bedrock-agentcore-runtime">Invoke an Amazon Bedrock AgentCore Runtime</a></li>
+<li><a class="reference internal" href="#consult-an-amazon-bedrock-agentcore-runtime-from-a-common-ai-agent">Consult an Amazon Bedrock AgentCore Runtime from a Common AI agent</a></li>
 <li><a class="reference internal" href="#delete-an-amazon-bedrock-agentcore-runtime">Delete an Amazon Bedrock AgentCore Runtime</a></li>
 <li><a class="reference internal" href="#customize-an-existing-amazon-bedrock-model">Customize an existing Amazon Bedrock Model</a></li>
 <li><a class="reference internal" href="#provision-throughput-for-an-existing-amazon-bedrock-model">Provision Throughput for an existing Amazon Bedrock Model</a></li>
@@ -1649,9 +1684,9 @@ the service confirms that the job is in the queue, use TargetState.SCHEDULED.</p
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../_static/copybutton.js?v=f281be69"></script>
         <script src="../_static/js/globaltoc.js?v=32f50df6"></script>

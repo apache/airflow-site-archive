@@ -1,0 +1,96 @@
+airflow.providers.common.ai.durable.strands
+===========================================
+
+.. py:module:: airflow.providers.common.ai.durable.strands
+
+.. autoapi-nested-parse::
+
+   Resume a `Strands Agents <https://strandsagents.com/>`__ agent where it stopped when Airflow retries its task.
+
+   .. note:: Experimental, as Strands' checkpointing is; see :mod:`strands.experimental.checkpoint`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.strands.AgentFactory
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.strands.invoke_durably
+
+
+Module Contents
+---------------
+
+.. py:class:: AgentFactory
+
+   Bases: :py:obj:`Protocol`
+
+
+   Builds the agent :func:`invoke_durably` runs, wiring in the two arguments it is called with.
+
+   ``functools.partial(Agent, model=model, tools=[...])`` is one.
+
+
+   .. py:method:: __call__(*, session_manager, checkpointing)
+
+
+.. py:function:: invoke_durably(agent_factory, prompt, *, session_id = None, storage = None)
+
+   Run a Strands agent so that a retry of the task resumes it from its last checkpoint.
+
+   Call it inside a task. The agent is built with Strands' ``checkpointing=True`` and a
+   ``SnapshotSessionManager``, so it pauses at every boundary of a cycle that calls tools:
+   once the model has asked for tools, and once they have run. At each pause the
+   conversation is saved, together with where the agent paused, before the agent carries
+   on. When the task fails and Airflow retries it, the agent is rebuilt from the last
+   pause, so the model calls and tool calls of the cycles before it do not run again.
+   Once the agent stops for any other reason, such as its final answer, an interrupt or
+   a cancellation, what was saved is deleted, so clearing the task later starts the
+   agent over. :ref:`howto/frameworks:strands-durable` describes what a retry runs again.
+
+   Pass a function that builds the agent, such as ``functools.partial(Agent, ...)``:
+
+   .. code-block:: python
+
+       from functools import partial
+
+       from strands import Agent
+
+       from airflow.providers.common.ai.durable.strands import invoke_durably
+       from airflow.providers.common.ai.tools.strands import AirflowTools
+       from airflow.sdk import task
+
+
+       @task(retries=3)
+       def research(question: str) -> str:
+           agent = partial(Agent, model=model, plugins=[AirflowTools(warehouse)])
+           return str(invoke_durably(agent, question))
+
+   :param agent_factory: Builds the agent, given the ``session_manager`` and
+       ``checkpointing`` arguments to pass to ``Agent``. It is called once per try, or
+       twice when the saved state is from a different prompt.
+   :param prompt: The prompt for the agent; ignored when resuming.
+   :param session_id: Names the agent's saved state. Defaults to an id derived from the
+       task instance (Dag id, run id, task id and map index), the same on every try. Pass
+       a distinct one for each agent when a task runs more than one; it must stay the same
+       across tries, and when ``storage`` is shared across Dag runs it must differ between
+       them.
+   :param storage: Where the agent's state is saved. Defaults to the task instance's task
+       state store, on Airflow 3.3 and later; on older versions pass a Strands storage such
+       as ``S3Storage``.
+   :return: The result of the agent's last invocation. Its metrics cover every invocation
+       of this try, one per resume in ``metrics.agent_invocations``, and none of the
+       earlier tries.
+   :raises ValueError: If the agent's model keeps the conversation server-side
+       (``model.stateful``), since Strands drops a restored conversation for it.
+
+

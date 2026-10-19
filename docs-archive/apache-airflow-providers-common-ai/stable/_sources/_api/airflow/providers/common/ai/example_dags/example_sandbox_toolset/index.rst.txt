@@ -7,7 +7,7 @@ airflow.providers.common.ai.example_dags.example_sandbox_toolset
 
    Example Dags for ``SandboxToolset``.
 
-   Three shapes, each a job a data team actually runs:
+   Five shapes, each a job a data team actually runs:
 
    1. An agent investigates a revenue anomaly. It queries the warehouse through a
       ``SQLToolset`` (the credential stays in the task, the model only sees rows) and
@@ -18,8 +18,14 @@ airflow.providers.common.ai.example_dags.example_sandbox_toolset
       which is how the same Dag moves from a laptop to production.
    3. A plain ``@task`` drives a backend directly to convert a file the Dag already
       knows how to convert. No model is involved. This is the shape for producing an
-      artifact today, because a file inside an agent's sandbox can only leave through
-      the model's context.
+      artifact when the Dag knows the job.
+   4. A ``@task`` provisions the sandbox, an agent attaches to it, and another
+      ``@task`` reads the report the agent wrote and destroys the sandbox. The task
+      that creates the sandbox decides what goes in, in ordinary Python at run time,
+      and a file the agent built comes out without crossing the model's context.
+   5. An agent writes a file and the toolset exports it to object storage when the
+      run ends, for a downstream task to load. No task has to own the sandbox, so
+      this is the shorter shape whenever the file is all that must come out.
 
 
 
@@ -34,6 +40,7 @@ Attributes
    airflow.providers.common.ai.example_dags.example_sandbox_toolset.VENDOR_SAMPLE
    airflow.providers.common.ai.example_dags.example_sandbox_toolset.MIB
    airflow.providers.common.ai.example_dags.example_sandbox_toolset.CONVERT_SCRIPT
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.STAGING_URI
 
 
 Classes
@@ -52,6 +59,8 @@ Functions
 
    airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_agent_local
    airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_task_artifact
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_attach
+   airflow.providers.common.ai.example_dags.example_sandbox_toolset.example_sandbox_agent_export
 
 
 Module Contents
@@ -171,9 +180,29 @@ Module Contents
    Convert a CSV to parquet inside a sandbox and land the result in object storage.
 
    No agent is involved. The Dag knows exactly what to run, so a model would add
-   nothing, and a file produced inside an *agent's* sandbox could only come back
-   through the model's context, which is text-only and capped. Driving the
-   backend from a task has neither limit: the bytes move through the worker, and
-   the caller owns the sandbox's lifetime.
+   nothing. Driving the backend from a task also gives the caller the sandbox's
+   whole lifetime: it puts the input in, runs the conversion, and reads the result
+   out, with the bytes moving through the worker. When an agent has to produce the
+   file instead, see example 5.
+
+
+.. py:function:: example_sandbox_attach()
+
+   An agent writes a report file inside a sandbox a task created, and a task reads it out.
+
+   The toolset's own sandbox is provisioned on the first tool call from a spec fixed
+   in the Dag file, and destroyed when the run ends. Here the sandbox belongs to the
+   Dag instead: ``provision`` creates it at run time, so anything it needs can come
+   from a connection or object storage, ``analyse`` attaches to it, and ``collect``
+   reads the file the agent wrote after the run has ended, then destroys it.
+
+
+.. py:data:: STAGING_URI
+   :value: 'file:///tmp/airflow-sandbox-example/{{ run_id }}/staging.csv'
+
+
+.. py:function:: example_sandbox_agent_export()
+
+   Have an agent normalize a vendor file, export the result, and load it downstream.
 
 

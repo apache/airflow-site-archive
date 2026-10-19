@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -684,15 +684,19 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">google.auth.transport.requests</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">asgiref.sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">sync_to_async</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">InvalidArgument</span><span class="p">,</span> <span class="n">NotFound</span><span class="p">,</span> <span class="n">PermissionDenied</span><span class="p">,</span> <span class="n">Unauthenticated</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.aiplatform_v1</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReasoningEngineExecutionServiceClient</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.aiplatform_v1.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">QueryReasoningEngineResponse</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">vertexai</span><span class="w"> </span><span class="kn">import</span> <span class="n">Client</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.consts</span><span class="w"> </span><span class="kn">import</span> <span class="n">CLIENT_INFO</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.hooks.base_google</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">PROVIDE_PROJECT_ID</span><span class="p">,</span>
@@ -702,8 +706,41 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">google.api_core.retry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Retry</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.aiplatform_v1.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">QueryReasoningEngineResponse</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">vertexai._genai</span><span class="w"> </span><span class="kn">import</span> <span class="n">types</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ManagedAgentInvocationError</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.managed_agents.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">BaseManagedAgentHook</span><span class="p">,</span>
+        <span class="n">ManagedAgentCapabilities</span><span class="p">,</span>
+        <span class="n">ManagedAgentRef</span><span class="p">,</span>
+        <span class="n">ManagedAgentRequest</span><span class="p">,</span>
+        <span class="n">ManagedAgentResponse</span><span class="p">,</span>
+    <span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ManagedAgentInvocationError</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.managed_agents.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">BaseManagedAgentHook</span><span class="p">,</span>
+            <span class="n">ManagedAgentCapabilities</span><span class="p">,</span>
+            <span class="n">ManagedAgentRef</span><span class="p">,</span>
+            <span class="n">ManagedAgentResponse</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="c1"># The Common AI provider is optional. This module still imports without it, and every</span>
+        <span class="c1"># managed-agent entry point on AgentEngineHook then says what is missing.</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_needs_common_ai</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
+                <span class="s2">"Consulting an Agent Engine as a managed agent needs the 'common.ai' extra of the "</span>
+                <span class="s2">"google provider: pip install 'apache-airflow-providers-google[common.ai]'."</span>
+            <span class="p">)</span>
+
+        <span class="k">class</span><span class="w"> </span><span class="nc">BaseManagedAgentHook</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">"""Stand-in for the Common AI contract base; ``agent()`` names the missing extra."""</span>
+
+            <span class="n">agent</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
+
+        <span class="n">ManagedAgentCapabilities</span> <span class="o">=</span> <span class="n">ManagedAgentRef</span> <span class="o">=</span> <span class="n">ManagedAgentResponse</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
+        <span class="n">ManagedAgentInvocationError</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
 
 
 <div class="viewcode-block" id="VERTEX_AI_AGENT_ENGINE_API_VERSION">
@@ -746,16 +783,67 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
 
 
+<span class="c1"># ``vendor_options`` of a managed-agent request. ``class_method`` and ``input_key`` shape the</span>
+<span class="c1"># request; ``retry`` and ``metadata`` reach ``query_reasoning_engine``, which accepts exactly those.</span>
+<span class="n">_AGENT_OPTIONS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"class_method"</span><span class="p">,</span> <span class="s2">"input_key"</span><span class="p">,</span> <span class="s2">"retry"</span><span class="p">,</span> <span class="s2">"metadata"</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_agent_output_text</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">output</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"output"</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">[</span><span class="s2">"output"</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="AgentEngineHook">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">AgentEngineHook</span><span class="p">(</span><span class="n">GoogleBaseHook</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AgentEngineHook</span><span class="p">(</span><span class="n">GoogleBaseHook</span><span class="p">,</span> <span class="n">BaseManagedAgentHook</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Hook for Google Cloud Vertex AI Agent Engine APIs.</span>
 
 <span class="sd">    Wraps the ``agent_engines`` module of the Vertex AI SDK client and the</span>
 <span class="sd">    Reasoning Engine Execution Service GAPIC client:</span>
 <span class="sd">    https://docs.cloud.google.com/python/docs/reference/agentplatform/latest/vertexai._genai.agent_engines.AgentEngines</span>
+
+<span class="sd">    With the ``common.ai`` extra installed, the hook also implements the Common AI</span>
+<span class="sd">    managed-agent contract over the synchronous query path, so ``hook.agent(resource_name)``</span>
+<span class="sd">    can be handed to a ``ManagedAgentToolset``. The agent is the engine's full resource name,</span>
+<span class="sd">    ``projects/P/locations/L/reasoningEngines/ID``, so a single hook on one connection reaches</span>
+<span class="sd">    engines in several projects and regions. A request carrying a ``prompt`` is sent as</span>
+<span class="sd">    ``{input_key: prompt}`` to ``class_method`` (``query`` and ``input`` by default; both can be</span>
+<span class="sd">    set per request in ``vendor_options``, alongside ``retry`` and ``metadata``); a request</span>
+<span class="sd">    carrying ``messages`` is sent as ``{"messages": [...]}``. When the engine returns a mapping</span>
+<span class="sd">    with a string ``output``, that is the answer text; any other output is returned as JSON text</span>
+<span class="sd">    and kept on ``ManagedAgentResponse.structured``. The wire type is a protobuf ``Value``, so</span>
+<span class="sd">    integers come back as floats and an absent, null or empty output all read as an empty string.</span>
+
+<span class="sd">    Agent Engine reports an author-side mistake, such as an unknown ``class_method`` or an</span>
+<span class="sd">    input under the wrong key, as ``INVALID_ARGUMENT``. That is a configuration error, not</span>
+<span class="sd">    something a model rephrase could fix, so it is terminal here; the hook never raises</span>
+<span class="sd">    :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected`. The query path keeps</span>
+<span class="sd">    no conversation state, so a request with a ``session_id`` is refused rather than silently</span>
+<span class="sd">    sent as a fresh call. Query *jobs* remain the domain of</span>
+<span class="sd">    :class:`~airflow.providers.google.cloud.operators.vertex_ai.agent_engine.RunQueryJobOperator`,</span>
+<span class="sd">    which can defer.</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        from airflow.providers.common.ai.toolsets import ManagedAgentToolset</span>
+<span class="sd">        from airflow.providers.google.cloud.hooks.vertex_ai.agent_engine import AgentEngineHook</span>
+
+<span class="sd">        analyst = AgentEngineHook(gcp_conn_id="google_cloud_default").agent(</span>
+<span class="sd">            "projects/my-project/locations/us-central1/reasoningEngines/1234567890"</span>
+<span class="sd">        )</span>
+<span class="sd">        toolset = ManagedAgentToolset(analyst, tool_name="ask_analyst", description="...")</span>
 <span class="sd">    """</span>
+
+<div class="viewcode-block" id="AgentEngineHook.agent_platform">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook.agent_platform">[docs]</a>
+    <span class="n">agent_platform</span> <span class="o">=</span> <span class="s2">"gcp.vertex_agent_engine"</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -768,6 +856,85 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
             <span class="n">impersonation_chain</span><span class="o">=</span><span class="n">impersonation_chain</span><span class="p">,</span>
             <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="c1"># One execution client per location for managed-agent calls: a GAPIC client opens its gRPC</span>
+        <span class="c1"># channel in __init__, and a model may consult the same agent several times in one run.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_agent_clients</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ReasoningEngineExecutionServiceClient</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">ReasoningEngineExecutionServiceClient</span><span class="o">.</span><span class="n">parse_reasoning_engine_path</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span>
+        <span class="c1"># The SDK parser is non-greedy, so a child resource such as an operation name still matches.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">parts</span> <span class="ow">or</span> <span class="s2">"/"</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">[</span><span class="s2">"reasoning_engine"</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"An Agent Engine agent is its full resource name projects/P/locations/L/reasoningEngines/ID, "</span>
+                <span class="sa">f</span><span class="s2">"got </span><span class="si">{</span><span class="n">agent</span><span class="si">!r}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="s2">"project"</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="s2">"location"</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="s2">"reasoning_engine"</span><span class="p">]</span>
+
+<div class="viewcode-block" id="AgentEngineHook.resolve_agent">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook.resolve_agent">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentRef</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parse_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ManagedAgentRef</span><span class="p">(</span><span class="n">platform</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">agent_platform</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">agent</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AgentEngineHook.get_agent_capabilities">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook.get_agent_capabilities">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_agent_capabilities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentCapabilities</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ManagedAgentCapabilities</span><span class="p">(</span><span class="n">structured_output</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AgentEngineHook.invoke_agent">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook.invoke_agent">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invoke_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">ManagedAgentRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentResponse</span><span class="p">:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">session_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"Agent Engine's query path keeps no conversation state; session_id is not supported."</span>
+            <span class="p">)</span>
+        <span class="n">unknown</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">vendor_options</span><span class="p">)</span> <span class="o">-</span> <span class="n">_AGENT_OPTIONS</span>
+        <span class="k">if</span> <span class="n">unknown</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"vendor_options </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">unknown</span><span class="p">)</span><span class="si">}</span><span class="s2"> are not accepted; an Agent Engine request takes "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_AGENT_OPTIONS</span><span class="p">)</span><span class="si">}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">vendor_options</span><span class="p">)</span>
+        <span class="n">class_method</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"class_method"</span><span class="p">,</span> <span class="s2">"query"</span><span class="p">)</span>
+        <span class="n">input_key</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"input_key"</span><span class="p">,</span> <span class="s2">"input"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">class_method</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"vendor_options['class_method'] and vendor_options['input_key'] must be strings."</span>
+            <span class="p">)</span>
+        <span class="n">input_data</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">{</span><span class="n">input_key</span><span class="p">:</span> <span class="n">request</span><span class="o">.</span><span class="n">prompt</span><span class="p">}</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">prompt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"messages"</span><span class="p">:</span> <span class="n">request</span><span class="o">.</span><span class="n">as_messages</span><span class="p">()}</span>
+        <span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_agent_clients</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">location</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_agent_clients</span><span class="p">[</span><span class="n">location</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_reasoning_engine_execution_service_client</span><span class="p">(</span>
+                <span class="n">location</span>
+            <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">query_reasoning_engine</span><span class="p">(</span>
+                <span class="n">request</span><span class="o">=</span><span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="n">agent</span><span class="p">,</span> <span class="s2">"class_method"</span><span class="p">:</span> <span class="n">class_method</span><span class="p">,</span> <span class="s2">"input"</span><span class="p">:</span> <span class="n">input_data</span><span class="p">},</span>
+                <span class="n">retry</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"retry"</span><span class="p">),</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                <span class="n">metadata</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"metadata"</span><span class="p">,</span> <span class="p">()),</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">InvalidArgument</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Agent Engine </span><span class="si">{</span><span class="n">agent</span><span class="si">}</span><span class="s2"> rejected the request (class_method=</span><span class="si">{</span><span class="n">class_method</span><span class="si">!r}</span><span class="s2">, "</span>
+                <span class="sa">f</span><span class="s2">"input_key=</span><span class="si">{</span><span class="n">input_key</span><span class="si">!r}</span><span class="s2">): </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">NotFound</span><span class="p">,</span> <span class="n">PermissionDenied</span><span class="p">,</span> <span class="n">Unauthenticated</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Agent Engine </span><span class="si">{</span><span class="n">agent</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">QueryReasoningEngineResponse</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"output"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ManagedAgentResponse</span><span class="p">(</span>
+            <span class="n">text</span><span class="o">=</span><span class="n">_agent_output_text</span><span class="p">(</span><span class="n">output</span><span class="p">),</span>
+            <span class="n">raw</span><span class="o">=</span><span class="n">raw</span><span class="p">,</span>
+            <span class="n">structured</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">output</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
 
 <div class="viewcode-block" id="AgentEngineHook.get_agent_engine_client">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/google/cloud/hooks/vertex_ai/agent_engine/index.html#airflow.providers.google.cloud.hooks.vertex_ai.agent_engine.AgentEngineHook.get_agent_engine_client">[docs]</a>
@@ -1427,9 +1594,9 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

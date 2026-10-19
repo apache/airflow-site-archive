@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.6.0</span>
+        <span class="version-label">Version: </span><span class="version">22.7.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -685,6 +685,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
@@ -695,6 +696,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pendulum</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tenacity</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.common.hooks.base_google</span><span class="w"> </span><span class="kn">import</span> <span class="n">PROVIDE_PROJECT_ID</span>
 
@@ -1951,6 +1953,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="c1"># Get storage client once (storage.Client is thread-safe for concurrent requests).</span>
             <span class="n">client</span> <span class="o">=</span> <span class="n">source_hook</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
 
+            <span class="c1"># A transient ``GoogleCloudError`` retries the whole download. ``reraise`` keeps the</span>
+            <span class="c1"># original error after the last attempt, for the ``download_continue_on_fail``</span>
+            <span class="c1"># handling below. The waits (2, 4, 8 s, ...) match ``GCSHook.download``.</span>
+            <span class="nd">@tenacity</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">stop</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">stop_after_attempt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">download_num_attempts</span><span class="p">),</span>
+                <span class="n">wait</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">wait_exponential</span><span class="p">(</span><span class="n">multiplier</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">60</span><span class="p">),</span>
+                <span class="n">retry</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">retry_if_exception_type</span><span class="p">(</span><span class="n">GoogleCloudError</span><span class="p">),</span>
+                <span class="n">before_sleep</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">before_sleep_log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">),</span>
+                <span class="n">reraise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">def</span><span class="w"> </span><span class="nf">_download</span><span class="p">(</span><span class="n">blob_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 
                 <span class="n">bucket</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">source_bucket</span><span class="p">)</span>
@@ -2031,6 +2043,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="c1"># Get storage client once (storage.Client is thread-safe for concurrent requests).</span>
             <span class="n">client</span> <span class="o">=</span> <span class="n">destination_hook</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
 
+            <span class="c1"># Same retry policy as the downloads, for ``upload_num_attempts``.</span>
+            <span class="nd">@tenacity</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">stop</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">stop_after_attempt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">upload_num_attempts</span><span class="p">),</span>
+                <span class="n">wait</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">wait_exponential</span><span class="p">(</span><span class="n">multiplier</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="nb">max</span><span class="o">=</span><span class="mi">60</span><span class="p">),</span>
+                <span class="n">retry</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">retry_if_exception_type</span><span class="p">(</span><span class="n">GoogleCloudError</span><span class="p">),</span>
+                <span class="n">before_sleep</span><span class="o">=</span><span class="n">tenacity</span><span class="o">.</span><span class="n">before_sleep_log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">),</span>
+                <span class="n">reraise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">def</span><span class="w"> </span><span class="nf">_upload</span><span class="p">(</span><span class="n">upload_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
 
                 <span class="n">bucket</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">destination_bucket</span><span class="p">)</span>
@@ -2043,9 +2063,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
                 <span class="n">blob</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">blob</span><span class="p">(</span><span class="n">blob_name</span><span class="o">=</span><span class="n">upload_file_name</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">)</span>
 
-                <span class="n">blob</span><span class="o">.</span><span class="n">upload_from_filename</span><span class="p">(</span>
-                    <span class="n">filename</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">upload_file</span><span class="p">),</span>
-                <span class="p">)</span>
+                <span class="n">blob</span><span class="o">.</span><span class="n">upload_from_filename</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">upload_file</span><span class="p">))</span>
 
                 <span class="k">return</span> <span class="n">upload_file_name</span>
 
@@ -2584,9 +2602,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97f0f051"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=e625ba08"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

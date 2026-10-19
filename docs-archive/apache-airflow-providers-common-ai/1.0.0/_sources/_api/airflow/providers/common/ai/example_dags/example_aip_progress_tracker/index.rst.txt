@@ -1,0 +1,431 @@
+airflow.providers.common.ai.example_dags.example_aip_progress_tracker
+=====================================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_aip_progress_tracker
+
+.. autoapi-nested-parse::
+
+   AIP progress tracker -- two approaches to the same problem with common.ai.
+
+   This file contains **two DAGs** that solve the same use case -- tracking
+   Airflow Improvement Proposal implementation progress -- using different
+   architectural patterns. Comparing them illustrates the tradeoff between
+   deterministic control and agent autonomy.
+
+   ``example_aip_progress_tracker`` (pipeline approach):
+
+   .. code-block:: text
+
+       fetch_aip_list  (@task)  ─┐
+                                  ├─> gather_aip_evidence  (@task, mapped ×N AIPs)
+       fetch_repo_tree (@task)  ─┘    → format_analysis_prompt (@task, mapped ×N)
+                                      → analyze_aip           (LLMOperator, mapped ×N)
+                                      → collect_analyses      (@task)
+                                      → format_report         (@task)
+                                      → synthesize_report     (LLMOperator, UsageLimits)
+                                      → validate_report       (LLMOperator, hallucination check)
+                                      → apply_validation      (@task, deterministic corrections)
+                                      → build_review_body     (@task)
+                                      → review_report         (ApprovalOperator)
+
+   The pipeline gathers evidence deterministically, then uses LLMs only for
+   analysis and synthesis -- with a three-layer quality pipeline (structured
+   output → AI validation → arithmetic correction) to prevent hallucination.
+
+   ``example_aip_progress_tracker_skills`` (skills approach):
+
+   .. code-block:: text
+
+       track_aip_progress  (AgentOperator + AgentSkillsToolset)
+           → review_report (ApprovalOperator)
+
+   The agent loads the ``aip-tracker`` skill (an `agentskills.io
+   <https://agentskills.io>`__ ``SKILL.md`` bundle) which teaches it how to
+   assess AIP progress. Custom tools give it access to Confluence and GitHub
+   APIs. The agent decides its own evidence-gathering strategy -- simpler DAG,
+   but less control over accuracy.
+
+   **When to use which:**
+
+   * **Pipeline** when accuracy is critical and you want full auditability of
+     every evidence source and LLM judgment.
+   * **Agent** when you want a quick assessment and trust the model to follow
+     skill instructions, or when the problem is too open-ended for a fixed
+     pipeline.
+
+   Before running either DAG:
+
+   1. Create an LLM connection named ``pydanticai_default`` (or the value of
+      ``LLM_CONN_ID``) for your chosen model provider.
+   2. Optionally set a ``GITHUB_TOKEN`` environment variable for higher API
+      rate limits (unauthenticated: 10 req/min; authenticated: 5,000 req/hr).
+   3. Trigger the DAG with the default ``aip_numbers`` param or edit it to
+      choose which AIPs to investigate.
+   4. The agent DAG requires the ``skills`` extra:
+      ``pip install "apache-airflow-providers-common-ai[skills]"``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.LLM_CONN_ID
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.CONFLUENCE_BASE_URL
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.GITHUB_REPO
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.GITHUB_API_DELAY
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.DEFAULT_AIP_NUMBERS
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.AIP_REGISTRY
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.ANALYSIS_SYSTEM_PROMPT
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.SYNTHESIS_SYSTEM_PROMPT
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.VALIDATION_SYSTEM_PROMPT
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.SKILLS_DIR
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.AGENT_SYSTEM_PROMPT
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.DeliverableStatus
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.AIPStatus
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.ClaimValidation
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.ValidationResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.example_aip_progress_tracker
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.fetch_confluence_page
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.search_github_prs
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.get_repo_file_tree
+   airflow.providers.common.ai.example_dags.example_aip_progress_tracker.example_aip_progress_tracker_skills
+
+
+Module Contents
+---------------
+
+.. py:data:: LLM_CONN_ID
+   :value: 'pydanticai_default'
+
+
+.. py:data:: CONFLUENCE_BASE_URL
+   :value: 'https://cwiki.apache.org/confluence'
+
+
+.. py:data:: GITHUB_REPO
+   :value: 'apache/airflow'
+
+
+.. py:data:: GITHUB_API_DELAY
+   :value: 7
+
+
+.. py:data:: DEFAULT_AIP_NUMBERS
+   :value: '76,99,103,105,108'
+
+
+.. py:data:: AIP_REGISTRY
+   :type:  dict[int, dict]
+
+.. py:class:: DeliverableStatus(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Status of a single deliverable from the AIP spec.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: status
+      :type:  Literal['shipped', 'in_progress', 'not_started', 'beyond_spec', 'unclear']
+
+
+   .. py:attribute:: evidence
+      :type:  str
+
+
+   .. py:attribute:: confidence
+      :type:  Literal['high', 'medium', 'low']
+
+
+.. py:class:: AIPStatus(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Per-AIP analysis produced by the LLM.
+
+
+   .. py:attribute:: aip_number
+      :type:  int
+
+
+   .. py:attribute:: title
+      :type:  str
+
+
+   .. py:attribute:: spec_summary
+      :type:  str
+
+
+   .. py:attribute:: deliverables
+      :type:  list[DeliverableStatus]
+
+
+   .. py:attribute:: shipped_count
+      :type:  int
+
+
+   .. py:attribute:: total_count
+      :type:  int
+
+
+   .. py:attribute:: key_prs
+      :type:  list[str]
+
+
+   .. py:attribute:: confluence_update_needed
+      :type:  bool
+
+
+   .. py:attribute:: notes
+      :type:  str
+
+
+.. py:class:: ClaimValidation(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   A single claim from the report checked against evidence.
+
+
+   .. py:attribute:: claim
+      :type:  str
+
+
+   .. py:attribute:: grounded
+      :type:  bool
+
+
+   .. py:attribute:: evidence_found
+      :type:  str
+
+
+   .. py:attribute:: correction
+      :type:  str
+
+
+.. py:class:: ValidationResult(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Result of the AI hallucination validation step.
+
+
+   .. py:attribute:: overall_verdict
+      :type:  Literal['pass', 'pass_with_warnings', 'fail']
+
+
+   .. py:attribute:: ungrounded_claims
+      :type:  list[ClaimValidation]
+
+
+   .. py:attribute:: hallucination_risk
+      :type:  Literal['low', 'medium', 'high']
+
+
+.. py:data:: ANALYSIS_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an Airflow project analyst assessing AIP implementation progress.
+      
+      DELIVERABLE EXTRACTION:
+      Extract deliverables from the specification's own structure. Use these sources in priority order:
+      1. Numbered completion criteria (e.g. "Definition of Done", "Completion Criteria") -- each numbered item is one deliverable.
+      2. Phase definitions -- each bullet or item under a phase heading is one deliverable.
+      3. Explicitly enumerated components (classes, operators, API endpoints, CLI commands, UI features) listed in the spec.
+      Do NOT split a single spec item into multiple deliverables. Do NOT merge multiple spec items into one. Use the spec's own granularity.
+      
+      ASSESSMENT RULES:
+      1. For each deliverable, you MUST cite specific evidence (a PR number, commit message, or file path from the provided data). If no evidence exists, set status to "not_started" or "unclear" and confidence to "low".
+      2. Do NOT guess completion percentages. Instead, count shipped vs total deliverables. shipped_count and total_count must match the deliverables list.
+      3. Do NOT invent blockers. Use the notes field for genuine uncertainties only.
+      4. If codebase evidence shows shipped work NOT mentioned in the spec, add those as deliverables with status "beyond_spec" and set confluence_update_needed to true.
+      5. PR numbers must come from the Pull Requests section of the input. Do not invent PR numbers."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:data:: SYNTHESIS_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an Airflow release coordinator. Given individual AIP status assessments, produce a concise cross-AIP progress report.
+      
+      RULES:
+      1. Use ONLY the data from the individual assessments. Do not add information not present in the inputs.
+      2. Always write progress as "X/Y deliverables shipped" (e.g. "8/14 shipped"). NEVER convert to percentages. Do not write "57%" or "90%" or any other percentage. The fraction form is the only acceptable format.
+      3. Identify AIPs where confluence_update_needed is true.
+      4. Flag deliverables with confidence="low" as needing manual verification.
+      5. Do NOT characterize AIPs as "near completion" or "minimal blockers" unless the evidence explicitly supports that. Use the fraction (e.g. "9/10 shipped, 1 in progress") and let the reader draw conclusions.
+      6. Keep the report actionable and under 500 words."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:data:: VALIDATION_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are a fact-checker for an AIP progress report. You receive two inputs:
+      1. A synthesized cross-AIP progress report
+      2. The raw per-AIP evidence that the report was derived from
+      
+      Your ONLY job is to verify claims. A separate downstream step applies your corrections, so each correction must be a self-contained replacement string that can be substituted for the original claim text.
+      
+      RULES:
+      1. Any deliverable status, PR number, shipped count, or recommendation in the report must have a corresponding entry in the raw evidence.
+      2. If a claim has no supporting evidence, set grounded=false and provide a correction. The "claim" field must contain the EXACT text from the report (so it can be found by string search). The "correction" field must contain the replacement text, or "REMOVE" if the claim should be deleted entirely.
+      3. Flag invented blockers, fabricated statistics, and PR numbers not in the evidence.
+      4. Flag any percentages (e.g. "57%", "90%") as ungrounded. Progress must be expressed as fractions ("8/14 shipped"), never as percentages.
+      5. Flag vague characterizations ("near completion", "minimal blockers", "requires foundational work") that editorialize beyond the evidence. Provide a factual replacement using data from the evidence.
+      6. Set overall_verdict to "fail" if any high-confidence claims are ungrounded, "pass_with_warnings" if only low-confidence claims are flagged, "pass" if all claims are grounded."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: example_aip_progress_tracker()
+
+   Track AIP progress by analyzing Confluence specs against GitHub evidence.
+
+   Task graph::
+
+       fetch_aip_list  ─┐
+                         ├─> gather_aip_evidence   (@task ×N, Dynamic Task Mapping)
+       fetch_repo_tree ─┘    → format_analysis_prompt (@task ×N)
+                             → analyze_aip            (LLMOperator ×N, structured output)
+                             → collect_analyses       (@task)
+                             → format_report          (@task)
+                             → synthesize_report      (LLMOperator, with UsageLimits)
+                             → validate_report        (LLMOperator, hallucination check)
+                             → apply_validation       (@task, deterministic corrections)
+                             → build_review_body      (@task)
+                             → review_report          (ApprovalOperator)
+
+
+.. py:data:: SKILLS_DIR
+   :value: ''
+
+
+.. py:function:: fetch_confluence_page(page_id)
+
+   Fetch an AIP specification page from the Apache Confluence wiki.
+
+   Args:
+       page_id: The Confluence page ID (e.g. "311626969" for AIP-76).
+
+   Returns:
+       The page title, last-modified date, and body content (HTML).
+       Returns an error message if the page cannot be fetched.
+
+
+.. py:function:: search_github_prs(query)
+
+   Search GitHub for pull requests and commits related to an AIP.
+
+   Call this with the AIP number (e.g. "AIP-76") and also with topic
+   keywords (e.g. "asset partition") to find commits not tagged with
+   the AIP number.
+
+   Args:
+       query: Search query (e.g. "AIP-76" or "asset partition PartitionMapper").
+
+   Returns:
+       A list of matching PRs and commits with titles, numbers, and status.
+
+
+.. py:function:: get_repo_file_tree(path_prefix)
+
+   List files in the Apache Airflow repository under a given path.
+
+   Args:
+       path_prefix: Directory path to list (e.g. "providers/common/ai/src/airflow/providers/common/ai/operators").
+
+   Returns:
+       A list of file paths under the given prefix, with counts of source
+       and test files.
+
+
+.. py:data:: AGENT_SYSTEM_PROMPT
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an Airflow project analyst assessing AIP implementation progress.
+      
+      You have access to an aip-tracker skill that provides detailed assessment methodology. Load it first and follow its instructions precisely.
+      
+      HARD RULES (these override any conflicting tendency):
+      1. Gather evidence from ALL three sources (Confluence spec, GitHub search, file tree) for every AIP before writing any assessment.
+      2. Extract deliverables from the spec's own structure -- completion criteria, phase definitions, or enumerated components. Do NOT split a single spec item into multiple deliverables (e.g. individual files within one component). Do NOT merge multiple spec items into one. Match the spec's granularity.
+      3. Always express progress as "X/Y deliverables shipped". NEVER convert to percentages. Do not write "73%" or "72%" or any percentage.
+      4. Every deliverable must cite evidence from tool results. If no evidence exists, mark it "not_started" or "unclear" -- do not guess.
+      5. Do NOT invent blockers, risks, or characterizations beyond the evidence. Do NOT editorialize with phrases like "near completion", "Advanced maturity", or "substantially implemented". State the fraction and let the reader judge.
+      6. PR numbers must come from search_github_prs results. Never fabricate them.
+      7. Before returning the report, run the self-verification checklist in the skill. Fix any violations before returning."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: example_aip_progress_tracker_skills()
+
+   Skills-based AIP tracker using AgentSkillsToolset.
+
+   Same use case as ``example_aip_progress_tracker`` but solved with a
+   single ``AgentOperator`` that loads the ``aip-tracker`` skill and
+   decides its own evidence-gathering strategy.
+
+

@@ -24,6 +24,14 @@ Attributes
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_VALID_DATABASE_TYPES
 
 
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.google.cloud.hooks.cloud_sql.CloudSQLImportError
+
+
 Classes
 -------
 
@@ -48,6 +56,14 @@ Module Contents
 
 
 .. py:data:: CLOUD_SQL_PROXY_VERSION_REGEX
+
+.. py:exception:: CloudSQLImportError
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.AirflowException`
+
+
+   Raised when importing data into a Cloud SQL instance fails.
+
 
 .. py:class:: CloudSqlOperationStatus
 
@@ -232,6 +248,9 @@ Module Contents
 
       Export data from a Cloud SQL instance to a Cloud Storage bucket as a SQL dump or CSV file.
 
+      Cloud SQL runs one admin operation at a time per instance, so this submit can come back
+      409 — hence the retry decorator.
+
       :param instance: Database instance ID of the Cloud SQL instance. This does not include the
           project ID.
       :param body: The request body, as described in
@@ -245,6 +264,9 @@ Module Contents
    .. py:method:: import_instance(instance, body, project_id)
 
       Import data into a Cloud SQL instance from a SQL dump or CSV file in Cloud Storage.
+
+      The submit retries on 409 (see ``_submit_import``). The polling below stays outside that
+      retry: re-submitting an accepted import would load the same data twice.
 
       :param instance: Database instance ID. This does not include the
           project ID.

@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -703,6 +703,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">packaging.version</span><span class="w"> </span><span class="kn">import</span> <span class="n">Version</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.s3</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3Hook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.transfer</span><span class="w"> </span><span class="kn">import</span> <span class="n">strip_overlapping_folder_markers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseOperator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.hooks.gcs</span><span class="w"> </span><span class="kn">import</span> <span class="n">GCSHook</span>
 
@@ -891,29 +892,6 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">file_path</span>
 
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_strip_overlapping_folder_markers</span><span class="p">(</span><span class="n">keys</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Drop trailing-slash keys that are strict prefixes of other listed keys.</span>
-
-<span class="sd">        Treated as directory markers. A lone trailing-slash key with no overlap</span>
-<span class="sd">        (e.g. ``lonely/``) is preserved, and a non-slash key that happens to be a</span>
-<span class="sd">        strict prefix of another (e.g. ``abc`` of ``abcdef``) is also preserved.</span>
-<span class="sd">        Returns ``(kept, dropped)``.</span>
-<span class="sd">        """</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">keys</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">[],</span> <span class="p">[]</span>
-        <span class="n">ordered</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">keys</span><span class="p">))</span>
-        <span class="n">kept</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">dropped</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">current</span><span class="p">,</span> <span class="n">nxt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">ordered</span><span class="p">,</span> <span class="n">ordered</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
-            <span class="k">if</span> <span class="n">current</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">nxt</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">current</span><span class="p">):</span>
-                <span class="n">dropped</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">kept</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current</span><span class="p">)</span>
-        <span class="n">kept</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ordered</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-        <span class="k">return</span> <span class="n">kept</span><span class="p">,</span> <span class="n">dropped</span>
-
 <div class="viewcode-block" id="GCSToS3Operator.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/transfers/gcs_to_s3/index.html#airflow.providers.amazon.aws.transfers.gcs_to_s3.GCSToS3Operator.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
@@ -939,7 +917,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="n">gcs_files</span> <span class="o">=</span> <span class="n">gcs_hook</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="o">**</span><span class="n">list_kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
 
-        <span class="n">gcs_files</span><span class="p">,</span> <span class="n">dropped_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_strip_overlapping_folder_markers</span><span class="p">(</span><span class="n">gcs_files</span><span class="p">)</span>
+        <span class="n">gcs_files</span><span class="p">,</span> <span class="n">dropped_keys</span> <span class="o">=</span> <span class="n">strip_overlapping_folder_markers</span><span class="p">(</span><span class="n">gcs_files</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_structure</span><span class="p">:</span>
             <span class="c1"># A kept marker like lonely/ has no basename, so flattening would hit the destination prefix.</span>
             <span class="n">dropped_keys</span> <span class="o">+=</span> <span class="p">[</span><span class="n">file</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">gcs_files</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform_file_path</span><span class="p">(</span><span class="n">file</span><span class="p">)]</span>
@@ -1289,9 +1267,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

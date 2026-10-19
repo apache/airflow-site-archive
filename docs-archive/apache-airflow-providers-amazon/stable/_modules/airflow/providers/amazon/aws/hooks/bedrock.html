@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -693,7 +693,74 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">closing</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientError</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsBaseHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ManagedAgentInvocationError</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.managed_agents.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">BaseManagedAgentHook</span><span class="p">,</span>
+        <span class="n">ManagedAgentCapabilities</span><span class="p">,</span>
+        <span class="n">ManagedAgentRef</span><span class="p">,</span>
+        <span class="n">ManagedAgentRequest</span><span class="p">,</span>
+        <span class="n">ManagedAgentResponse</span><span class="p">,</span>
+    <span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ManagedAgentInvocationError</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.managed_agents.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">BaseManagedAgentHook</span><span class="p">,</span>
+            <span class="n">ManagedAgentCapabilities</span><span class="p">,</span>
+            <span class="n">ManagedAgentRef</span><span class="p">,</span>
+            <span class="n">ManagedAgentResponse</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="c1"># The Common AI provider is optional. This module still imports without it, and every</span>
+        <span class="c1"># managed-agent entry point on BedrockAgentCoreHook then says what is missing.</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_needs_common_ai</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span>
+                <span class="s2">"Consulting an AgentCore runtime as a managed agent needs the 'common.ai' extra of the "</span>
+                <span class="s2">"amazon provider: pip install 'apache-airflow-providers-amazon[common.ai]'."</span>
+            <span class="p">)</span>
+
+        <span class="k">class</span><span class="w"> </span><span class="nc">BaseManagedAgentHook</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">"""Stand-in for the Common AI contract base; ``agent()`` names the missing extra."""</span>
+
+            <span class="n">agent</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
+
+        <span class="n">ManagedAgentCapabilities</span> <span class="o">=</span> <span class="n">ManagedAgentRef</span> <span class="o">=</span> <span class="n">ManagedAgentResponse</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
+        <span class="n">ManagedAgentInvocationError</span> <span class="o">=</span> <span class="n">_needs_common_ai</span>
+
+<span class="c1"># Fields the managed-agent contract already covers. Letting ``vendor_options`` carry them would</span>
+<span class="c1"># let a caller re-target the call, which is a change of authority, not an option.</span>
+<span class="n">_RESERVED_OPTIONS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">"agentRuntimeArn"</span><span class="p">,</span> <span class="s2">"payload"</span><span class="p">,</span> <span class="s2">"contentType"</span><span class="p">,</span> <span class="s2">"accept"</span><span class="p">,</span> <span class="s2">"runtimeSessionId"</span><span class="p">,</span> <span class="s2">"accountId"</span><span class="p">,</span> <span class="s2">"mcpSessionId"</span><span class="p">}</span>
+<span class="p">)</span>
+<span class="c1"># Error codes InvokeAgentRuntime can return that no retry or rephrase will fix. The container's own</span>
+<span class="c1"># errors come back inside a 200 body, so AgentCore has no error that means "rephrase the prompt".</span>
+<span class="n">_TERMINAL_ERROR_CODES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">"ValidationException"</span><span class="p">,</span>
+        <span class="s2">"ResourceNotFoundException"</span><span class="p">,</span>
+        <span class="s2">"AccessDeniedException"</span><span class="p">,</span>
+        <span class="s2">"ServiceQuotaExceededException"</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="c1"># Do not retry an invocation whose effects are unknown; Airflow's task-level retry is the right layer.</span>
+<span class="n">_NO_RETRIES</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">retries</span><span class="o">=</span><span class="p">{</span><span class="s2">"total_max_attempts"</span><span class="p">:</span> <span class="mi">1</span><span class="p">})</span>
+<span class="c1"># The service model's bounds for runtimeSessionId. botocore rejects a shorter value client-side with a</span>
+<span class="c1"># ParamValidationError, which is not a ClientError and would otherwise escape the error classes.</span>
+<span class="n">_SESSION_ID_LENGTH</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">33</span><span class="p">,</span> <span class="mi">257</span><span class="p">)</span>
+<span class="n">_MAX_RESPONSE_BYTES</span> <span class="o">=</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span>
+<span class="n">_TEXT_KEYS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"output"</span><span class="p">,</span> <span class="s2">"result"</span><span class="p">,</span> <span class="s2">"text"</span><span class="p">,</span> <span class="s2">"response"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="BedrockHook">
@@ -840,27 +907,195 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="BedrockAgentCoreHook">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">BedrockAgentCoreHook</span><span class="p">(</span><span class="n">AwsBaseHook</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">BedrockAgentCoreHook</span><span class="p">(</span><span class="n">AwsBaseHook</span><span class="p">,</span> <span class="n">BaseManagedAgentHook</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Interact with the Amazon Bedrock AgentCore runtime plane API.</span>
 
 <span class="sd">    Provide thin wrapper around :external+boto3:py:class:`boto3.client("bedrock-agentcore") &lt;BedrockAgentCore.Client&gt;`.</span>
 
-<span class="sd">    Additional arguments (such as ``aws_conn_id``) may be specified and</span>
-<span class="sd">    are passed down to the underlying AwsBaseHook.</span>
+<span class="sd">    Additional arguments (such as ``aws_conn_id`` and ``config``) may be specified and</span>
+<span class="sd">    are passed down to the underlying AwsBaseHook; the connection's ``config_kwargs`` apply</span>
+<span class="sd">    as they do for every other AWS hook.</span>
+
+<span class="sd">    With the ``common.ai`` extra installed, the hook also implements the Common AI</span>
+<span class="sd">    managed-agent contract, so ``hook.agent(runtime_arn)`` can be handed to a</span>
+<span class="sd">    ``ManagedAgentToolset``. The agent is the runtime ARN; the session is AgentCore's</span>
+<span class="sd">    ``runtimeSessionId``, which the service requires to be 33 to 256 characters long. A request</span>
+<span class="sd">    carrying a ``prompt`` is sent as ``{"prompt": ...}`` and a request carrying ``messages`` as</span>
+<span class="sd">    ``{"messages": [...]}``, both as ``application/json``. The container behind the runtime</span>
+<span class="sd">    defines its own response shape, so the answer text is taken from the first of ``output``,</span>
+<span class="sd">    ``result``, ``text`` or ``response`` that holds a string, or from the ``text_key`` vendor</span>
+<span class="sd">    option when the container's contract is known; otherwise the whole JSON body is returned as</span>
+<span class="sd">    text. The decoded body is always available on ``ManagedAgentResponse.raw``.</span>
+
+<span class="sd">    A remote invocation may have unknown effects, so the contract methods disable botocore's</span>
+<span class="sd">    retries unless the connection or the caller configured them, and let failures propagate to</span>
+<span class="sd">    Airflow's task-level retry instead. ``ManagedAgentRequest.timeout`` is honored as the botocore</span>
+<span class="sd">    connect and read timeout of the call; a client is built per distinct timeout and reused.</span>
+<span class="sd">    AgentCore has no error that means "rephrase the prompt" (a container's own errors arrive</span>
+<span class="sd">    inside a successful body), so the hook raises terminal errors or lets transient ones</span>
+<span class="sd">    propagate, never :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected`.</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        from airflow.providers.amazon.aws.hooks.bedrock import BedrockAgentCoreHook</span>
+<span class="sd">        from airflow.providers.common.ai.toolsets import ManagedAgentToolset</span>
+
+<span class="sd">        claims = BedrockAgentCoreHook(aws_conn_id="aws_prod", region_name="us-east-1").agent(</span>
+<span class="sd">            "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/claims"</span>
+<span class="sd">        )</span>
+<span class="sd">        toolset = ManagedAgentToolset(</span>
+<span class="sd">            claims, tool_name="ask_claims_agent", description="...", vendor_options={"text_key": "answer"}</span>
+<span class="sd">        )</span>
+
+<span class="sd">    Two ``vendor_options`` are read by the hook itself rather than forwarded to</span>
+<span class="sd">    ``InvokeAgentRuntime``: ``text_key`` names the response field that holds the answer text when</span>
+<span class="sd">    the container's contract is known (a body without a string there is an error), and</span>
+<span class="sd">    ``max_response_bytes`` bounds the body read into worker memory (default 1 MiB). Every other</span>
+<span class="sd">    option is passed to the API call as is.</span>
 
 <span class="sd">    .. seealso::</span>
 <span class="sd">        - :class:`airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`</span>
+<span class="sd">        - :class:`airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="BedrockAgentCoreHook.client_type">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook.client_type">[docs]</a>
     <span class="n">client_type</span> <span class="o">=</span> <span class="s2">"bedrock-agentcore"</span></div>
 
+<div class="viewcode-block" id="BedrockAgentCoreHook.agent_platform">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook.agent_platform">[docs]</a>
+    <span class="n">agent_platform</span> <span class="o">=</span> <span class="s2">"aws.bedrock_agentcore"</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">kwargs</span><span class="p">[</span><span class="s2">"client_type"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_type</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_clients</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_clients_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+
+<div class="viewcode-block" id="BedrockAgentCoreHook.resolve_agent">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook.resolve_agent">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentRef</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">agent</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"arn:"</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">":runtime/"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">agent</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"An AgentCore agent is a runtime ARN, got </span><span class="si">{</span><span class="n">agent</span><span class="si">!r}</span><span class="s2">."</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ManagedAgentRef</span><span class="p">(</span><span class="n">platform</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">agent_platform</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">agent</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BedrockAgentCoreHook.get_agent_capabilities">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook.get_agent_capabilities">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_agent_capabilities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentCapabilities</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ManagedAgentCapabilities</span><span class="p">(</span><span class="n">sessions</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">structured_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">trace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BedrockAgentCoreHook.invoke_agent">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/bedrock/index.html#airflow.providers.amazon.aws.hooks.bedrock.BedrockAgentCoreHook.invoke_agent">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invoke_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">ManagedAgentRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ManagedAgentResponse</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resolve_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reserved</span> <span class="o">:=</span> <span class="n">_RESERVED_OPTIONS</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">vendor_options</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"vendor_options cannot override contract fields: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">reserved</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">session_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">session_id</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_SESSION_ID_LENGTH</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"AgentCore requires a session id of </span><span class="si">{</span><span class="n">_SESSION_ID_LENGTH</span><span class="o">.</span><span class="n">start</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">_SESSION_ID_LENGTH</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> "</span>
+                <span class="sa">f</span><span class="s2">"characters; got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">session_id</span><span class="p">)</span><span class="si">}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">{</span><span class="s2">"prompt"</span><span class="p">:</span> <span class="n">request</span><span class="o">.</span><span class="n">prompt</span><span class="p">}</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">prompt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"messages"</span><span class="p">:</span> <span class="n">request</span><span class="o">.</span><span class="n">as_messages</span><span class="p">()}</span>
+        <span class="p">)</span>
+        <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">vendor_options</span><span class="p">)</span>
+        <span class="n">text_key</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"text_key"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">text_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">text_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"vendor_options['text_key'] must be a string, got </span><span class="si">{</span><span class="n">text_key</span><span class="si">!r}</span><span class="s2">."</span><span class="p">)</span>
+        <span class="n">max_response_bytes</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"max_response_bytes"</span><span class="p">,</span> <span class="n">_MAX_RESPONSE_BYTES</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">max_response_bytes</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="n">max_response_bytes</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"vendor_options['max_response_bytes'] must be a positive integer, got </span><span class="si">{</span><span class="n">max_response_bytes</span><span class="si">!r}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">session_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">"runtimeSessionId"</span><span class="p">]</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">session_id</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_client</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span><span class="o">.</span><span class="n">invoke_agent_runtime</span><span class="p">(</span>
+                <span class="n">agentRuntimeArn</span><span class="o">=</span><span class="n">agent</span><span class="p">,</span>
+                <span class="n">payload</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+                <span class="n">contentType</span><span class="o">=</span><span class="s2">"application/json"</span><span class="p">,</span>
+                <span class="n">accept</span><span class="o">=</span><span class="s2">"application/json"</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_json_body</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="n">max_response_bytes</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Error"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Code"</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TERMINAL_ERROR_CODES</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+            <span class="k">raise</span>  <span class="c1"># throttling, conflicts, server errors: Airflow's task retry is the right layer</span>
+        <span class="k">return</span> <span class="n">ManagedAgentResponse</span><span class="p">(</span>
+            <span class="n">text</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_extract_text</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">text_key</span><span class="p">),</span>
+            <span class="n">raw</span><span class="o">=</span><span class="p">{</span><span class="o">**</span><span class="n">response</span><span class="p">,</span> <span class="s2">"response"</span><span class="p">:</span> <span class="n">body</span><span class="p">},</span>
+            <span class="n">structured</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="n">body</span><span class="p">,</span>
+            <span class="n">session_id</span><span class="o">=</span><span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"runtimeSessionId"</span><span class="p">),</span>
+            <span class="n">trace_ref</span><span class="o">=</span><span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ResponseMetadata"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"RequestId"</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_client</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        One boto3 client per distinct request timeout, built on first use and reused.</span>
+
+<span class="sd">        The timeout is a client setting, so it cannot ride on the hook's shared client, and a</span>
+<span class="sd">        toolset uses one timeout, so this is one client per hook in practice. Clients are</span>
+<span class="sd">        thread-safe, which the toolset relies on when a model issues two calls in one turn.</span>
+<span class="sd">        """</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_clients_lock</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_clients</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_clients</span><span class="p">[</span><span class="n">timeout</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_client_type</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_call_config</span><span class="p">(</span><span class="n">timeout</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">client</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Config</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the connection's or caller's botocore config, with retries off unless they set them."""</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span>
+        <span class="k">if</span> <span class="n">base</span><span class="o">.</span><span class="n">retries</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">base</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">_NO_RETRIES</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">timeout</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">base</span>
+        <span class="k">return</span> <span class="n">base</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">Config</span><span class="p">(</span><span class="n">connect_timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span> <span class="n">read_timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_describe_call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"AgentCore agent </span><span class="si">{</span><span class="n">agent</span><span class="si">}</span><span class="s2"> via connection </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="si">!r}</span><span class="s2">"</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_json_body</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">max_response_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">closing</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s2">"response"</span><span class="p">])</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="n">content_type</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"contentType"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">";"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">content_type</span> <span class="o">!=</span> <span class="s2">"application/json"</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span><span class="si">}</span><span class="s2"> returned </span><span class="si">{</span><span class="n">content_type</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">'no Content-Type'</span><span class="si">}</span><span class="s2">; "</span>
+                    <span class="s2">"this hook handles application/json only."</span>
+                <span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">max_response_bytes</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_response_bytes</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span><span class="si">}</span><span class="s2"> returned more than max_response_bytes=</span><span class="si">{</span><span class="n">max_response_bytes</span><span class="si">}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span><span class="si">}</span><span class="s2"> returned a body that is not JSON: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">text_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">text_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">text_key</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ManagedAgentInvocationError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">agent</span><span class="p">)</span><span class="si">}</span><span class="s2"> returned no string at text_key=</span><span class="si">{</span><span class="n">text_key</span><span class="si">!r}</span><span class="s2">."</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">body</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_TEXT_KEYS</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">body</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span></div>
 
 </pre></div>
 
@@ -1121,9 +1356,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

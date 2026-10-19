@@ -18,7 +18,7 @@ Classes
 .. autoapisummary::
 
    airflow.providers.common.ai.toolsets.managed_agent.BaseManagedAgentToolset
-   airflow.providers.common.ai.toolsets.managed_agent.FailoverManagedAgentToolset
+   airflow.providers.common.ai.toolsets.managed_agent.ManagedAgentToolset
 
 
 Module Contents
@@ -28,40 +28,44 @@ Module Contents
 
 .. py:class:: BaseManagedAgentToolset(*, tool_name, description = None, timeout = None, max_retries = 1)
 
-   Bases: :py:obj:`pydantic_ai.toolsets.abstract.AbstractToolset`\ [\ :py:obj:`Any`\ ]
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
 
 
    Base class exposing a vendor-managed agent as a single pydantic-ai tool.
 
-   A managed agent runs its own reasoning loop on the vendor's infrastructure
-   (Snowflake Cortex Agents, Amazon Bedrock AgentCore, Azure AI Foundry hosted
-   agents, Vertex AI Agent Engine). Airflow submits one request and reads one
-   answer, so the Airflow-side agent features -- toolsets, human-in-the-loop
-   review, durable step replay -- apply to the *calling* agent and never reach
-   inside the managed agent.
+   .. note::
 
-   Subclasses implement :meth:`agent_ref` and :meth:`invoke`. Tool naming,
-   argument validation, result serialisation and logging are handled here so
-   every provider's implementation presents the same surface to the model.
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
 
-   :param tool_name: Name the calling model sees, and the identifier it emits
-       when calling the tool. A verb phrase naming the specialist reads best,
-       e.g. ``ask_bookings_analyst``.
-   :param description: What this agent knows and when to consult it. Optional --
-       it falls back to ``tool_name`` rendered as prose, matching how
-       ``HookToolset`` handles a method with no docstring. Worth writing anyway:
-       it is what tells the model to consult the agent rather than answer from
-       its own knowledge, and it is the only place to state a scope limit the
-       name cannot carry ("cannot see revenue figures"). Since the argument
-       schema is always a bare prompt, the name and this string are the whole
-       of what the model knows about the agent.
-   :param timeout: Seconds to wait for a single invocation. ``None`` defers to
-       the platform default, which subclasses supply -- a number chosen here
-       would silently disagree with the vendor operator's documented timeout
-       for the same service.
-   :param max_retries: How many times the calling model may rephrase after the
-       remote agent raises ``ModelRetry``. ``0`` turns the first ``ModelRetry``
-       into a hard error, which disables that recovery path entirely.
+   A managed agent runs its own reasoning loop on the vendor's infrastructure. Airflow
+   submits one request and reads one answer, so the Airflow-side agent features --
+   toolsets, human-in-the-loop review, durable step replay -- apply to the *calling* agent
+   and never reach inside the managed agent.
+
+   Most code should not subclass this. Use :class:`ManagedAgentToolset` over a
+   :class:`~airflow.providers.common.ai.managed_agents.base.ManagedAgentClient`, which
+   every provider hook that adopts
+   :class:`~airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
+   produces via ``hook.agent(...)``. Subclass this directly only for an agent that has no
+   hook at all. Subclasses implement :attr:`agent_ref` and :meth:`invoke_sync` (or override
+   the async :meth:`invoke`); tool naming, argument validation, result serialization,
+   logging and metrics are handled here so every implementation presents the same surface
+   to the model.
+
+   :param tool_name: Name the calling model sees, and the identifier it emits when calling
+       the tool. A verb phrase naming the specialist reads best, e.g. ``ask_bookings_analyst``.
+   :param description: What this agent knows and when to consult it. Optional -- it falls
+       back to ``tool_name`` rendered as prose, matching how ``HookToolset`` handles a method
+       with no docstring. Worth writing anyway: it is what tells the model to consult the
+       agent rather than answer from its own knowledge, and it is the only place to state a
+       scope limit the name cannot carry ("cannot see revenue figures"). Since the argument
+       schema is always a bare prompt, the name and this string are the whole of what the
+       model knows about the agent.
+   :param timeout: Seconds to wait for a single invocation. ``None`` defers to the platform
+       default. Exposed as :attr:`timeout` so an implementation can honor it.
+   :param max_retries: How many times the calling model may rephrase after the remote agent
+       rejects a request. ``0`` turns the first rejection into a hard error.
 
 
    .. py:attribute:: replayable
@@ -70,19 +74,25 @@ Module Contents
 
 
 
+   .. py:property:: timeout
+      :type: float | None
+
+
+      Seconds to wait for one invocation, or ``None`` for the platform default.
+
+
+
    .. py:property:: agent_ref
-      :type: dict[str, str]
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
 
       :abstractmethod:
 
 
-      Normalised identity of the remote agent.
+      Normalized identity of the remote agent.
 
-      Must contain ``platform`` and ``name``, e.g.
-      ``{"platform": "snowflake.cortex", "name": "ANALYTICS.REVENUE.BOOKINGS_ANALYST"}``.
-      Logged whenever this toolset's tool is called, so the resolved remote
-      identity behind a task appears in that task's log even though the Dag
-      only names a connection.
+      Logged after every successful call, so the resolved remote identity behind a task
+      appears in that task's log even though the Dag only names a connection. Resolution
+      is never on the call's critical path: a failure here is logged, not raised.
 
 
 
@@ -92,37 +102,21 @@ Module Contents
 
       Send ``prompt`` to the remote agent and return the agent's answer.
 
-      Override this when the vendor call is already asynchronous. When it
-      blocks, implement :meth:`invoke_sync` instead and let the default
-      implementation here run it in a worker thread, which keeps it off the
-      event loop that the whole agent run shares.
+      Override this when the vendor call is already asynchronous. When it blocks, implement
+      :meth:`invoke_sync` instead and let the default implementation here run it in a worker
+      thread, which keeps it off the event loop that the whole agent run shares.
 
-      Return the answer, not the transport envelope -- whatever the calling
-      model should actually read. Unwrapping is the implementation's job.
+      Return the answer, not the transport envelope. Failures sort into three classes:
+      ``ModelRetry`` (the model can fix it by rephrasing; a hook-backed client raises
+      :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected` instead and
+      :class:`ManagedAgentToolset` translates it),
+      :class:`~airflow.providers.common.ai.exceptions.ManagedAgentInvocationError`
+      (terminal), and anything transient, which should propagate unchanged so Airflow's
+      task-level retry handles it.
 
-      Failures sort into three buckets, and conflating them is the most common
-      way an implementation goes wrong:
-
-      * ``pydantic_ai.exceptions.ModelRetry`` -- the remote agent rejected the
-        request in a way rephrasing could fix. The calling model sees the
-        message and tries again, bounded by its ``usage_limits``.
-      * :class:`~airflow.providers.common.ai.exceptions.ManagedAgentInvocationError`
-        -- terminal. Bad credentials, missing agent, revoked quota. Neither a
-        rephrase nor a task retry helps, so fail fast.
-      * Anything transient (429, 5xx, connection reset, read timeout) -- let it
-        propagate unchanged. Airflow's task-level retry is the right layer; a
-        rephrase does nothing for a 503.
-
-      **Release anything you allocate, on every path.** Platforms that require a
-      session bill for its lifetime, so an implementation that opens one here
-      must close it in a ``finally`` -- including when ``ModelRetry`` propagates,
-      which is a return path the calling model treats as recoverable and will
-      therefore hit repeatedly. A tool call has no post-task cleanup hook to
-      fall back on: if the worker dies mid-call the handle is lost, and nothing
-      will reap the remote session. Implementations whose sessions are long
-      enough for that to matter belong in that provider's own operator, where
-      deferral and :class:`~airflow.sdk.bases.resumablejobmixin.ResumableJobMixin`
-      can reconnect to the existing job instead of leaking it.
+      **Release anything you allocate, on every path.** Platforms that require a session
+      bill for its lifetime, so an implementation that opens one here must close it in a
+      ``finally``. A tool call has no post-task cleanup hook to fall back on.
 
       :param prompt: The question or instruction to send to the remote agent.
 
@@ -134,15 +128,8 @@ Module Contents
 
       Blocking variant of :meth:`invoke`, run in a worker thread.
 
-      This is the hook to implement when the vendor call blocks. Make it
-      normally -- the base class keeps it off the event loop, so a call that
-      takes minutes does not stall the calling agent's other tool calls.
-
-      The contract is :meth:`invoke`'s: return the answer rather than the
-      transport envelope, sort failures into the same three buckets, and
-      release anything allocated on every path. A thread cannot be cancelled,
-      so set a timeout on the underlying request: a caller that stops waiting
-      does not stop this call.
+      A thread cannot be cancelled, so set a timeout on the underlying request: a caller
+      that stops waiting does not stop this call.
 
       :param prompt: The question or instruction to send to the remote agent.
 
@@ -172,116 +159,94 @@ Module Contents
 
 
 
-   .. py:method:: call_tool(name, tool_args, ctx, tool)
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
       :async:
 
 
-      Call a tool with the given arguments.
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
 
-      Args:
-          name: The name of the tool to call.
-          tool_args: The arguments to pass to the tool.
-          ctx: The run context.
-          tool: The tool definition returned by [`get_tools`][pydantic_ai.toolsets.AbstractToolset.get_tools] that was called.
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
 
 
 
-.. py:class:: FailoverManagedAgentToolset(*, members, failover_on = (Exception, ), **kwargs)
+.. py:class:: ManagedAgentToolset(client, *, tool_name, description = None, timeout = None, max_retries = 1, replayable = False, vendor_options = None)
 
    Bases: :py:obj:`BaseManagedAgentToolset`
 
 
-   Present several interchangeable managed agents to the model as one tool.
+   Expose any managed-agent client as one tool.
 
-   Active/passive failover for a managed agent: members are tried in order and
-   the first answer wins. Because this is itself a
-   :class:`BaseManagedAgentToolset`, the calling model sees a single tool and
-   has no say in which provider serves the request -- the policy stays
-   deterministic Python rather than a prompt instruction a model may ignore.
-   Groups nest, so a group can itself be a member of another group.
+   .. note::
 
-   Members must satisfy two preconditions that this class cannot check:
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
 
-   *Substitutability.* The same agent deployed twice, not two specialists with
-   different data. Two containerised agents built from one image (Bedrock
-   AgentCore and Azure AI Foundry hosted agents, say) qualify; agents backed by
-   different corpora or bound to one platform's own objects -- a Cortex Agent
-   over Snowflake semantic models -- do not, because there is no equivalent to
-   fail over *to*.
+   This is the toolset to use. It accepts any
+   :class:`~airflow.providers.common.ai.managed_agents.base.ManagedAgentClient`. The client is usually a
+   :class:`~airflow.providers.common.ai.managed_agents.base.BoundManagedAgent` from a
+   vendor hook's ``agent()`` method, or a
+   :class:`~airflow.providers.common.ai.managed_agents.failover.FailoverManagedAgentClient`
+   over several of them::
 
-   *Statelessness per invocation.* Server-side conversation state is the norm
-   rather than the exception across managed-agent platforms -- optional on some
-   (Cortex ``thread_id``), mandatory on others, where a session must be created
-   and torn down around every exchange. Each member here is invoked with a bare
-   prompt and no thread reference, so a failover silently starts a fresh
-   conversation on the standby. That is correct for a one-shot consultation and
-   wrong for a multi-turn one: failover discards the thread rather than resuming
-   it elsewhere. Since most platforms fall on the stateful side, treat one-shot
-   as something a group is deliberately restricted to, not a safe default.
+       from airflow.providers.amazon.aws.hooks.bedrock import (
+           BedrockAgentCoreHook,
+       )
+       from airflow.providers.common.ai.toolsets import ManagedAgentToolset
 
-   :param members: Interchangeable toolsets, tried in order. At least two.
-   :param failover_on: Exception types that move to the next member. Defaults
-       to ``Exception`` because ``common.ai`` cannot enumerate the cloud SDKs'
-       exception trees (``requests``, ``botocore`` and the Azure SDK share no
-       common base), so the safe default is broad. It can be narrowed when the
-       members' exception types are known. ``ModelRetry`` is always re-raised
-       and never triggers failover, whatever this is set to.
+       claims = BedrockAgentCoreHook(aws_conn_id="aws_prod").agent(RUNTIME_ARN)
+       toolset = ManagedAgentToolset(
+           claims,
+           tool_name="ask_claims_agent",
+           description="Reviews an insurance claim and returns a coverage determination.",
+       )
+
+   The model receives ``response.text``. The vendor envelope in ``response.raw`` is for
+   Python callers of the client and never reaches the model.
+
+   :param client: The agent to consult.
+   :param tool_name: See :class:`BaseManagedAgentToolset`.
+   :param description: See :class:`BaseManagedAgentToolset`.
+   :param timeout: Passed to the client on every request as ``ManagedAgentRequest.timeout``.
+       ``None`` means whatever the vendor client defaults to, which for Agent Engine is no
+       deadline at all.
+   :param max_retries: See :class:`BaseManagedAgentToolset`.
+   :param replayable: Whether durable execution may replay a completed call. Only set it
+       for an agent that is read-only.
+   :param vendor_options: Sent with every request as ``ManagedAgentRequest.vendor_options``,
+       for per-agent settings the vendor hook accepts there (Agent Engine's ``class_method``,
+       for instance). The hook decides which keys are allowed.
 
 
    .. py:attribute:: replayable
+      :value: False
+
+
+
+   .. py:property:: client
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentClient
+
 
 
    .. py:property:: agent_ref
-      :type: dict[str, str]
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
 
 
-      Normalised identity of the remote agent.
+      Normalized identity of the remote agent.
 
-      Must contain ``platform`` and ``name``, e.g.
-      ``{"platform": "snowflake.cortex", "name": "ANALYTICS.REVENUE.BOOKINGS_ANALYST"}``.
-      Logged whenever this toolset's tool is called, so the resolved remote
-      identity behind a task appears in that task's log even though the Dag
-      only names a connection.
+      Logged after every successful call, so the resolved remote identity behind a task
+      appears in that task's log even though the Dag only names a connection. Resolution
+      is never on the call's critical path: a failure here is logged, not raised.
 
 
 
-   .. py:method:: invoke(prompt)
-      :async:
+   .. py:method:: invoke_sync(prompt)
 
+      Blocking variant of :meth:`invoke`, run in a worker thread.
 
-      Send ``prompt`` to the remote agent and return the agent's answer.
-
-      Override this when the vendor call is already asynchronous. When it
-      blocks, implement :meth:`invoke_sync` instead and let the default
-      implementation here run it in a worker thread, which keeps it off the
-      event loop that the whole agent run shares.
-
-      Return the answer, not the transport envelope -- whatever the calling
-      model should actually read. Unwrapping is the implementation's job.
-
-      Failures sort into three buckets, and conflating them is the most common
-      way an implementation goes wrong:
-
-      * ``pydantic_ai.exceptions.ModelRetry`` -- the remote agent rejected the
-        request in a way rephrasing could fix. The calling model sees the
-        message and tries again, bounded by its ``usage_limits``.
-      * :class:`~airflow.providers.common.ai.exceptions.ManagedAgentInvocationError`
-        -- terminal. Bad credentials, missing agent, revoked quota. Neither a
-        rephrase nor a task retry helps, so fail fast.
-      * Anything transient (429, 5xx, connection reset, read timeout) -- let it
-        propagate unchanged. Airflow's task-level retry is the right layer; a
-        rephrase does nothing for a 503.
-
-      **Release anything you allocate, on every path.** Platforms that require a
-      session bill for its lifetime, so an implementation that opens one here
-      must close it in a ``finally`` -- including when ``ModelRetry`` propagates,
-      which is a return path the calling model treats as recoverable and will
-      therefore hit repeatedly. A tool call has no post-task cleanup hook to
-      fall back on: if the worker dies mid-call the handle is lost, and nothing
-      will reap the remote session. Implementations whose sessions are long
-      enough for that to matter belong in that provider's own operator, where
-      deferral and :class:`~airflow.sdk.bases.resumablejobmixin.ResumableJobMixin`
-      can reconnect to the existing job instead of leaking it.
+      A thread cannot be cancelled, so set a timeout on the underlying request: a caller
+      that stops waiting does not stop this call.
 
       :param prompt: The question or instruction to send to the remote agent.
 

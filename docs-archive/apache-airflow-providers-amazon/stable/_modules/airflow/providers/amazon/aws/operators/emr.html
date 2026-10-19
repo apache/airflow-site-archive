@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.37.0</span>
+        <span class="version-label">Version: </span><span class="version">9.38.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -722,6 +722,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">EmrServerlessCancelJobsTrigger</span><span class="p">,</span>
     <span class="n">EmrServerlessCreateApplicationTrigger</span><span class="p">,</span>
     <span class="n">EmrServerlessDeleteApplicationTrigger</span><span class="p">,</span>
+    <span class="n">EmrServerlessSessionTrigger</span><span class="p">,</span>
     <span class="n">EmrServerlessStartApplicationTrigger</span><span class="p">,</span>
     <span class="n">EmrServerlessStartJobTrigger</span><span class="p">,</span>
     <span class="n">EmrServerlessStopApplicationTrigger</span><span class="p">,</span>
@@ -741,7 +742,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">inject_parent_job_information_into_spark_properties</span><span class="p">,</span>
     <span class="n">inject_transport_information_into_emr_serverless_properties</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">mask_secret</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">exactly_one</span><span class="p">,</span> <span class="n">prune_dict</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -3118,6 +3119,235 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"EMR serverless application </span><span class="si">%s</span><span class="s2"> deleted successfully"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">)</span></div>
 </div>
 
+
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EmrServerlessStartSessionOperator</span><span class="p">(</span><span class="n">AwsBaseOperator</span><span class="p">[</span><span class="n">EmrServerlessHook</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Start an EMR Serverless interactive session and wait until it is ready.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information on how to use this operator, take a look at the guide:</span>
+<span class="sd">        :ref:`howto/operator:EmrServerlessStartSessionOperator`</span>
+
+<span class="sd">    :param application_id: ID of the EMR Serverless application to run the session on.</span>
+<span class="sd">    :param execution_role_arn: ARN of the IAM role the session assumes to access data.</span>
+<span class="sd">    :param name: An optional name for the session.</span>
+<span class="sd">    :param idle_timeout_minutes: Auto-stop the session after this many idle minutes.</span>
+<span class="sd">    :param configuration_overrides: Optional Spark/monitoring configuration overrides.</span>
+<span class="sd">    :param wait_for_completion: If True, wait for the session to be ready before returning.</span>
+<span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
+<span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
+<span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
+<span class="sd">        empty, then default boto3 configuration would be used (and must be</span>
+<span class="sd">        maintained on each worker node).</span>
+<span class="sd">    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.</span>
+<span class="sd">    :param verify: Whether or not to verify SSL certificates. See:</span>
+<span class="sd">        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html</span>
+<span class="sd">    :param waiter_max_attempts: Number of times the waiter should poll the session to check the state.</span>
+<span class="sd">    :param waiter_delay: Number of seconds between polling the state of the session.</span>
+<span class="sd">    :param deferrable: If True and ``wait_for_completion`` is enabled, the operator will wait</span>
+<span class="sd">        asynchronously for the session to be ready. This mode requires aiobotocore to be installed.</span>
+<span class="sd">        (default: False, but can be overridden in config file by setting default_deferrable to True)</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.aws_hook_class">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.aws_hook_class">[docs]</a>
+    <span class="n">aws_hook_class</span> <span class="o">=</span> <span class="n">EmrServerlessHook</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.template_fields">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.template_fields">[docs]</a>
+    <span class="n">template_fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">aws_template_fields</span><span class="p">(</span>
+        <span class="s2">"application_id"</span><span class="p">,</span>
+        <span class="s2">"execution_role_arn"</span><span class="p">,</span>
+        <span class="s2">"name"</span><span class="p">,</span>
+        <span class="s2">"idle_timeout_minutes"</span><span class="p">,</span>
+        <span class="s2">"configuration_overrides"</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">application_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">execution_role_arn</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">idle_timeout_minutes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">configuration_overrides</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">wait_for_completion</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">waiter_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="n">waiter_max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">,</span>
+        <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.application_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.application_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span> <span class="o">=</span> <span class="n">application_id</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.execution_role_arn">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.execution_role_arn">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execution_role_arn</span> <span class="o">=</span> <span class="n">execution_role_arn</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.name">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.name">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.idle_timeout_minutes">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.idle_timeout_minutes">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">idle_timeout_minutes</span> <span class="o">=</span> <span class="n">idle_timeout_minutes</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.configuration_overrides">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.configuration_overrides">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configuration_overrides</span> <span class="o">=</span> <span class="n">configuration_overrides</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.wait_for_completion">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.wait_for_completion">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span> <span class="o">=</span> <span class="n">wait_for_completion</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.waiter_delay">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.waiter_delay">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span> <span class="o">=</span> <span class="n">waiter_delay</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.waiter_max_attempts">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.waiter_max_attempts">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span> <span class="o">=</span> <span class="n">waiter_max_attempts</span></div>
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.deferrable">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.deferrable">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
+
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">start_session</span><span class="p">(</span>
+            <span class="n">application_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span>
+            <span class="n">execution_role_arn</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execution_role_arn</span><span class="p">,</span>
+            <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">idle_timeout_minutes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">idle_timeout_minutes</span><span class="p">,</span>
+            <span class="n">configuration_overrides</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">configuration_overrides</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Started EMR Serverless session </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">session_id</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
+                    <span class="n">trigger</span><span class="o">=</span><span class="n">EmrServerlessSessionTrigger</span><span class="p">(</span>
+                        <span class="n">application_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span>
+                        <span class="n">session_id</span><span class="o">=</span><span class="n">session_id</span><span class="p">,</span>
+                        <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">,</span>
+                        <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="p">,</span>
+                        <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
+                        <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
+                        <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
+                        <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">),</span>
+                    <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">wait</span><span class="p">(</span>
+                    <span class="n">waiter</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="s2">"serverless_session_ready"</span><span class="p">),</span>
+                    <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">,</span>
+                    <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="p">,</span>
+                    <span class="n">args</span><span class="o">=</span><span class="p">{</span><span class="s2">"applicationId"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span> <span class="s2">"sessionId"</span><span class="p">:</span> <span class="n">session_id</span><span class="p">},</span>
+                    <span class="n">failure_message</span><span class="o">=</span><span class="s2">"EMR Serverless session failed to start"</span><span class="p">,</span>
+                    <span class="n">status_message</span><span class="o">=</span><span class="s2">"EMR Serverless session status is"</span><span class="p">,</span>
+                    <span class="n">status_args</span><span class="o">=</span><span class="p">[</span><span class="s2">"session.state"</span><span class="p">,</span> <span class="s2">"session.stateDetails"</span><span class="p">],</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"application_id"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span> <span class="s2">"session_id"</span><span class="p">:</span> <span class="n">session_id</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="EmrServerlessStartSessionOperator.execute_complete">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessStartSessionOperator.execute_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">validated_event</span> <span class="o">=</span> <span class="n">validate_execute_complete_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"success"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error starting EMR Serverless session: </span><span class="si">{</span><span class="n">validated_event</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">session_details</span> <span class="o">=</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"session_details"</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"EMR Serverless session </span><span class="si">%s</span><span class="s2"> started"</span><span class="p">,</span> <span class="n">session_details</span><span class="p">[</span><span class="s2">"session_id"</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">session_details</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EmrServerlessGetSessionEndpointOperator</span><span class="p">(</span><span class="n">AwsBaseOperator</span><span class="p">[</span><span class="n">EmrServerlessHook</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return a fresh Spark Connect endpoint and auth token for a running interactive session.</span>
+
+<span class="sd">    The returned ``auth_token`` is short-lived (about one hour), so this operator should run</span>
+<span class="sd">    immediately before the task that connects to the session. The token is registered with</span>
+<span class="sd">    Airflow's secrets masker, which only redacts it from this task's logs: downstream tasks</span>
+<span class="sd">    that read it from XCom must mask it themselves, and anyone who can read this task's XCom</span>
+<span class="sd">    can use it until it expires.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information on how to use this operator, take a look at the guide:</span>
+<span class="sd">        :ref:`howto/operator:EmrServerlessGetSessionEndpointOperator`</span>
+
+<span class="sd">    :param application_id: ID of the EMR Serverless application.</span>
+<span class="sd">    :param session_id: ID of the interactive session.</span>
+<span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
+<span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
+<span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
+<span class="sd">        empty, then default boto3 configuration would be used (and must be</span>
+<span class="sd">        maintained on each worker node).</span>
+<span class="sd">    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.</span>
+<span class="sd">    :param verify: Whether or not to verify SSL certificates. See:</span>
+<span class="sd">        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.aws_hook_class">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.aws_hook_class">[docs]</a>
+    <span class="n">aws_hook_class</span> <span class="o">=</span> <span class="n">EmrServerlessHook</span></div>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.template_fields">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.template_fields">[docs]</a>
+    <span class="n">template_fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">aws_template_fields</span><span class="p">(</span>
+        <span class="s2">"application_id"</span><span class="p">,</span>
+        <span class="s2">"session_id"</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">application_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.application_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.application_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">application_id</span> <span class="o">=</span> <span class="n">application_id</span></div>
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.session_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.session_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span> <span class="o">=</span> <span class="n">session_id</span></div>
+
+
+<div class="viewcode-block" id="EmrServerlessGetSessionEndpointOperator.execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrServerlessGetSessionEndpointOperator.execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">_check_interactive_session_support</span><span class="p">()</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">get_session_endpoint</span><span class="p">(</span>
+            <span class="n">applicationId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span> <span class="n">sessionId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_id</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">auth_token</span> <span class="o">:=</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"authToken"</span><span class="p">):</span>
+            <span class="n">mask_secret</span><span class="p">(</span><span class="n">auth_token</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Resolved Spark Connect endpoint for session </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"endpoint"</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"endpoint"</span><span class="p">),</span>
+            <span class="s2">"auth_token"</span><span class="p">:</span> <span class="n">auth_token</span><span class="p">,</span>
+            <span class="s2">"auth_token_expires_at"</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"authTokenExpiresAt"</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
 </pre></div>
 
     <div class="pager" role="navigation" aria-label="related navigation"><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Previous</button><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Next</button>
@@ -3377,9 +3607,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=97c18975"></script>
-        <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
-        <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=21d226f1"></script>
+        <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+        <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
         <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
         <script src="../../../../../../_static/js/globaltoc.js?v=32f50df6"></script>

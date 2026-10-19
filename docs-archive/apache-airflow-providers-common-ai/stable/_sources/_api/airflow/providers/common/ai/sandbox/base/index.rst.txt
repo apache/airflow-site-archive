@@ -9,6 +9,19 @@ airflow.providers.common.ai.sandbox.base
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.base.log
+   airflow.providers.common.ai.sandbox.base.OWNER_TAG
+   airflow.providers.common.ai.sandbox.base.HOLDER_TAG
+   airflow.providers.common.ai.sandbox.base.EXPIRES_AT_TAG
+   airflow.providers.common.ai.sandbox.base.NETWORK_TAG
+   airflow.providers.common.ai.sandbox.base.WORKDIR_TAG
+
+
 Exceptions
 ----------
 
@@ -25,12 +38,71 @@ Classes
 .. autoapisummary::
 
    airflow.providers.common.ai.sandbox.base.SandboxSpec
+   airflow.providers.common.ai.sandbox.base.AttachedSandbox
    airflow.providers.common.ai.sandbox.base.SandboxExecResult
    airflow.providers.common.ai.sandbox.base.SandboxBackend
+   airflow.providers.common.ai.sandbox.base.AttachableSandboxBackend
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.base.is_sandbox_handle
+   airflow.providers.common.ai.sandbox.base.dag_run_owner
+   airflow.providers.common.ai.sandbox.base.encode_network_policy
+   airflow.providers.common.ai.sandbox.base.decode_network_policy
 
 
 Module Contents
 ---------------
+
+.. py:data:: log
+
+.. py:data:: OWNER_TAG
+   :value: 'airflow_owner'
+
+
+   Who the sandbox was provisioned for: the value of :attr:`SandboxSpec.owner`.
+
+
+.. py:data:: HOLDER_TAG
+   :value: 'airflow_holder'
+
+
+   The agent task currently holding the sandbox, set on attach and cleared on release.
+
+
+.. py:data:: EXPIRES_AT_TAG
+   :value: 'airflow_expires_at'
+
+
+   Unix time, in whole seconds, at which the backend will end the sandbox.
+
+
+.. py:data:: NETWORK_TAG
+   :value: 'airflow_network'
+
+
+   The network policy the sandbox was provisioned with, as :func:`encode_network_policy` writes it.
+
+
+.. py:data:: WORKDIR_TAG
+   :value: 'airflow_workdir'
+
+
+   The working directory the sandbox was provisioned with, when the creator chose one.
+
+
+.. py:function:: is_sandbox_handle(value)
+
+   Whether ``value`` can name a sandbox at all.
+
+   A handle travels between tasks by XCom and template, so the shapes a missing one
+   takes are known: ``None`` from a missing XCom under native rendering, the string
+   ``"None"`` from the default Jinja environment, and the empty string.
+
 
 .. py:exception:: SandboxError
 
@@ -78,6 +150,11 @@ Module Contents
 
    What a single sandbox should be provisioned with.
 
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
    Passed to :meth:`SandboxBackend.create`. Every field is optional and a
    backend may not be able to honor all of them; a backend that cannot enforce
    a field it was given must raise rather than silently ignore it, so a DAG
@@ -103,6 +180,12 @@ Module Contents
        than a hostname list gives, so it needs no opt-in. Both lists may be set
        together; how a backend combines them, and what that costs, is the
        backend's to document.
+   :param owner: Who the sandbox is for, when a task provisions it for an agent
+       task to attach to later. A :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`
+       attaching to the sandbox has to present the same value, and by default it
+       presents the Dag run it is part of, so the provisioning task in the same
+       run writes ``owner=dag_run_owner(context)``. Unset for a sandbox nobody
+       will attach to. A backend that cannot record it must refuse it.
 
 
    .. py:attribute:: env
@@ -127,6 +210,66 @@ Module Contents
       :type:  collections.abc.Sequence[str] | None
       :value: None
 
+
+
+   .. py:attribute:: owner
+      :type:  str | None
+      :value: None
+
+
+
+.. py:function:: dag_run_owner(context)
+
+   Return the owner token naming the Dag run a task is part of: ``"<dag_id>/<run_id>"``.
+
+   This is what a ``SandboxToolset`` presents when it attaches to a sandbox
+   without an explicit ``owner``, so a task provisioning a sandbox for an agent
+   task in the same Dag run stamps it with ``SandboxSpec(owner=dag_run_owner(context))``.
+   The pair is unique across the deployment where a bare ``run_id`` is not: two
+   Dags on the same schedule share their run ids. ``context`` is the task context,
+   as a ``@task`` receives it in ``**context`` or ``get_current_context`` returns it.
+
+
+.. py:function:: encode_network_policy(spec)
+
+   Serialize a spec's network policy for a sandbox tag, so an attaching toolset can read it back.
+
+   The toolset tells the model what the sandbox can reach, because a model that has to
+   discover a denied network by failing wastes a turn, or a whole command budget. An
+   attached sandbox was provisioned under a spec the toolset never sees, so the backend
+   records the policy on the sandbox at create and :func:`decode_network_policy` turns
+   it back into a spec. Compact JSON with sorted keys, so the same policy always encodes
+   the same way.
+
+
+.. py:function:: decode_network_policy(value)
+
+   Read a :data:`NETWORK_TAG` value back into a spec carrying only the network fields.
+
+   Raises :class:`ValueError` when the value is not what :func:`encode_network_policy`
+   writes, so the caller decides what a stamp written by something else means.
+
+
+.. py:class:: AttachedSandbox
+
+   What :meth:`AttachableSandboxBackend.attach` reports about the sandbox it just claimed.
+
+   ``remaining_lifetime`` is in seconds, or ``None`` when the creator recorded no expiry,
+   in which case nothing is claimed about it. ``network`` is the policy the sandbox was
+   provisioned with and ``workdir`` its working directory, each ``None`` when the
+   creator recorded nothing.
+
+
+   .. py:attribute:: remaining_lifetime
+      :type:  float | None
+
+
+   .. py:attribute:: network
+      :type:  SandboxSpec | None
+
+
+   .. py:attribute:: workdir
+      :type:  str | None
 
 
 .. py:class:: SandboxExecResult
@@ -196,11 +339,20 @@ Module Contents
 
    Contract for running commands and file operations in an isolated sandbox.
 
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
    The lifecycle is create -> (any number of operations) -> destroy, driven by
    :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`.
    The four operation methods are named after the four tools the toolset
    exposes, so the mapping from a model-facing tool to the backend call behind
-   it is literal; ``create`` and ``destroy`` are lifecycle and have no tool.
+   it is literal; ``create`` and ``destroy`` are lifecycle and have no tool, and
+   neither has ``export_file``, which hands a finished file to the Dag author. A
+   backend whose sandboxes can be found again from another process implements
+   :class:`AttachableSandboxBackend` instead, which adds the ownership rules a
+   task-provisioned sandbox needs.
 
    Implementations must be cheap to construct, because constructors run at
    Dag-parse time: resolve credentials and open connections lazily, on first
@@ -281,11 +433,117 @@ Module Contents
 
 
 
+   .. py:method:: export_file(sandbox, path, dest, *, max_bytes)
+
+      Copy a regular file out of the sandbox into ``dest`` and return the bytes written.
+
+      ``dest`` is a writable binary stream, typically an object-storage file, and the
+      copy goes through it without the whole file ever being held in worker memory,
+      so a file far over :meth:`read_file`'s budget can leave the sandbox. Only a
+      regular file is exported: a directory, a device, or a FIFO is refused, since
+      none of them has a size to promise a caller. Raise
+      :class:`SandboxFileTooLargeError` instead of copying a file larger than
+      ``max_bytes``, and :class:`SandboxError` when the file changed size while it
+      was being copied, which means a process in the sandbox is still writing it.
+
+      This default reads the file in slices through :meth:`run_command`, one
+      command per slice, and needs ``stat``, ``tail``, ``head`` and ``base64`` in the
+      guest. It relies on ``run_command`` returning each slice's output intact, or
+      setting ``stdout_truncated`` when it could not, and on nothing but the command's
+      own output reaching stdout. Override it when the vendor can stream a file out,
+      and bound the whole copy by :func:`_export_deadline` as this one does, since a
+      guest that keeps sending a byte now and then never trips a stall timeout.
+
+
+
    .. py:method:: destroy(sandbox)
       :abstractmethod:
 
 
       Tear down the sandbox. Must be idempotent.
+
+
+
+.. py:class:: AttachableSandboxBackend
+
+   Bases: :py:obj:`SandboxBackend`
+
+
+   A backend whose sandboxes outlive the process that created them and can be found again.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   This is what lets one task provision a sandbox and a later agent task use it:
+   the provisioning task stamps the sandbox with :attr:`SandboxSpec.owner`, the
+   :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset` attaches
+   with ``attach_to=<handle>``, and the task that created the sandbox destroys it.
+   A backend that has no way to reach a sandbox from another process, such as
+   ``sbx``, stays a plain :class:`SandboxBackend` and the toolset refuses
+   ``attach_to`` for it at construction.
+
+   Two primitives are the vendor's to implement: :meth:`read_tags` and
+   :meth:`write_tags`. The rules are written once, here, on top of them:
+
+   * **Who may attach.** A sandbox is attached only if its :data:`OWNER_TAG`
+     equals the owner the toolset presents. A bare handle is never enough, so a
+     wrong handle from an upstream XCom is refused rather than used. This stops a
+     run reaching the wrong sandbox by mistake and gives attribution; it is not a
+     boundary between authors, since anyone holding the vendor credential can
+     rewrite the tags or drive the sandbox without the toolset.
+   * **One holder at a time.** Attaching stamps :data:`HOLDER_TAG` with the
+     attaching task and releasing clears it. A second, different holder is refused
+     while the first is attached. The same holder may attach again, so a retry of
+     the agent task finds its files after an attempt that died without releasing.
+     The claim is a plain read-then-write over the vendor's tags, re-read after the
+     write to catch a competing writer, so two tasks attaching in the same instant
+     can both pass; it stops the sequential mistakes, not a race, and a Dag that
+     needs a workspace per task provisions one per task.
+   * **The lifetime is the creator's.** ``create`` stamps :data:`EXPIRES_AT_TAG`,
+     and :meth:`attach` reports what is left so the toolset can bound its commands
+     and tell the model the clock it is on. ``create`` also records the network
+     policy under :data:`NETWORK_TAG`, so the toolset can tell the model what the
+     sandbox reaches, and the working directory under :data:`WORKDIR_TAG`, so the
+     attaching backend resolves relative paths where the creator's shell does.
+
+
+   .. py:method:: read_tags(sandbox)
+      :abstractmethod:
+
+
+      Return the tags on a sandbox.
+
+      Raise :class:`SandboxTerminalError` if the sandbox does not exist or has
+      ended: attaching to it can never succeed.
+
+
+
+   .. py:method:: write_tags(sandbox, tags)
+      :abstractmethod:
+
+
+      Replace the sandbox's tags with ``tags``.
+
+
+
+   .. py:method:: attach(sandbox, *, owner, holder)
+
+      Claim ``sandbox`` for ``holder`` and report what the creator recorded about it.
+
+      Raises :class:`SandboxTerminalError` if the sandbox is not owned by ``owner``
+      or is held by someone else; either is a fact about the Dag that no retry of
+      the agent task can change.
+
+
+
+   .. py:method:: release(sandbox, *, holder)
+
+      Give up ``holder``'s claim on ``sandbox`` so another run may attach.
+
+      Idempotent, and never destroys anything: the sandbox belongs to the task
+      that created it. A claim held by someone else is left alone.
 
 
 

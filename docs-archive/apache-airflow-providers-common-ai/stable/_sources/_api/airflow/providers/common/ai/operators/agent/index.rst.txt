@@ -51,9 +51,9 @@ Module Contents
 
 
 
-.. py:class:: AgentOperator(*, prompt, llm_conn_id, model_id = None, fallback_conn_ids = None, system_prompt = '', output_type = str, toolsets = None, enable_tool_logging = True, agent_params = None, usage_limits = None, durable = False, code_mode = False, message_history = None, enable_hitl_review = False, max_hitl_iterations = 5, hitl_timeout = None, hitl_poll_interval = 10.0, serialize_output = False, **kwargs)
+.. py:class:: AgentOperator(*, prompt, llm_conn_id, model_id = None, fallback_conn_ids = None, system_prompt = '', output_type = str, toolsets = None, capabilities = None, enable_tool_logging = True, agent_params = None, usage_limits = None, durable = False, cache_prompt = True, message_history = None, enable_hitl_review = False, max_hitl_iterations = 5, hitl_timeout = None, hitl_poll_interval = 10.0, serialize_output = False, tool_approval_timeout = None, on_tool_approval_timeout = 'fail', tool_approval_assigned_users = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.ai.mixins.cancellable_run.CancellableAgentRunMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin`
+   Bases: :py:obj:`airflow.providers.common.ai.mixins.cancellable_run.CancellableAgentRunMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin`, :py:obj:`airflow.providers.common.ai.mixins.usage_budget.UsageBudgetMixin`
 
 
    Run a pydantic-ai Agent with tools and multi-turn reasoning.
@@ -64,10 +64,15 @@ Module Contents
 
    Alongside the returned agent output, the run's ``run_id`` and token ``usage``
    are pushed to XCom under the ``run_id`` and ``usage`` keys, so a downstream
-   task can reference the run and its cost. The ``run_id`` also ties the task to
-   its GenAI trace (see the provider's observability docs). With
-   ``enable_hitl_review``, these reflect the initial model run, not the
-   human-feedback regenerations.
+   task can reference the run and its cost. ``usage`` is this attempt's own
+   usage, not the cross-attempt cumulative total described under
+   ``usage_limits`` below; it is pushed on a failed attempt too, so a
+   downstream ``all_done`` task or failure callback can read what the last
+   attempt spent -- XCom is cleared at the start of every attempt, so only
+   the most recent attempt's value survives, not each historical attempt's.
+   The ``run_id`` also ties the task to its GenAI trace (see the provider's
+   observability docs). With ``enable_hitl_review``, these reflect the
+   initial model run, not the human-feedback regenerations.
 
    :param prompt: The prompt to send to the agent.
    :param llm_conn_id: Connection ID for the LLM provider.
@@ -92,13 +97,33 @@ Module Contents
        ``conn_name_attr``) are templated, e.g.
        ``SQLToolset(db_conn_id="warehouse_{{ var.value.environment }}")`` per
        environment, or ``"tenant_{{ task.op_kwargs.customer }}"`` per map index of
-       a mapped ``@task.agent``. Each task instance renders its own copy and logs
-       the rendered toolset id; the toolset object in the Dag file is not
-       modified. Derive the connection ID from values the Dag controls rather than
-       ``params`` or ``dag_run.conf``, which whoever triggers the Dag controls.
-   :param enable_tool_logging: When ``True`` (default), wraps each toolset in a
-       ``LoggingToolset`` that logs tool calls with timing at INFO level and
-       arguments at DEBUG level. Set to ``False`` to disable.
+       a mapped ``@task.agent``, and so is ``SandboxToolset.attach_to``, which is
+       how ``SandboxToolset(attach_to="{{ ti.xcom_pull('provision') }}")``
+       receives the sandbox an upstream task created. Each task instance renders
+       its own copy and logs the rendered toolset id; the toolset object in the
+       Dag file is not modified. Derive the connection ID from values the Dag
+       controls rather than ``params`` or ``dag_run.conf``, which whoever triggers
+       the Dag controls.
+   :param capabilities: pydantic-ai capabilities for the agent, e.g.
+       ``[Thinking(effort="high"), WebSearch()]``. A capability bundles tools,
+       instructions, model settings and lifecycle hooks; pydantic-ai wraps their
+       hooks in list order, first outermost, unless a capability declares its
+       own position. A ``Toolset`` capability holding one of the
+       toolsets above has its connection IDs templated the same way as
+       ``toolsets=``. Capabilities passed here are not stored in the serialized
+       Dag (the worker builds them from the Dag file), except on a mapped task,
+       where they are stored as their repr. Passing ``capabilities`` inside
+       ``agent_params`` still works, but stores each capability's repr
+       in the serialized Dag, and cannot be combined with this argument (the
+       task fails when it runs).
+   :param enable_tool_logging: When ``True`` (default), wraps the agent's
+       assembled function toolset in a ``LoggingToolset`` that logs tool calls
+       with timing at INFO level and arguments at DEBUG level. This includes
+       tools supplied through ``toolsets=``, ``agent_params["tools"]``, and
+       capabilities, but not output tools, provider-native tools that run
+       server-side, or tools another capability adds through its own wrapper
+       (code mode's ``run_code``, ToolSearch's ``search_tools``). Set to
+       ``False`` to disable.
    :param agent_params: Additional keyword arguments passed to the pydantic-ai
        ``Agent`` constructor (e.g. ``retries``, ``model_settings``).
    :param usage_limits: Optional pydantic-ai
@@ -113,47 +138,68 @@ Module Contents
        non-numeric string -- fails the task with a ``ValueError`` naming the
        field and the rendered value, instead of silently disabling the
        limit. A ``UsageLimits`` instance passed directly is used as-is and
-       is not templated or validated. ``None`` (default) means no
-       enforcement.
+       is not templated or validated. ``None`` (default) sets no token, cost,
+       or tool-call limits, but pydantic-ai still caps each run at its default
+       ``request_limit`` of ``50`` requests.
 
-       A dict that omits ``request_limit`` still gets pydantic-ai's default of
-       ``50`` requests -- pass ``"request_limit": None`` explicitly for no
-       request cap. See :ref:`howto/operator:llm` for the full set of caveats,
-       and :ref:`howto/operator:agent` for the ``durable=True`` replay
-       double-counting warning.
-   :param durable: When ``True``, enables step-level caching of model
-       responses and tool results for durable execution.  On retry, cached
-       steps are replayed instead of re-executing.  Each cached step is
-       verified against the current request before replay: if the prompt,
-       model, settings, tools, or message history changed since the failed
-       attempt, the affected steps re-run live (with a warning) instead of
-       replaying stale results.  Default ``False``.
-       On Airflow >= 3.3 the cache is kept in the AIP-103 task state store, so
-       no extra configuration is needed. On older cores it is persisted to
+       A dict that omits ``request_limit`` gets the same default of ``50``
+       requests -- pass ``"request_limit": None`` explicitly for no request
+       cap.
+
+       On Airflow >= 3.3, this counts usage across every attempt combined
+       -- initial run, retries, and HITL regenerations all add to one
+       running total instead of resetting each attempt. Scale each limit
+       by ``retries + 1``, or set ``usage_limits=None``, to keep the old
+       per-attempt headroom. On Airflow < 3.3, or when ``usage_limits`` is
+       ``None``, each attempt is checked and counted on its own, unchanged.
+       See :ref:`howto/operator:llm` for the full caveats, and
+       :ref:`the cross-attempt usage budget <agent-usage-budget>` for how
+       it is persisted, reset, and how ``durable`` replay and HITL
+       regeneration interact with it.
+   :param durable: When ``True``, attaches
+       :class:`~airflow.providers.common.ai.durable.AirflowDurability`, which
+       records each step the agent completes -- model responses, tool calls from
+       any toolset or capability, tool discovery, and other capabilities'
+       ``@durable_operation`` methods -- in a journal kept for the task instance.
+       On retry the agent runs again from the start and the steps the previous
+       attempt completed are replayed from the journal instead of running again.
+       Each step is replayed only if it matches what the previous attempt did at
+       the same point: if the prompt, model, settings, tools, tool arguments or
+       message history changed, that step and every step after it run live (with
+       a warning). Default ``False``. A replayed step adds nothing to the usage
+       counted against ``usage_limits`` or reported in the ``usage`` XCom -- not
+       its request, tokens, cost, or tool calls -- so every attempt counts only
+       the model and tool calls it actually makes. This holds the same way after
+       clearing a failed task instance: it starts a fresh budget but keeps the
+       journal its attempts left behind, and whatever the rerun replays from it
+       is free. The agent's ``run_id`` (and its ``conversation_id``, when there is
+       no message history) stays the first attempt's on every retry.
+       On Airflow >= 3.3 the journal is kept in the AIP-103 task state store, so
+       no extra configuration is needed. On older Airflow versions it is persisted to
        ObjectStorage and requires ``[common.ai] durable_cache_path`` to be set.
-       Tools are durably cached when provided via ``toolsets=`` or via a
-       concrete pydantic-ai ``Toolset`` capability. Tools reaching the agent
-       through any *other* capability -- ``MCP``, ``PrefixTools``,
-       ``CombinedCapability``, a ``Toolset`` backed by a callable factory, or
-       capabilities loaded from a ``spec_file`` -- are not cached and re-run on
-       retry; put tools you need replayed in ``toolsets=``. Provider-native
-       capabilities such as ``WebSearch`` and ``Thinking`` execute inside the
-       model call and are covered by model-response caching.
-       Cannot be combined with a ``SandboxToolset`` (raises): a sandbox is
-       destroyed when the run ends, so replayed tool results would describe
-       files that no longer exist.
-   :param code_mode: When ``True``, wraps the agent's tools in a single
-       ``run_code`` tool powered by the Monty sandbox (pydantic-ai-harness
-       ``CodeMode``). Instead of one model round-trip per tool call, the model
-       writes Python that calls the tools as functions, with loops and
-       ``asyncio.gather``, in one turn. The generated code runs in Monty's
-       deny-by-default sandbox; the tools it calls still run in the worker, so
-       ``code_mode`` does not widen what the tools can reach -- it only changes
-       how the model invokes them. Requires the ``code-mode`` extra
-       (``pip install "apache-airflow-providers-common-ai[code-mode]"``).
-       Cannot be combined with ``durable=True`` (durable replay assumes a
-       stable per-step call order that code mode does not guarantee).
-       Default ``False``.
+       Toolsets pydantic-ai runs as durable steps (``FunctionToolset``,
+       ``MCPToolset``, ``DynamicToolset``) need a unique ``id``, and so do
+       capabilities with ``@durable_operation`` methods.
+       Cannot be combined with a ``SandboxToolset`` (raises), attached or
+       not: a replayed tool result describes a workspace state the replay did
+       not reproduce, and the first call that misses the cache runs against
+       whatever the sandbox holds now. With a pydantic-ai-harness ``CodeMode``
+       capability, a retry runs each ``run_code`` snippet again and replays the
+       tool calls it makes; ``CodeMode``'s ``eager`` and ``speculate`` options are
+       off while the run is durable.
+   :param cache_prompt: When ``True`` (default), asks the provider to cache the
+       tool definitions, system prompt and conversation so far, so the next
+       request in the run -- and a mapped task's other instances within the
+       cache lifetime -- reads them back at a fraction of the input price instead
+       of paying for them again. Turns on prompt caching for Anthropic models and
+       for Bedrock and OpenRouter models that support it; a no-op for OpenAI and
+       Gemini, which cache long prompts on their own. A provider's own cache
+       settings in ``agent_params["model_settings"]`` or a spec file take
+       precedence: setting any ``anthropic_cache*`` key leaves Anthropic caching
+       entirely to you, and a ``CachePoint`` in the prompt or message history
+       leaves all of it to you. Set ``False`` where a cache write is rarely read
+       back, such as a single long request that is not mapped. See
+       :ref:`agent-prompt-caching` for when caching costs more than it saves.
    :param message_history: Prior conversation to seed the run with, for
        multi-turn sessions that span task runs. Accepts a ``list`` of
        pydantic-ai ``ModelMessage`` objects, or their JSON form as ``str`` /
@@ -178,19 +224,54 @@ Module Contents
        can approve, reject, or request changes via the plugin's REST API
        at ``/hitl-review`` or through the **HITL Review** extra link
        on the task instance.  Default ``False``. Cannot be combined with a
-       ``SandboxToolset`` (raises): regeneration after feedback is a second
-       run, which starts from an empty sandbox while its history describes
-       the first run's files.
+       ``SandboxToolset`` that provisions its own sandbox (raises):
+       regeneration after feedback is a second run, which would start from an
+       empty sandbox while its history describes the first run's files. A
+       ``SandboxToolset`` attached to a sandbox another task owns
+       (``attach_to``) is fine, since both runs find the same files, as long
+       as the reviewer answers inside that sandbox's lifetime: the wait spends
+       the provisioning backend's ``sandbox_timeout``.
    :param max_hitl_iterations: Maximum outputs shown to the reviewer (1 =
        initial output). When the reviewer requests changes at
        iteration >= this limit, the task fails with ``HITLMaxIterationsError``
        without calling the LLM. E.g. 5 allows changes at iterations 1–4.
        Default ``5``.
    :param hitl_timeout: Maximum wall-clock time to wait for
-       all review rounds combined.  ``None`` means no timeout (the
-       operator blocks until a terminal action).
+       all review rounds combined.  ``None`` means no wall-clock timeout;
+       the review still ends on a terminal action (approve or reject),
+       ``max_hitl_iterations``, or when polling the human action XCom fails
+       too many times in a row.
    :param hitl_poll_interval: Seconds between XCom polls
        while waiting for a human response.  Default ``10``.
+
+   **Per-tool approval** (Airflow 3.3+):
+
+   Mark the tools a human must approve with pydantic-ai's own API --
+   ``toolset.approval_required(...)``, or ``requires_approval=True`` on a function
+   tool -- and the task pauses before running them. The pending calls, with their
+   arguments, appear on the **Required Actions** page; the task waits in the
+   ``awaiting_input`` state without holding a worker slot. On **Approve** the calls
+   run and the agent carries on. On **Reject** the agent is told the call was denied
+   (with the reviewer's reason, when given) and carries on without it. On Airflow
+   3.4+, each later step that calls a marked tool pauses again; on Airflow 3.3 a task
+   instance asks at most once per Dag run, across retries and clears, and a second
+   request fails the task. ``usage_limits`` applies to every side of every pause.
+   Not available together with ``durable``, ``enable_hitl_review``, a ``CodeMode``
+   capability, or a ``SandboxToolset``
+   that provisions its own sandbox; there, a tool that requires approval fails
+   the task as before, except one called from inside ``CodeMode``'s ``run_code``,
+   which does not run and is reported back to the model. A ``SandboxToolset`` attached to a
+   sandbox another task owns is fine: the sandbox outlives the pause.
+
+   :param tool_approval_timeout: How long the pause waits for a decision.
+       ``None`` (default) waits indefinitely. Must be positive.
+   :param on_tool_approval_timeout: What a timed-out pause does: ``"fail"``
+       (default) fails the task, ``"deny"`` rejects the pending calls so the agent
+       carries on without them, and needs a ``tool_approval_timeout``. There is no
+       approve-on-timeout.
+   :param tool_approval_assigned_users: Users allowed to decide. ``None`` (default)
+       leaves it to anyone who can act on the task's Required Actions.
+
    :param serialize_output: If ``True`` and ``output_type`` is a Pydantic
        ``BaseModel`` subclass, the model instance is dumped to a ``dict`` via
        ``model_dump()`` before being pushed to XCom. Default ``False`` --
@@ -255,6 +336,11 @@ Module Contents
    .. py:attribute:: agent_params
 
 
+   .. py:attribute:: capabilities
+      :value: None
+
+
+
    .. py:attribute:: usage_limits
       :value: None
 
@@ -270,8 +356,8 @@ Module Contents
 
 
 
-   .. py:attribute:: code_mode
-      :value: False
+   .. py:attribute:: cache_prompt
+      :value: True
 
 
 
@@ -295,6 +381,19 @@ Module Contents
 
 
 
+   .. py:attribute:: tool_approval_timeout
+      :value: None
+
+
+
+   .. py:attribute:: on_tool_approval_timeout
+      :value: 'fail'
+
+
+
+   .. py:attribute:: tool_approval_assigned_users
+
+
    .. py:property:: llm_hook
       :type: airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook
 
@@ -314,9 +413,24 @@ Module Contents
 
 
 
+   .. py:method:: resume_after_tool_approval(context, tool_call_ids, usage, transcript_sha256, toolset_ids, event, attempt_usage = None, pause_number = 1)
+
+      Continue a run paused by :meth:`_pause_for_tool_approval` with the reviewer's decision.
+
+
+
    .. py:method:: regenerate_with_feedback(*, feedback, message_history)
 
       Re-run the agent with *feedback* appended to the conversation history.
+
+      Shares the cross-run ``RunUsage`` with the run that produced the output being
+      reviewed -- so a ``usage_limits`` cap bounds the initial run plus every
+      regeneration combined -- only when ``usage_limits`` is set. With
+      ``usage_limits=None``, each regeneration starts from a fresh ``RunUsage()``,
+      matching the behaviour before the cross-attempt budget existed: nothing shares
+      usage. This applies on every Airflow version; only the *cross-attempt*
+      persistence of a shared, budget-tracked ``RunUsage`` (via the task state store)
+      is gated on >= 3.3, in ``execute()``.
 
 
 

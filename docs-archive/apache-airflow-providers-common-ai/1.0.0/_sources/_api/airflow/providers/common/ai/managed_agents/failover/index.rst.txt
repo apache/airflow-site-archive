@@ -1,0 +1,76 @@
+airflow.providers.common.ai.managed_agents.failover
+===================================================
+
+.. py:module:: airflow.providers.common.ai.managed_agents.failover
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.managed_agents.failover.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.managed_agents.failover.FailoverManagedAgentClient
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: FailoverManagedAgentClient(members, *, failover_on = (Exception, ))
+
+   Active/passive failover across interchangeable managed agents.
+
+   Members are tried in order and the first answer wins. The group is itself a
+   :class:`~airflow.providers.common.ai.managed_agents.base.ManagedAgentClient`, so
+   a toolset built over it presents a single tool and the calling model has no say in
+   which provider serves the request: the policy stays deterministic Python rather than a
+   prompt instruction a model may ignore. Groups nest.
+
+   Members must be *substitutable*: the same agent deployed twice, not two specialists over
+   different data. Two containerized agents built from one image qualify; an agent bound to
+   one platform's own objects does not, because there is nothing equivalent to fail over to.
+   The group cannot check this.
+
+   What it can check is conversation state. A failover starts a fresh conversation on the
+   standby, which is correct for a one-shot consultation and wrong for a multi-turn one, so
+   the group never reports ``capabilities.sessions`` and refuses a request that carries a
+   ``session_id``, whatever its members support.
+
+   :param members: Interchangeable clients, tried in order. At least two.
+   :param failover_on: Exception types that move to the next member. Defaults to
+       ``Exception`` because ``common.ai`` cannot enumerate the cloud SDKs' exception trees.
+       Narrow it when the members' exception types are known.
+       :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected` never
+       triggers failover, whatever this is set to: the standby would reject the same prompt.
+
+
+   .. py:property:: members
+      :type: tuple[airflow.providers.common.ai.managed_agents.base.ManagedAgentClient, ...]
+
+
+
+   .. py:property:: ref
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
+
+
+
+   .. py:property:: capabilities
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentCapabilities
+
+
+      The intersection of the members', except sessions, which a group never offers.
+
+
+
+   .. py:method:: invoke(request)
+
+
