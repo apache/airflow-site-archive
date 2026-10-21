@@ -422,6 +422,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#input-provision">Input Provision</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#option-selection">Option Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#formatting-the-body">Formatting the body</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#notifiers">Notifiers</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>
@@ -563,6 +564,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#input-provision">Input Provision</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#option-selection">Option Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#formatting-the-body">Formatting the body</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#notifiers">Notifiers</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>
@@ -953,6 +955,32 @@ ONLY the users within this list will be allowed to respond.</p>
 <div class="line"><br /></div>
 </div>
 </section>
+<section id="formatting-the-body">
+<h2>Formatting the body<a class="headerlink" href="#formatting-the-body" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">body</span></code> of every HITL operator is rendered as Markdown in the UI.
+In Markdown, a single line break inside a paragraph is displayed as a space, so a multi-line value such as a
+templated XCom shows up on one line.
+To keep the line breaks, wrap the value in a fenced code block, or separate the lines with blank lines.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ApprovalOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"confirm_deletion"</span><span class="p">,</span>
+    <span class="n">subject</span><span class="o">=</span><span class="s2">"Should the following files be deleted?"</span><span class="p">,</span>
+    <span class="n">body</span><span class="o">=</span><span class="s2">"""Dry-run result:</span>
+
+<span class="s2">```</span>
+<span class="s2">{{ ti.xcom_pull(task_ids='dry_run') }}</span>
+<span class="s2">```</span>
+<span class="s2">"""</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 3.4: </span>Code blocks in the body keep their line breaks. On earlier versions, lines inside a code block are
+also joined, so separate them with blank lines instead.</p>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</section>
 <section id="branch-selection">
 <h2>Branch Selection<a class="headerlink" href="#branch-selection" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h2>
 <p>Users can choose which branches to follow within the Dag.
@@ -1094,9 +1122,12 @@ GET /api/v2/dags/~/dagRuns/~/hitlDetails?response_received=false
 # Submit the response; the test run resumes the task on its next poll.
 # map_index is -1 for non-mapped tasks.
 PATCH /api/v2/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances/{task_id}/{map_index}/hitlDetails
-{"chosen_options": ["Approve"], "params_input": {}}
+{"chosen_options": ["Approve"], "params_input": {}, "request_created_at": "&lt;created_at from the GET&gt;"}
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">request_created_at</span></code> is optional. Copy it unchanged from the request you read: if the task asked
+again in the meantime (a retry, a clear, or an operator that pauses more than once in one run), the
+answer is refused with <code class="docutils literal notranslate"><span class="pre">409</span></code> instead of being applied to a request you did not read.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Keys in <code class="docutils literal notranslate"><span class="pre">params_input</span></code> must not be Airflow’s reserved serialization keys (<code class="docutils literal notranslate"><span class="pre">__classname__</span></code>,
@@ -1204,6 +1235,7 @@ It is also highly beneficial in enterprise data pipelines, where human validatio
 <li><a class="reference internal" href="#input-provision">Input Provision</a></li>
 <li><a class="reference internal" href="#option-selection">Option Selection</a></li>
 <li><a class="reference internal" href="#approval-or-rejection">Approval or Rejection</a></li>
+<li><a class="reference internal" href="#formatting-the-body">Formatting the body</a></li>
 <li><a class="reference internal" href="#branch-selection">Branch Selection</a></li>
 <li><a class="reference internal" href="#notifiers">Notifiers</a></li>
 <li><a class="reference internal" href="#testing-hitl-dags-locally">Testing HITL Dags locally</a></li>

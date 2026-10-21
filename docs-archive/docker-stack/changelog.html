@@ -681,8 +681,49 @@ then you can use latest features from that image to build images for previous Ai
 Images are released for Python 3.11, 3.12, 3.13 and 3.14.</p></li>
 <li><p>The <code class="docutils literal notranslate"><span class="pre">tdsodbc</span></code> package was added to the image so that the FreeTDS ODBC driver
 (<code class="docutils literal notranslate"><span class="pre">libtdsodbc.so</span></code>) is available for connecting to Sybase/TDS databases via ODBC.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">libxmlsec1-openssl</span></code> package was added to the image. <code class="docutils literal notranslate"><span class="pre">libxmlsec1</span></code> contains no crypto
+engine of its own, so <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">xmlsec</span></code> (used by <code class="docutils literal notranslate"><span class="pre">python3-saml</span></code>) failed with
+<code class="docutils literal notranslate"><span class="pre">libxmlsec1-openssl.so.1:</span> <span class="pre">cannot</span> <span class="pre">open</span> <span class="pre">shared</span> <span class="pre">object</span> <span class="pre">file</span></code>.</p></li>
 </ul>
 </div></blockquote>
+<p>In Airflow 3.4.0 the base image changed again - from <code class="docutils literal notranslate"><span class="pre">debian:bookworm-slim</span></code> with a Python compiled in
+the image, to the Debian 13 “trixie” <a class="reference external" href="https://dhi.io">Docker Hardened Image</a> for Python, which already
+carries a Python built by Docker. This removes the Python compilation, and the source download and signature verification
+that went with it, from the build entirely - the OS dependency layer of the production image went from
+roughly 210s to 105s in a local cache-disabled build.</p>
+<ul class="simple">
+<li><p>The <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> arg now defaults to <code class="docutils literal notranslate"><span class="pre">ghcr.io/apache/airflow/base/python:&lt;version&gt;-debian13-dev</span></code>,
+which is Airflow’s public mirror of the upstream <code class="docutils literal notranslate"><span class="pre">dhi.io/python</span></code> image. Pulling from <code class="docutils literal notranslate"><span class="pre">dhi.io</span></code>
+directly requires a <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">login</span> <span class="pre">dhi.io</span></code>; pulling the mirror requires nothing. If you pass your own
+<code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code>, it now has to be an image that already provides Python - a bare <code class="docutils literal notranslate"><span class="pre">debian:bookworm-slim</span></code>
+only works with <code class="docutils literal notranslate"><span class="pre">AIRFLOW_IMAGE_FLAVOR=&quot;legacy&quot;</span></code>.</p></li>
+<li><p>The image is based on Debian 13 “trixie” instead of Debian 12 “bookworm”. Library packages renamed in
+trixie’s 64-bit <code class="docutils literal notranslate"><span class="pre">time_t</span></code> transition (for example <code class="docutils literal notranslate"><span class="pre">libssl3t64</span></code>, <code class="docutils literal notranslate"><span class="pre">libldap2</span></code>) have to be used in
+custom <code class="docutils literal notranslate"><span class="pre">RUNTIME_APT_DEPS</span></code>, and the MySQL-compatible client comes from MariaDB 11.8 (with
+<code class="docutils literal notranslate"><span class="pre">mariadb-client-compat</span></code> providing the <code class="docutils literal notranslate"><span class="pre">mysql</span></code> named commands).</p></li>
+<li><p>The new <code class="docutils literal notranslate"><span class="pre">AIRFLOW_IMAGE_FLAVOR</span></code> arg (<code class="docutils literal notranslate"><span class="pre">hardened</span></code> by default) can be set to <code class="docutils literal notranslate"><span class="pre">legacy</span></code> to build the
+image as before: Python compiled from sources on a plain Debian <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> such as
+<code class="docutils literal notranslate"><span class="pre">debian:bookworm-slim</span></code>. Images of that flavor are published for the 3.4.x line, are deprecated, and
+will be removed in Airflow 3.5.0. The flavor is recorded in the <code class="docutils literal notranslate"><span class="pre">org.apache.airflow.image.flavor</span></code> label.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">PYTHON_LTO</span></code> arg was removed. It only controlled Link-Time Optimization while compiling Python;
+the legacy flavor always compiles with LTO. To build a FIPS-compliant image, point <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> at a FIPS
+variant of the hardened image, for example <code class="docutils literal notranslate"><span class="pre">dhi.io/python:3.13.16-debian13-fips-dev</span></code> (those variants
+require a paid Docker subscription).</p></li>
+<li><p>Python is installed under <code class="docutils literal notranslate"><span class="pre">/usr</span></code> by the base image, as Debian packages. <code class="docutils literal notranslate"><span class="pre">/usr/python</span></code> is a symlink to it, and the
+<code class="docutils literal notranslate"><span class="pre">/usr/local/bin</span></code> symlinks are unchanged, so paths that worked before keep working.</p></li>
+<li><p>The hardened images ship the standard library with no <code class="docutils literal notranslate"><span class="pre">.pyc</span></code> files, so the build compiles it into the
+image. This keeps the behaviour introduced in Airflow 3.1.4 (see below): the standard library is owned
+by root while the image runs as <code class="docutils literal notranslate"><span class="pre">airflow</span></code>, so a missing bytecode cache could never be filled and every
+import would leak a negative <code class="docutils literal notranslate"><span class="pre">dentry</span></code>.</p></li>
+<li><p>Python in the hardened images is not the plain upstream build: Docker patches it (<code class="docutils literal notranslate"><span class="pre">pkgutil.get_data()</span></code>
+rejects <code class="docutils literal notranslate"><span class="pre">..</span></code> resource paths), builds it without profile-guided optimization, and compiles it with a
+1 MiB default thread stack. The image restores the previous 8 MiB thread stack. See
+<a class="reference internal" href="build.html#image-hardened-base"><span class="std std-ref">Properties of the hardened base image</span></a> for these and the other differences from the previous images.</p></li>
+</ul>
+<p>As with any base image change, some <code class="docutils literal notranslate"><span class="pre">apt</span></code> packages that used to be present as a side effect are not
+there any more. The hardened images are deliberately minimal - they ship no compiler, no <code class="docutils literal notranslate"><span class="pre">curl</span></code>,
+<code class="docutils literal notranslate"><span class="pre">wget</span></code>, <code class="docutils literal notranslate"><span class="pre">git</span></code> or <code class="docutils literal notranslate"><span class="pre">gzip</span></code>, and a stripped <code class="docutils literal notranslate"><span class="pre">/etc</span></code> - so a custom image that relied on something being
+present may need to install it explicitly. See <a class="reference internal" href="build.html"><span class="doc">Building the image</span></a>.</p>
 </section>
 <section id="airflow-3-1-4">
 <h2>Airflow 3.1.4<a class="headerlink" href="#airflow-3-1-4" title="Link to this heading">¶</a></h2>

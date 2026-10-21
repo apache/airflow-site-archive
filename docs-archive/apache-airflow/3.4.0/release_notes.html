@@ -451,6 +451,12 @@
 <li class="toctree-l4"><a class="reference internal" href="#deprecate-cyclic-taskgroup-dependencies-73746">Deprecate cyclic TaskGroup dependencies (#73746)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#language-sdk-coordinators-load-task-handlers-from-a-dag-bundle-73970">Language SDK coordinators load task handlers from a Dag bundle (#73970)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#support-for-python-3-10-has-been-removed-74151">Support for Python 3.10 has been removed (#74151)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#deprecate-the-required-kwargs-attribute-for-custom-deadline-references-70714">Deprecate the <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> attribute for custom deadline references (#70714)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ci-and-production-images-are-now-based-on-docker-hardened-images-and-debian-13-73038">CI and production images are now based on Docker Hardened Images and Debian 13 (#73038)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#task-sdk-api-client-trusts-the-system-certificate-store-instead-of-certifi-73116">Task SDK API client trusts the system certificate store instead of <code class="docutils literal notranslate"><span class="pre">certifi</span></code> (#73116)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#older-workers-can-no-longer-resume-deferred-tasks-whose-next-kwargs-hold-custom-classes-73577">Older workers can no longer resume deferred tasks whose <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> hold custom classes (#73577)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#deadline-alert-callback-kwargs-are-decoded-where-the-callback-runs-74830">Deadline Alert callback kwargs are decoded where the callback runs (#74830)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-xcom-backends-that-override-serialize-value-must-implement-store-value-to-support-task-loops-74858">Custom XCom backends that override <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code> must implement <code class="docutils literal notranslate"><span class="pre">store_value</span></code> to support task loops (#74858)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#new-features">New Features</a></li>
@@ -1283,6 +1289,12 @@
 <li class="toctree-l4"><a class="reference internal" href="#deprecate-cyclic-taskgroup-dependencies-73746">Deprecate cyclic TaskGroup dependencies (#73746)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#language-sdk-coordinators-load-task-handlers-from-a-dag-bundle-73970">Language SDK coordinators load task handlers from a Dag bundle (#73970)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#support-for-python-3-10-has-been-removed-74151">Support for Python 3.10 has been removed (#74151)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#deprecate-the-required-kwargs-attribute-for-custom-deadline-references-70714">Deprecate the <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> attribute for custom deadline references (#70714)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ci-and-production-images-are-now-based-on-docker-hardened-images-and-debian-13-73038">CI and production images are now based on Docker Hardened Images and Debian 13 (#73038)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#task-sdk-api-client-trusts-the-system-certificate-store-instead-of-certifi-73116">Task SDK API client trusts the system certificate store instead of <code class="docutils literal notranslate"><span class="pre">certifi</span></code> (#73116)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#older-workers-can-no-longer-resume-deferred-tasks-whose-next-kwargs-hold-custom-classes-73577">Older workers can no longer resume deferred tasks whose <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> hold custom classes (#73577)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#deadline-alert-callback-kwargs-are-decoded-where-the-callback-runs-74830">Deadline Alert callback kwargs are decoded where the callback runs (#74830)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#custom-xcom-backends-that-override-serialize-value-must-implement-store-value-to-support-task-loops-74858">Custom XCom backends that override <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code> must implement <code class="docutils literal notranslate"><span class="pre">store_value</span></code> to support task loops (#74858)</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#new-features">New Features</a></li>
@@ -2161,6 +2173,25 @@ the body runs at least once and an <code class="docutils literal notranslate"><s
 after another (tasks within an iteration can still run in parallel). Retried attempts are kept
 under a per-attempt UUID so each iteration’s data is preserved and can be cleared selectively.</p>
 <p>For detailed usage instructions, see <a class="reference internal" href="authoring-and-scheduling/loops.html"><span class="doc">Loops</span></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Downgrading to any version earlier than 3.4.0 can be slow, depending on the number of
+XCom rows that have been written after upgrading. Upgrading was tested on a
+300m row XCom table, so please don’t worry about upgrade time (we made sure
+that the XCom <em>data</em> didn’t get touched or read during migration to keep it
+fast).</p>
+<p>This is because this release contains a migration that starts storing new XCom
+rows in an xcom_v2 table, and in order to downgrade we have to move those over
+to the old table, and there is no way of doing this without copying the
+written xcom values.</p>
+<p>The downgrade refuses to continue when it finds data it cannot map back
+safely. Each migration commits separately, so the later 3.4.0 migrations
+have already been reversed at that point: fix the data and re-run the
+downgrade, or run <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">db</span> <span class="pre">migrate</span></code> to return to 3.4.</p>
+<p>On MySQL a failure after those checks leaves the schema partly downgraded,
+as MySQL cannot roll back DDL. Taking a backup before attempting the
+downgrade on MySQL is advised, so it can be restored in that case.</p>
+</div>
 </section>
 <section id="dag-importer-for-non-python-dags-72369-73728-73853-74020-74084-74333-74586">
 <h4>Dag Importer for non-Python Dags (#72369, #73728, #73853, #74020, #74084, #74333, #74586)<a class="headerlink" href="#dag-importer-for-non-python-dags-72369-73728-73853-74020-74084-74333-74586" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
@@ -2458,10 +2489,90 @@ Airflow drops support for a Python version in <code class="docutils literal notr
 <code class="docutils literal notranslate"><span class="pre">apache-airflow</span></code> distribution, the Task SDK, <code class="docutils literal notranslate"><span class="pre">airflowctl</span></code> and all providers released from
 <code class="docutils literal notranslate"><span class="pre">main</span></code> declare <code class="docutils literal notranslate"><span class="pre">requires-python</span> <span class="pre">=</span> <span class="pre">&quot;&gt;=3.11&quot;</span></code>.</p>
 </section>
+<section id="deprecate-the-required-kwargs-attribute-for-custom-deadline-references-70714">
+<h4>Deprecate the <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> attribute for custom deadline references (#70714)<a class="headerlink" href="#deprecate-the-required-kwargs-attribute-for-custom-deadline-references-70714" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>Implement <code class="docutils literal notranslate"><span class="pre">_evaluate_with()</span></code> with a <code class="docutils literal notranslate"><span class="pre">dagrun</span></code> parameter instead.</p>
+</section>
+<section id="ci-and-production-images-are-now-based-on-docker-hardened-images-and-debian-13-73038">
+<h4>CI and production images are now based on Docker Hardened Images and Debian 13 (#73038)<a class="headerlink" href="#ci-and-production-images-are-now-based-on-docker-hardened-images-and-debian-13-73038" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>Airflow’s CI and production images are now based on <a class="reference external" href="https://dhi.io">Docker Hardened Images</a> for
+Python and Debian 13 “trixie”.</p>
+<p>Python is no longer compiled from source during the image build - it comes from the hardened base
+image instead, which removes the source download, its signature verification and the compilation
+itself from the build. Python still lives in <code class="docutils literal notranslate"><span class="pre">/usr/python</span></code>, which is now a symlink to the
+<code class="docutils literal notranslate"><span class="pre">/opt/python</span></code> location the base image uses, so paths inside the image are unchanged.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> build argument now defaults to
+<code class="docutils literal notranslate"><span class="pre">ghcr.io/apache/airflow/base/python:&lt;version&gt;-debian13-dev</span></code>, Airflow’s public mirror of the
+upstream <code class="docutils literal notranslate"><span class="pre">dhi.io/python</span></code> image, so building an image needs no registry credentials. Anyone
+overriding <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> with a plain <code class="docutils literal notranslate"><span class="pre">debian:bookworm-slim</span></code> image has to switch to an image that
+already provides Python, or build the <code class="docutils literal notranslate"><span class="pre">legacy</span></code> flavor.</p>
+<p>The base OS moved from Debian 12 “bookworm” to Debian 13 “trixie”. Library packages renamed in
+trixie’s 64-bit <code class="docutils literal notranslate"><span class="pre">time_t</span></code> transition (for example <code class="docutils literal notranslate"><span class="pre">libssl3</span></code> is now <code class="docutils literal notranslate"><span class="pre">libssl3t64</span></code>) have to be
+updated in custom <code class="docutils literal notranslate"><span class="pre">RUNTIME_APT_DEPS</span></code> / <code class="docutils literal notranslate"><span class="pre">ADDITIONAL_RUNTIME_APT_DEPS</span></code>, and the MySQL-compatible
+client now comes from MariaDB 11.8.</p>
+<p>For the 3.4.x line, production images built the previous way - Python compiled from sources on
+<code class="docutils literal notranslate"><span class="pre">debian:bookworm-slim</span></code> - are still published as the deprecated <code class="docutils literal notranslate"><span class="pre">legacy</span></code> flavor, selected with
+the new <code class="docutils literal notranslate"><span class="pre">AIRFLOW_IMAGE_FLAVOR=&quot;legacy&quot;</span></code> build argument. They will be removed in Airflow 3.5.0.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">PYTHON_LTO</span></code> build argument is gone. To build a FIPS-compliant image, point <code class="docutils literal notranslate"><span class="pre">BASE_IMAGE</span></code> at a
+FIPS variant of the hardened image instead, for example <code class="docutils literal notranslate"><span class="pre">dhi.io/python:3.13.16-debian13-fips-dev</span></code>.</p>
+</section>
+<section id="task-sdk-api-client-trusts-the-system-certificate-store-instead-of-certifi-73116">
+<h4>Task SDK API client trusts the system certificate store instead of <code class="docutils literal notranslate"><span class="pre">certifi</span></code> (#73116)<a class="headerlink" href="#task-sdk-api-client-trusts-the-system-certificate-store-instead-of-certifi-73116" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>With <code class="docutils literal notranslate"><span class="pre">[api]</span> <span class="pre">client_use_public_certs</span></code> enabled (the default), the Task SDK client that talks to the
+Execution API now trusts the operating system’s certificate store through <code class="docutils literal notranslate"><span class="pre">truststore</span></code> instead of
+the <code class="docutils literal notranslate"><span class="pre">certifi</span></code> CA bundle. CAs from <code class="docutils literal notranslate"><span class="pre">[api]</span> <span class="pre">ssl_ca_file</span></code> and <code class="docutils literal notranslate"><span class="pre">[api]</span> <span class="pre">ssl_cert</span></code> are still trusted
+in addition to the system store, and <code class="docutils literal notranslate"><span class="pre">certifi</span></code> is no longer a Task SDK dependency.</p>
+<p>Workers must have the public CAs they rely on installed in the system store (for example, the
+<code class="docutils literal notranslate"><span class="pre">ca-certificates</span></code> package on Debian-based images). On macOS and Windows, certificate validation
+is delegated to the operating system, which can reject server certificates that OpenSSL accepted,
+such as private-CA certificates without the <code class="docutils literal notranslate"><span class="pre">serverAuth</span></code> extended key usage.</p>
+</section>
+<section id="older-workers-can-no-longer-resume-deferred-tasks-whose-next-kwargs-hold-custom-classes-73577">
+<h4>Older workers can no longer resume deferred tasks whose <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> hold custom classes (#73577)<a class="headerlink" href="#older-workers-can-no-longer-resume-deferred-tasks-whose-next-kwargs-hold-custom-classes-73577" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>When a deferred task resumes on a worker with an older Task SDK, the API server no longer reconstructs arbitrary classes from the stored <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> to convert them to the legacy format. Built-in value types, assets and asset aliases (including asset access control) are still converted, without constructing them. A deferred task whose <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> hold any other class now fails on such a worker with an error naming the type and asking to upgrade the Task SDK, instead of crashing on a payload it cannot decode.</p>
+<p><strong>What to do:</strong> if you run workers with <code class="docutils literal notranslate"><span class="pre">apache-airflow-task-sdk</span></code> 1.1.x or older and your deferrable operators or triggers pass instances of custom classes in <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> (for example via <code class="docutils literal notranslate"><span class="pre">self.defer(...,</span> <span class="pre">kwargs=...)</span></code> or in the trigger event payload), upgrade the Task SDK on those workers to 1.2.0 or later. Newer workers receive <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> unchanged and are not affected. Until all workers are upgraded, pass only built-in values, assets and asset aliases in <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> of tasks that may resume on older workers.</p>
+</section>
+<section id="deadline-alert-callback-kwargs-are-decoded-where-the-callback-runs-74830">
+<h4>Deadline Alert callback kwargs are decoded where the callback runs (#74830)<a class="headerlink" href="#deadline-alert-callback-kwargs-are-decoded-where-the-callback-runs-74830" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>The keyword arguments of Deadline Alert callbacks are no longer decoded by the scheduler. They
+are kept in their serialized form and decoded where the callback runs: by the triggerer for an
+<code class="docutils literal notranslate"><span class="pre">AsyncCallback</span></code>, and by the callback runner on the worker for a <code class="docutils literal notranslate"><span class="pre">SyncCallback</span></code>.</p>
+<p>Workers that run <code class="docutils literal notranslate"><span class="pre">SyncCallback</span></code> Deadline Alerts need a Task SDK that includes this change, so
+upgrade <code class="docutils literal notranslate"><span class="pre">apache-airflow</span></code> and <code class="docutils literal notranslate"><span class="pre">apache-airflow-task-sdk</span></code> on workers together. A worker with
+an upgraded <code class="docutils literal notranslate"><span class="pre">apache-airflow</span></code> and an older Task SDK fails such callbacks with an error instead
+of running them. Callbacks created before the upgrade run as before.</p>
+</section>
+<section id="custom-xcom-backends-that-override-serialize-value-must-implement-store-value-to-support-task-loops-74858">
+<h4>Custom XCom backends that override <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code> must implement <code class="docutils literal notranslate"><span class="pre">store_value</span></code> to support task loops (#74858)<a class="headerlink" href="#custom-xcom-backends-that-override-serialize-value-must-implement-store-value-to-support-task-loops-74858" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h4>
+<p>Every iteration of a task inside a loop is its own task instance, but <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code>
+receives the same <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">run_id</span></code>, <code class="docutils literal notranslate"><span class="pre">task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">map_index</span></code> and <code class="docutils literal notranslate"><span class="pre">key</span></code> for all of
+them, so a backend that builds its storage location from those makes every iteration’s XCom
+read back as the last iteration’s value. Backends should override <code class="docutils literal notranslate"><span class="pre">store_value</span></code> and
+<code class="docutils literal notranslate"><span class="pre">load_value</span></code> instead, and build the storage location with <code class="docutils literal notranslate"><span class="pre">XComCoordinate.build_path</span></code>,
+which is unique per task instance, or per write when the write cannot know the task instance.</p>
+<p>A Dag that uses a loop fails on startup when the configured XCom backend still stores values
+through <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code>, even if it already writes to a unique location. This includes
+<code class="docutils literal notranslate"><span class="pre">XComObjectStorageBackend</span></code> from <code class="docutils literal notranslate"><span class="pre">apache-airflow-providers-common-io</span></code> 1.10.1 and earlier;
+upgrade the provider before using task loops with it.</p>
+<p>Custom Task State Store backends will likewise need to include
+<code class="docutils literal notranslate"><span class="pre">scope.region_id</span></code> in their storage key to support mapped tasks inside a loop
+and loop iterations regenerated by clearing.</p>
+</section>
 </section>
 <section id="new-features">
 <h3>New Features<a class="headerlink" href="#new-features" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <ul class="simple">
+<li><p>Java SDK: Add edge labels to native Dags (#75173)</p></li>
+<li><p>Add a Duplicate action to the Connections list (#75143)</p></li>
+<li><p>Make the scheduler Dag cache size and TTL configurable (#75087)</p></li>
+<li><p>TS SDK: Add edge labels with label() (#75031)</p></li>
+<li><p>Let retry policies reschedule a task without using a retry (#74993)</p></li>
+<li><p>Let plugin views be scoped to specific Assets (#74992)</p></li>
+<li><p>UI: Add Select Recent Configurations dropdown to Trigger Dag form (#74977)</p></li>
+<li><p>Add support for forwarding CeleryExecutor task logs to stdout (#74976)</p></li>
+<li><p>Add deadline callback log visibility to the Dag Run view in UI (#74955)</p></li>
+<li><p>Allow loop gates to add human-readable decisions (#74932)</p></li>
+<li><p>Add Map Index search to dag breadcrumb (#74893)</p></li>
 <li><p>Add dag version lookup on get task endpoint (#74365)</p></li>
 <li><p>Add Logical Date column to the Runs table (#74340)</p></li>
 <li><p>UI: Add a Dag Run ID column to the Task Instances list (#74316)</p></li>
@@ -2536,6 +2647,43 @@ Airflow drops support for a Python version in <code class="docutils literal notr
 <section id="bug-fixes">
 <h3>Bug Fixes<a class="headerlink" href="#bug-fixes" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <ul class="simple">
+<li><p>Fix log template sync failing when a custom SQL Alchemy schema is configured (#75194)</p></li>
+<li><p>Java SDK: Send log timestamps in UTC (#75186)</p></li>
+<li><p>Fix 500 when ordering the Dag list by state or start_date (#75148)</p></li>
+<li><p>Keep Dag folder selection distinct across bundle names (#75146)</p></li>
+<li><p>Keep parent Dag folders collapsed after one click (#75145)</p></li>
+<li><p>Fix <code class="docutils literal notranslate"><span class="pre">Trigger.clean_unused</span></code> rejecting a caller-provided session (#75122)</p></li>
+<li><p>Scope asset Dag and task references to readable Dags (#75107)</p></li>
+<li><p>Reject reserved serialization keys in Dag run conf (#75105)</p></li>
+<li><p>Reserve graph header width for loop-group iteration badge (#75095)</p></li>
+<li><p>Scope asset-wide queued event deletion to editable Dags (#75089)</p></li>
+<li><p>Refuse a HITL response for a request the task has since replaced (#74982)</p></li>
+<li><p>Stop the secrets backend lookup from importing the task runner outside tasks (#74980)</p></li>
+<li><p>Fix <code class="docutils literal notranslate"><span class="pre">map_index_template</span></code> failing for numeric-looking labels with <code class="docutils literal notranslate"><span class="pre">render_template_as_native_obj</span></code> (#74978)</p></li>
+<li><p>Do not abort Dag run creation when a deadline alert fails (#74975)</p></li>
+<li><p>Fix ORM models failing to configure in processes that skip database setup (#74971)</p></li>
+<li><p>Fix Lang-SDK decoder typing for pydantic 2.14 <code class="docutils literal notranslate"><span class="pre">TypeForm</span></code> signature (#74970)</p></li>
+<li><p>Fix CLI –bundle-name finding no Dags in Git bundles (#74969)</p></li>
+<li><p>Fix clearing with upstream and downstream selecting unrelated tasks (#74968)</p></li>
+<li><p>Make <code class="docutils literal notranslate"><span class="pre">ZIP_REGEX</span></code> case-insensitive to match .ZIP archives (#74967)</p></li>
+<li><p>Fix /ui/dags recent-runs query degradation on large, skewed dag_run tables (#74966)</p></li>
+<li><p>Fix missing <code class="docutils literal notranslate"><span class="pre">task.queued_duration</span></code> metric in Airflow 3 (#74965)</p></li>
+<li><p>UI: Keep JSON text in string HITL params instead of showing [object Object] (#74961)</p></li>
+<li><p>UI: Fix the Dags list showing an error page and reduce unnecessary re-renders (#74956)</p></li>
+<li><p>Fix Dag list run badges and counters not refreshing after completion (#74954)</p></li>
+<li><p>Drain result_queue before dispatch in LocalExecutor to prevent runtime dispatch deadlock (#74949)</p></li>
+<li><p>Clear language SDK task XComs in the coordinator when a try starts (#74936)</p></li>
+<li><p>Fix dynamically mapped tasks never running on scheduled Dag runs (#74918)</p></li>
+<li><p>Match camelCase keys against sensitive field names in masker (#74897)</p></li>
+<li><p>Keep queued connection tests from overwriting newer connections (#74895)</p></li>
+<li><p>Fix Dag version diff max-changes border, limit wording and duplicate count (#74886)</p></li>
+<li><p>Do not warn about bare postgresql:// metadata DB URLs (#74884)</p></li>
+<li><p>Resolve a trigger’s XCom requests as its deferred task instance (#74868)</p></li>
+<li><p>Fix JWT token not refreshed when token expires mid-request (#74865)</p></li>
+<li><p>Java SDK: Reject byte arrays instead of letting the task hang (#74831)</p></li>
+<li><p>Go SDK: pack a bundle that registers no Dags at pack time (#74821)</p></li>
+<li><p>Report a Dag whose timetable fails to load as an import error (#74807)</p></li>
+<li><p>UI: Fix clearing a task instance doing nothing after Confirm (#74738)</p></li>
 <li><p>Fix 400 and 500s on POST /connections/defaults in multi-team mode (#74615)</p></li>
 <li><p>Keep the scheduler running when a queued run’s Dag fails to deserialize (#74499)</p></li>
 <li><p>Fix plugin applies_to scoping (#74425)</p></li>
@@ -2612,6 +2760,38 @@ Airflow drops support for a Python version in <code class="docutils literal notr
 <section id="miscellaneous">
 <h3>Miscellaneous<a class="headerlink" href="#miscellaneous" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <ul class="simple">
+<li><p>TS SDK: Collect <code class="docutils literal notranslate"><span class="pre">dag_dependencies</span></code> in the tasks pass (#75191)</p></li>
+<li><p>Mask CLI secrets in the audit log by parsed argument, not argv position (#75144)</p></li>
+<li><p>UI: Replace stacked Dag header banners with inline status (#75125)</p></li>
+<li><p>Pass runtime values to example Dag shell commands through env (#75121)</p></li>
+<li><p>Read XCom without object reconstruction during dependency evaluation (#75117)</p></li>
+<li><p>Add the resume event to stored next_kwargs without decoding them (#75116)</p></li>
+<li><p>Mask XCom values in the audit log (#75113)</p></li>
+<li><p>Mask registered secrets at any nesting depth (#75112)</p></li>
+<li><p>Open the Dags menu from the Dags nav button instead of navigating (#75109)</p></li>
+<li><p>Scope upstream asset events of a Dag run to assets and Dags the caller may read (#75108)</p></li>
+<li><p>Mask provider-declared sensitive connection extras on every connection type (#75106)</p></li>
+<li><p>Validate <code class="docutils literal notranslate"><span class="pre">CallbackTrigger</span></code> callback path before running the callback (#75102)</p></li>
+<li><p>Render XCom values on the API server without rebuilding objects (#75088)</p></li>
+<li><p>UI: Guard the remaining <code class="docutils literal notranslate"><span class="pre">RadioCardRoot</span></code> values instead of casting (#74989)</p></li>
+<li><p>UI: Keep unnamed columns out of the table columns menu (#74988)</p></li>
+<li><p>Lazy-load the Code tab grammar from the Dag’s stored language (#74987)</p></li>
+<li><p>UI: Use <code class="docutils literal notranslate"><span class="pre">RadioCardRoot</span></code>’s typed <code class="docutils literal notranslate"><span class="pre">onValueChange</span></code> instead of DOM casts (#74979)</p></li>
+<li><p>Highlight YAML Dag source in the Code tab (#74972)</p></li>
+<li><p>UI: Drop the loading spinner for base React plugins (#74964)</p></li>
+<li><p>Resolve loop iterations through family and path columns on dynamic regions (#74963)</p></li>
+<li><p>Show Dag version diff values-hidden pill only when values are hidden (#74960)</p></li>
+<li><p>Coerce delta and other typed fields when building operators from YAML Dags (#74959)</p></li>
+<li><p>UI: Fold draining into the Dags Paused state filter (#74958)</p></li>
+<li><p>UI: Add clicked tags to the Dags list filters instead of replacing them (#74957)</p></li>
+<li><p>UI: Open nav sidebar menus on hover and add a Dags menu (#74953)</p></li>
+<li><p>Reduce db clean batch probe overhead (#74952)</p></li>
+<li><p>Batch triggerer unused trigger cleanup deletes (#74950)</p></li>
+<li><p>Upgrade Task Loop UX (#74931)</p></li>
+<li><p>Skip the scheduler’s Dag lookup for Dag runs with no callback to send (#74857)</p></li>
+<li><p>TS SDK: Reject <code class="docutils literal notranslate"><span class="pre">triggerDagRun</span></code> tasks in <code class="docutils literal notranslate"><span class="pre">dag.if</span></code> and <code class="docutils literal notranslate"><span class="pre">dag.switch</span></code> (#74828)</p></li>
+<li><p>Java SDK: Rename annotation namespace from Builder to Airflow (#74826)</p></li>
+<li><p>Show serializer schema in Dag version diff only when it differs (#74739)</p></li>
 <li><p>Update waiting tasks to the latest Dag version (#74592)</p></li>
 <li><p>Disable psycopg3 auto-prepare by default behind connection poolers (#74581)</p></li>
 <li><p>Make airflow standalone discover new Dag files within seconds (#74479)</p></li>
@@ -2777,6 +2957,16 @@ Airflow drops support for a Python version in <code class="docutils literal notr
 <section id="doc-only-changes">
 <h3>Doc Only Changes<a class="headerlink" href="#doc-only-changes" title="Link to this heading"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></a></h3>
 <ul class="simple">
+<li><p>Complete Hindi (hi) UI translations (#75183)</p></li>
+<li><p>Document that the HITL operator body is rendered as Markdown (#75136)</p></li>
+<li><p>Fix missing and incorrect endpoints in the API permission reference (#75099)</p></li>
+<li><p>Add documentation for the new YAML Dag format (#75053)</p></li>
+<li><p>Add missing zh-CN translations for new UI strings (#75023)</p></li>
+<li><p>Close German Translation Gaps 2026-10-15 (#74990)</p></li>
+<li><p>Point the TaskFlow tutorial’s retries section to resumable tasks (#74984)</p></li>
+<li><p>Close German Translation Gaps 2026-10-14 (#74962)</p></li>
+<li><p>Document that <code class="docutils literal notranslate"><span class="pre">use_job_schedule</span></code> also stops asset-triggered Dag runs (#74951)</p></li>
+<li><p>Complete Hebrew UI translations 2026-10-16 (#74855)</p></li>
 <li><p>Add missing Taiwanese Mandarin translations (#74545)</p></li>
 <li><p>Add missing Polish UI translations (#74533)</p></li>
 <li><p>Add missing Taiwanese Mandarin translations for task states and Dag list settings (#74486)</p></li>
@@ -10717,6 +10907,12 @@ Any code handling this failure in addition to timeouts should move to caching th
 <li><a class="reference internal" href="#deprecate-cyclic-taskgroup-dependencies-73746">Deprecate cyclic TaskGroup dependencies (#73746)</a></li>
 <li><a class="reference internal" href="#language-sdk-coordinators-load-task-handlers-from-a-dag-bundle-73970">Language SDK coordinators load task handlers from a Dag bundle (#73970)</a></li>
 <li><a class="reference internal" href="#support-for-python-3-10-has-been-removed-74151">Support for Python 3.10 has been removed (#74151)</a></li>
+<li><a class="reference internal" href="#deprecate-the-required-kwargs-attribute-for-custom-deadline-references-70714">Deprecate the <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> attribute for custom deadline references (#70714)</a></li>
+<li><a class="reference internal" href="#ci-and-production-images-are-now-based-on-docker-hardened-images-and-debian-13-73038">CI and production images are now based on Docker Hardened Images and Debian 13 (#73038)</a></li>
+<li><a class="reference internal" href="#task-sdk-api-client-trusts-the-system-certificate-store-instead-of-certifi-73116">Task SDK API client trusts the system certificate store instead of <code class="docutils literal notranslate"><span class="pre">certifi</span></code> (#73116)</a></li>
+<li><a class="reference internal" href="#older-workers-can-no-longer-resume-deferred-tasks-whose-next-kwargs-hold-custom-classes-73577">Older workers can no longer resume deferred tasks whose <code class="docutils literal notranslate"><span class="pre">next_kwargs</span></code> hold custom classes (#73577)</a></li>
+<li><a class="reference internal" href="#deadline-alert-callback-kwargs-are-decoded-where-the-callback-runs-74830">Deadline Alert callback kwargs are decoded where the callback runs (#74830)</a></li>
+<li><a class="reference internal" href="#custom-xcom-backends-that-override-serialize-value-must-implement-store-value-to-support-task-loops-74858">Custom XCom backends that override <code class="docutils literal notranslate"><span class="pre">serialize_value</span></code> must implement <code class="docutils literal notranslate"><span class="pre">store_value</span></code> to support task loops (#74858)</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#new-features">New Features</a></li>

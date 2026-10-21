@@ -1067,20 +1067,24 @@ date would then be the logical date + scheduled interval.</p>
 <span class="sd">    """</span>
     <span class="n">get_ip</span> <span class="o">=</span> <span class="n">GetRequestOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"get_ip"</span><span class="p">,</span> <span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">)</span>
 
-    <span class="nd">@task</span><span class="p">(</span><span class="n">multiple_outputs</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">prepare_command</span><span class="p">(</span><span class="n">raw_json</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_external_ip</span><span class="p">(</span><span class="n">raw_json</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">external_ip</span> <span class="o">=</span> <span class="n">raw_json</span><span class="p">[</span><span class="s2">"origin"</span><span class="p">]</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">ipaddress</span><span class="o">.</span><span class="n">ip_address</span><span class="p">(</span><span class="n">external_ip</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span>
-                <span class="s2">"command"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"echo 'Seems like today your server executing Airflow is connected from IP </span><span class="si">{</span><span class="n">external_ip</span><span class="si">}</span><span class="s2">'"</span><span class="p">,</span>
-            <span class="p">}</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">ipaddress</span><span class="o">.</span><span class="n">ip_address</span><span class="p">(</span><span class="n">external_ip</span><span class="p">))</span>
         <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid IP address: '</span><span class="si">{</span><span class="n">external_ip</span><span class="si">}</span><span class="s2">'."</span><span class="p">)</span>
 
-    <span class="n">command_info</span> <span class="o">=</span> <span class="n">prepare_command</span><span class="p">(</span><span class="n">get_ip</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+    <span class="n">external_ip</span> <span class="o">=</span> <span class="n">get_external_ip</span><span class="p">(</span><span class="n">get_ip</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
 
-    <span class="n">BashOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"echo_ip_info"</span><span class="p">,</span> <span class="n">bash_command</span><span class="o">=</span><span class="n">command_info</span><span class="p">[</span><span class="s2">"command"</span><span class="p">])</span>
+    <span class="c1"># Pass the value to the command through the environment rather than formatting it into the</span>
+    <span class="c1"># command text, so the shell never interprets it as part of the command.</span>
+    <span class="n">BashOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"echo_ip_info"</span><span class="p">,</span>
+        <span class="n">bash_command</span><span class="o">=</span><span class="s1">'echo "Seems like today your server executing Airflow is connected from IP $EXTERNAL_IP"'</span><span class="p">,</span>
+        <span class="n">env</span><span class="o">=</span><span class="p">{</span><span class="s2">"EXTERNAL_IP"</span><span class="p">:</span> <span class="n">external_ip</span><span class="p">},</span>
+        <span class="n">append_env</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
 
 
 <span class="n">example_dag</span> <span class="o">=</span> <span class="n">example_dag_decorator</span><span class="p">()</span>

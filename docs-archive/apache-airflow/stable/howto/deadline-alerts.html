@@ -1177,9 +1177,9 @@ raises <code class="docutils literal notranslate"><span class="pre">DeadlineRefe
 <span class="k">class</span><span class="w"> </span><span class="nc">MyCustomDecoratedReference</span><span class="p">(</span><span class="n">BaseDeadlineReference</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""A custom reference evaluated when Dag runs are created."""</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_evaluate_with</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="p">:</span>
-        <span class="c1"># Add your business logic here</span>
-        <span class="k">return</span> <span class="n">your_datetime</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_evaluate_with</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">,</span> <span class="n">dagrun</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="p">:</span>
+        <span class="n">my_datetime</span> <span class="o">=</span> <span class="n">my_business_logic</span><span class="p">(</span><span class="n">dagrun</span><span class="o">.</span><span class="n">logical_date</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">my_datetime</span>
 
 
 <span class="c1"># You can specify when evaluate_with will be called by providing a DeadlineReference.TYPES value.</span>
@@ -1187,14 +1187,9 @@ raises <code class="docutils literal notranslate"><span class="pre">DeadlineRefe
 <span class="k">class</span><span class="w"> </span><span class="nc">MyQueuedReference</span><span class="p">(</span><span class="n">BaseDeadlineReference</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""A custom reference evaluated when Dag runs are queued."""</span>
 
-    <span class="c1"># Ask for the Dag run context values supplied by Airflow; see notes below.</span>
-    <span class="n">required_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"dag_id"</span><span class="p">,</span> <span class="s2">"run_id"</span><span class="p">}</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_evaluate_with</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="p">:</span>
-        <span class="n">dag_id</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">"dag_id"</span><span class="p">]</span>
-        <span class="n">run_id</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">"run_id"</span><span class="p">]</span>
-        <span class="c1"># Use dag_id and run_id in your calculation</span>
-        <span class="k">return</span> <span class="n">your_datetime</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_evaluate_with</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">,</span> <span class="n">dagrun</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="p">:</span>
+        <span class="n">my_datetime</span> <span class="o">=</span> <span class="n">my_business_logic</span><span class="p">(</span><span class="n">dagrun</span><span class="o">.</span><span class="n">queued_at</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">my_datetime</span>
 
 
 <span class="c1"># Register the classes so the scheduler can resolve them when it deserializes the Dag.</span>
@@ -1269,10 +1264,10 @@ and give every field a default value.</p></li>
 <li><p><strong>Plugin Registration</strong>: Custom references must be listed in the <code class="docutils literal notranslate"><span class="pre">deadline_references</span></code> attribute
 of an <code class="docutils literal notranslate"><span class="pre">AirflowPlugin</span></code>, so the plugins directory is the natural home for them.</p></li>
 <li><p><strong>API Server Restart</strong>: Restart the Airflow API Server after adding or modifying custom references.</p></li>
-<li><p><strong>Required Parameters</strong>: <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> declares which Dag run context values Airflow should
-forward to <code class="docutils literal notranslate"><span class="pre">_evaluate_with()</span></code>. Only <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> and <code class="docutils literal notranslate"><span class="pre">run_id</span></code> are available; declaring anything
-else raises a <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when the deadline is evaluated. To configure a reference itself, give
-it constructor fields or read from an Airflow Variable.</p></li>
+<li><p><strong>Dag run context</strong>: Add a <code class="docutils literal notranslate"><span class="pre">dagrun</span></code> parameter to <code class="docutils literal notranslate"><span class="pre">_evaluate_with()</span></code> to use the Dag run being evaluated.</p></li>
+<li><p><strong>Required Parameters</strong> <em>(deprecated)</em>: <code class="docutils literal notranslate"><span class="pre">required_kwargs</span></code> declares which parameters your reference
+needs. It still works but is deprecated and will be removed in Airflow 4.0 — declare the keyword-only
+parameters your <code class="docutils literal notranslate"><span class="pre">_evaluate_with()</span></code> needs instead.</p></li>
 <li><p><strong>Database Access</strong>: Use the <code class="docutils literal notranslate"><span class="pre">session</span></code> parameter for Airflow database queries if needed.</p></li>
 </ul>
 </section>
