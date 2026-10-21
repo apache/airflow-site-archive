@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -713,11 +713,17 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Literal</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.usage</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunUsage</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticAIHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.mixins.approval</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMApprovalMixin</span><span class="p">,</span> <span class="n">normalize_assigned_users</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.mixins.cancellable_run</span><span class="w"> </span><span class="kn">import</span> <span class="n">CancellableAgentRunMixin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.mixins.usage_budget</span><span class="w"> </span><span class="kn">import</span> <span class="n">UsageBudgetMixin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.observability</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">build_run_identity_attributes</span><span class="p">,</span>
+    <span class="n">make_task_instance_run_key</span><span class="p">,</span>
+    <span class="n">stamp_identity_on_agent_spans</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.policies.decision</span><span class="w"> </span><span class="kn">import</span> <span class="n">DecisionPolicy</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.decision</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">DECISION_XCOM_KEY</span><span class="p">,</span>
@@ -733,9 +739,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">timed_out_record</span><span class="p">,</span>
     <span class="n">validate_decision_policy</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">MODEL_NAME_XCOM_KEY</span><span class="p">,</span> <span class="n">log_run_summary</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.logging</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">MODEL_NAME_XCOM_KEY</span><span class="p">,</span>
+    <span class="n">format_usage_for_xcom</span><span class="p">,</span>
+    <span class="n">log_run_summary</span><span class="p">,</span>
+    <span class="n">log_run_usage</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.output_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">dump_output_to_json</span><span class="p">,</span> <span class="n">rehydrate_pydantic_output</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.usage</span><span class="w"> </span><span class="kn">import</span> <span class="n">coerce_usage_limits</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.usage_budget</span><span class="w"> </span><span class="kn">import</span> <span class="n">copy_run_usage</span><span class="p">,</span> <span class="n">subtract_run_usage</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.notifier</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseNotifier</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span> <span class="n">BaseOperator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_1_PLUS</span>
@@ -792,6 +804,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    ``DownstreamTasksSkipped`` to signal success is fine): a failure would be retried</span>
 <span class="sd">    with a fresh budget. This applies to subclasses that override ``execute`` or</span>
 <span class="sd">    ``execute_complete``.</span>
+
+<span class="sd">    Alongside the returned output, the run's ``run_id`` and token ``usage``</span>
+<span class="sd">    are pushed to XCom under the ``run_id`` and ``usage`` keys, the same shape</span>
+<span class="sd">    :class:`~airflow.providers.common.ai.operators.agent.AgentOperator` uses,</span>
+<span class="sd">    so a downstream task can reference the run and what it cost. ``usage`` is this</span>
+<span class="sd">    attempt's own usage, not the cross-attempt cumulative total described under</span>
+<span class="sd">    ``usage_limits`` below. Both are pushed on a failed run too, so a downstream</span>
+<span class="sd">    ``all_done`` task or failure callback can read what was spent, and which run,</span>
+<span class="sd">    before it raised. The ``run_id`` also ties the task to its GenAI trace (see the</span>
+<span class="sd">    provider's observability docs).</span>
 
 <span class="sd">    :param prompt: The prompt to send to the LLM.</span>
 <span class="sd">    :param llm_conn_id: Connection ID for the LLM provider.</span>
@@ -1100,9 +1122,43 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">usage_limits</span> <span class="o">=</span> <span class="n">coerce_usage_limits</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">usage_limits</span><span class="p">)</span>
 
         <span class="n">agent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_agent</span><span class="p">(</span><span class="n">output_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">,</span> <span class="n">instructions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">system_prompt</span><span class="p">)</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_llm</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">agent</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span><span class="p">)</span>
+
+        <span class="c1"># A per-attempt key (the task-instance id on Airflow 3, which is regenerated on each</span>
+        <span class="c1"># retry; dag/run/task/map/try on Airflow 2) ties this run to its GenAI trace, the same</span>
+        <span class="c1"># join key AgentOperator uses. A hand-built context with no task instance runs untracked.</span>
+        <span class="n">ti</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_task_instance</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">run_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">ti</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">stamp_identity_on_agent_spans</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">build_run_identity_attributes</span><span class="p">(</span><span class="n">ti</span><span class="p">))</span>
+            <span class="n">run_kwargs</span><span class="p">[</span><span class="s2">"run_id"</span><span class="p">]</span> <span class="o">=</span> <span class="n">make_task_instance_run_key</span><span class="p">(</span><span class="n">ti</span><span class="p">)</span>
+
+        <span class="n">attempt_usage</span> <span class="o">=</span> <span class="n">RunUsage</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_llm</span><span class="p">(</span>
+                <span class="n">context</span><span class="p">,</span> <span class="n">agent</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span><span class="p">,</span> <span class="n">run_usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">,</span> <span class="o">**</span><span class="n">run_kwargs</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+            <span class="c1"># A run that raises partway through (e.g. a cost_limit-triggered UsageLimitExceeded)</span>
+            <span class="c1"># still reports what it spent: the capped run is the one cost tracking most needs.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">log_run_usage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">attempt_usage</span><span class="p">,</span> <span class="n">outcome</span><span class="o">=</span><span class="s2">"failed"</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to log partial usage for the failed run"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_push_xcom</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s2">"usage"</span><span class="p">,</span> <span class="n">format_usage_for_xcom</span><span class="p">(</span><span class="n">attempt_usage</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to push usage XCom for the failed run"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ti</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_push_xcom</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s2">"run_id"</span><span class="p">,</span> <span class="n">run_kwargs</span><span class="p">[</span><span class="s2">"run_id"</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to push run_id XCom for the failed run"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">raise</span>
         <span class="n">output</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">output</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_push_xcom</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s2">"usage"</span><span class="p">,</span> <span class="n">format_usage_for_xcom</span><span class="p">(</span><span class="n">attempt_usage</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">ti</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_push_xcom</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s2">"run_id"</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
         <span class="n">model_confidence</span> <span class="o">=</span> <span class="n">ModelConfidence</span><span class="o">.</span><span class="n">from_result</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">model_confidence</span><span class="o">.</span><span class="n">model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_push_xcom</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">MODEL_NAME_XCOM_KEY</span><span class="p">,</span> <span class="n">model_confidence</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
@@ -1195,22 +1251,42 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_run_llm</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">user_prompt</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">usage_limits</span><span class="p">:</span> <span class="n">UsageLimits</span> <span class="o">|</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+        <span class="n">agent</span><span class="p">:</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">user_prompt</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">usage_limits</span><span class="p">:</span> <span class="n">UsageLimits</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">run_usage</span><span class="p">:</span> <span class="n">RunUsage</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">run_kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AgentRunResult</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">"""Run the agent, bounding ``usage_limits`` across task retries when the usage budget applies."""</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Run the agent, bounding ``usage_limits`` across task retries when the usage budget applies.</span>
+
+<span class="sd">        ``run_usage``, when given, receives this attempt's own usage, also when the run raises</span>
+<span class="sd">        partway through. With the usage budget, pydantic-ai is handed the cross-attempt total</span>
+<span class="sd">        instead, so the attempt's share is credited to ``run_usage`` once the run ends.</span>
+<span class="sd">        """</span>
         <span class="c1"># Contexts built without a ``task_instance`` stay valid for runs that have no ``usage_limits``.</span>
         <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span> <span class="k">if</span> <span class="n">usage_limits</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_usage_budget</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_usage_budget</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">usage_limits</span><span class="p">,</span> <span class="n">ti</span><span class="o">=</span><span class="n">ti</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_usage_budget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_agent_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">run_usage</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">run_kwargs</span><span class="p">[</span><span class="s2">"usage"</span><span class="p">]</span> <span class="o">=</span> <span class="n">run_usage</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_agent_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span><span class="p">,</span> <span class="o">**</span><span class="n">run_kwargs</span><span class="p">)</span>
             <span class="n">log_run_summary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">result</span>
-        <span class="n">run_usage</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_usage_budget</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
-        <span class="n">result</span><span class="p">,</span> <span class="n">attempt_usage</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_tracked</span><span class="p">(</span>
-            <span class="n">agent</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">,</span> <span class="n">run_usage</span><span class="o">=</span><span class="n">run_usage</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span>
-        <span class="p">)</span>
+        <span class="n">cumulative_usage</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_usage_budget</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="n">copy_run_usage</span><span class="p">(</span><span class="n">cumulative_usage</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">,</span> <span class="n">attempt_usage</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_tracked</span><span class="p">(</span>
+                <span class="n">agent</span><span class="p">,</span> <span class="n">user_prompt</span><span class="p">,</span> <span class="n">run_usage</span><span class="o">=</span><span class="n">cumulative_usage</span><span class="p">,</span> <span class="n">usage_limits</span><span class="o">=</span><span class="n">usage_limits</span><span class="p">,</span> <span class="o">**</span><span class="n">run_kwargs</span>
+            <span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">run_usage</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">run_usage</span><span class="o">.</span><span class="n">incr</span><span class="p">(</span><span class="n">subtract_run_usage</span><span class="p">(</span><span class="n">cumulative_usage</span><span class="p">,</span> <span class="n">base</span><span class="p">))</span>
         <span class="n">log_run_summary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="n">attempt_usage</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_log_cumulative_usage</span><span class="p">(</span><span class="n">run_usage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log_cumulative_usage</span><span class="p">(</span><span class="n">cumulative_usage</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_log_review</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">review</span><span class="p">:</span> <span class="n">ReviewReason</span><span class="p">,</span> <span class="n">confidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1246,21 +1322,30 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="bp">self</span><span class="o">.</span><span class="n">_push_decision</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">timed_out_record</span><span class="p">(</span><span class="n">decision</span><span class="p">))</span>
             <span class="k">raise</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_task_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return ``context["task_instance"]`` if it can push XComs, else ``None``.</span>
+
+<span class="sd">        A hand-built context (old tests, custom runners) may carry no task instance, ``None``, or a</span>
+<span class="sd">        dict stand-in, none of which has the attributes the run identity is built from either.</span>
+<span class="sd">        """</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">ti</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"xcom_push"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_push_xcom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Push ``value`` under ``key`` on XCom, honoring ``do_xcom_push`` and a missing task instance."""</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
             <span class="k">return</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
-        <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
-            <span class="n">ti</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">push</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"xcom_push"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">push</span><span class="p">):</span>
+        <span class="n">ti</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_task_instance</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ti</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># A hand-built context (a dict, or no task instance at all) has nowhere to push to; the</span>
             <span class="c1"># value is inspection output, so the run goes on without it.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"No task instance in the context; </span><span class="si">%r</span><span class="s2"> was not pushed to XCom."</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
             <span class="k">return</span>
-        <span class="n">push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_push_decision</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">record</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Expose what the model proposed, its confidence, and what the gate decided, on XCom."""</span>
@@ -1538,7 +1623,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=8d563738"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

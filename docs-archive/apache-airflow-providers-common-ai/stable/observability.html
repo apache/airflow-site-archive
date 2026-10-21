@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -510,7 +510,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.0.0</span>
+        <span class="version-label">Version: </span><span class="version">1.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -734,10 +734,11 @@ environment variables. If core tracing is not enabled in the worker process,
 no GenAI spans are emitted.</p></li>
 <li><p><strong>Correlation.</strong> The worker opens a task span before the operator runs, so the
 agent’s spans nest under it and share its <code class="docutils literal notranslate"><span class="pre">trace_id</span></code>.
-<a class="reference internal" href="_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a> (and
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>) additionally stamps the task-instance identity on every GenAI
-span it emits: the five keys core tracing already puts on the task span
-(<code class="docutils literal notranslate"><span class="pre">airflow.dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.dag_run.run_id</span></code>,
+<a class="reference internal" href="_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a> and
+<a class="reference internal" href="_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator" title="airflow.providers.common.ai.operators.llm.LLMOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMOperator</span></code></a> (and their
+<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> decorator forms) additionally stamp the
+task-instance identity on every GenAI span they emit: the five keys core
+tracing already puts on the task span (<code class="docutils literal notranslate"><span class="pre">airflow.dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.dag_run.run_id</span></code>,
 <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.try_number</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.map_index</span></code>) plus
 <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.id</span></code> as the per-attempt run join key. So a span is
 filterable by dag, task, run, attempt, or map index directly, without walking
@@ -747,25 +748,27 @@ An automatic retry reuses the task instance’s persisted trace context, so all
 attempts share one trace and appear as repeated task-run spans on it,
 distinguished by <code class="docutils literal notranslate"><span class="pre">try</span> <span class="pre">number</span></code>. Only a manual clear or rerun regenerates the
 context and starts a new trace.</p></li>
-<li><p><strong>Run join key.</strong> For an <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> run, the task-instance id (unique
-per attempt, since Airflow regenerates it on each retry) is passed to
+<li><p><strong>Run join key.</strong> For an <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> or <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> run (and their
+<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> decorator equivalents), the task-instance id
+(unique per attempt, since Airflow regenerates it on each retry) is passed to
 pydantic-ai as the run’s <code class="docutils literal notranslate"><span class="pre">run_id</span></code>. It surfaces on the run’s GenAI spans as
 <code class="docutils literal notranslate"><span class="pre">gen_ai.agent.call.id</span></code>, and the operator also exposes it, alongside the run’s
 token usage, on XCom under the <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code> keys. <code class="docutils literal notranslate"><span class="pre">usage</span></code> is
 this attempt’s own usage – not the cross-attempt cumulative total described
 under <code class="docutils literal notranslate"><span class="pre">usage_limits</span></code> in <a class="reference internal" href="operators/agent.html#howto-operator-agent"><span class="std std-ref">Agents with tools: AgentOperator and &#64;task.agent</span></a> – and it is pushed on
 a failed attempt too, so a downstream <code class="docutils literal notranslate"><span class="pre">all_done</span></code> task or failure callback
-can read what the last attempt spent. With <code class="docutils literal notranslate"><span class="pre">durable=True</span></code>, steps an
-attempt replays from the cache are not part of it. XCom is cleared at the start of every
+can read what the last attempt spent. XCom is cleared at the start of every
 attempt, so only the most recent attempt’s value survives, not each
 historical attempt’s. A downstream task can then reference the
-run (<code class="docutils literal notranslate"><span class="pre">ti.xcom_pull(task_ids=&quot;my_agent&quot;,</span> <span class="pre">key=&quot;run_id&quot;)</span></code>) and a trace
+run (<code class="docutils literal notranslate"><span class="pre">ti.xcom_pull(task_ids=&quot;my_task&quot;,</span> <span class="pre">key=&quot;run_id&quot;)</span></code>) and a trace
 backend can join a task’s output to its agent trace without parsing logs.
-With <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code> the <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code> reflect the initial
-model run, not the human-feedback regenerations. A run that resumes after a
-tool approval (see <a class="reference internal" href="tool_approval.html"><span class="doc">Approve an agent’s tool calls</span></a>) continues as
-<code class="docutils literal notranslate"><span class="pre">&lt;task-instance</span> <span class="pre">id&gt;-resumed-&lt;n&gt;</span></code> after pause <code class="docutils literal notranslate"><span class="pre">n</span></code>, which is the <code class="docutils literal notranslate"><span class="pre">run_id</span></code>
-the operator pushes; <code class="docutils literal notranslate"><span class="pre">usage</span></code> covers every part.
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> additionally: with <code class="docutils literal notranslate"><span class="pre">durable=True</span></code>, steps an attempt replays
+from the cache are not part of <code class="docutils literal notranslate"><span class="pre">usage</span></code>; with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code> the
+<code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code> reflect the initial model run, not the human-feedback
+regenerations; and a run that resumes after a tool approval (see
+<a class="reference internal" href="tool_approval.html"><span class="doc">Approve an agent’s tool calls</span></a>) continues as <code class="docutils literal notranslate"><span class="pre">&lt;task-instance</span> <span class="pre">id&gt;-resumed-&lt;n&gt;</span></code> after
+pause <code class="docutils literal notranslate"><span class="pre">n</span></code>, which is the <code class="docutils literal notranslate"><span class="pre">run_id</span></code> the operator pushes, with <code class="docutils literal notranslate"><span class="pre">usage</span></code>
+covering every part.
 Airflow 2 has no task-instance id, so there the key is
 <code class="docutils literal notranslate"><span class="pre">&lt;dag_id&gt;/&lt;run_id&gt;/&lt;task_id&gt;/&lt;map_index&gt;/&lt;try_number&gt;</span></code>, and spans carry the five
 identity keys without <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.id</span></code>.</p></li>
@@ -782,12 +785,12 @@ human-feedback regeneration’s, since <code class="docutils literal notranslate
 <code class="docutils literal notranslate"><span class="pre">super().execute()</span></code> – <code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMSQLQueryOperator</span></code>,
 <code class="docutils literal notranslate"><span class="pre">LLMSchemaCompareOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code> – don’t publish it yet;
 this is upcoming work.</p></li>
-<li><p><strong>Scope.</strong> The <code class="docutils literal notranslate"><span class="pre">run_id</span></code> / <code class="docutils literal notranslate"><span class="pre">usage</span></code> XComs come only from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>, and so do the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code> identity attributes, apart from a Strands,
-ADK or OpenAI Agents SDK agent run inside <code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code> (see below). <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> /
-<code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> additionally pushes the model name above. The other LLM
-operators still emit GenAI spans correlated to the task span by nesting, but
-without the identity attributes, the run join key, or the model name.</p></li>
+<li><p><strong>Scope.</strong> The <code class="docutils literal notranslate"><span class="pre">run_id</span></code> / <code class="docutils literal notranslate"><span class="pre">usage</span></code> XComs, the model name, and the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code>
+identity attributes come from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> /
+<code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code>, apart from a Strands, ADK or OpenAI Agents SDK agent run inside
+<code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code> (see below). The other LLM operators still emit GenAI spans
+correlated to the task span by nesting, but without the identity attributes, the run
+join key, the model name, or a <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom.</p></li>
 <li><p id="howto-observability-model-tab"><strong>Model tab.</strong> Separately from tracing, the provider adds an “AI Model” tab to the
 task-instance page showing the resolved model name and the <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom above as a
 readable table, including an estimated cost. It needs Airflow &gt;= 3.4, since it relies on
@@ -1271,7 +1274,7 @@ counted.</p>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=8d563738"></script>
+        <script src="_static/documentation_options.js?v=fc837d61"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

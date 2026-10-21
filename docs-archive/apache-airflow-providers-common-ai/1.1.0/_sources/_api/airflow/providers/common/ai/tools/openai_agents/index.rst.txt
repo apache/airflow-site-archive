@@ -1,0 +1,138 @@
+airflow.providers.common.ai.tools.openai_agents
+===============================================
+
+.. py:module:: airflow.providers.common.ai.tools.openai_agents
+
+.. autoapi-nested-parse::
+
+   Give an OpenAI Agents SDK agent Airflow's tools, and record its traces as the task's spans.
+
+   See the `OpenAI Agents SDK <https://openai.github.io/openai-agents-python/>`__ documentation.
+
+   .. note:: Experimental; see :ref:`howto/stability`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.openai_agents.AirflowTools
+   airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor
+
+
+Module Contents
+---------------
+
+.. py:class:: AirflowTools(*sources)
+
+   Bases: :py:obj:`list`\ [\ :py:obj:`agents.Tool`\ ]
+
+
+   Airflow's tools as OpenAI Agents SDK function tools, in a list to give an ``Agent``.
+
+   Pass toolsets that implement
+   :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``
+   and ``HookToolset``, or individual
+   :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. The agent, its
+   model and its runner stay plain OpenAI Agents SDK.
+
+   .. code-block:: python
+
+       from agents import Agent, Runner
+
+       from airflow.providers.common.ai.tools.openai_agents import AirflowTools
+       from airflow.providers.common.ai.toolsets import SQLToolset
+
+       warehouse = SQLToolset("warehouse", allowed_tables=["orders"])
+       agent = Agent(name="analyst", model=model, tools=AirflowTools(warehouse))
+       answer = Runner.run_sync(agent, question).final_output
+
+   It is a list of ``FunctionTool`` objects typed as ``Agent.tools`` is, so add your own
+   tools with ``[*AirflowTools(warehouse), my_tool]``.
+
+   Each tool keeps the source tool's name, description and argument schema, and every
+   result passes through Airflow's secret masker first. The schema is passed as it is,
+   with ``strict_json_schema=False``: the SDK's strict mode would make every argument
+   required. A failure the model can correct, such as a query naming a missing column,
+   reaches it as ``{"error": ...}``, counted against the tool's retry limit afresh on
+   every run of the agent. Arguments that are not a JSON object also come back as
+   ``{"error": ...}``, bounded by the run's ``max_turns`` rather than that limit. A tool
+   still failing once the limit is used up, or any other failure, raises
+   :class:`~airflow.providers.common.ai.tools.ToolCallError` out of ``Runner.run``, so
+   the task fails and Airflow retries it. Tools a toolset marks sequential, such as the
+   sandbox's, run one at a time in the order the model called them.
+
+   An agent holding these tools that another agent calls through ``Agent.as_tool()`` must
+   be given ``failure_error_function=None``: by default ``as_tool`` hands any exception
+   from the inner run to the outer model as text, so the task would carry on.
+
+   :param sources: Toolsets and tools to add, in order.
+
+
+.. py:class:: AirflowTraceProcessor(tracer_provider = None)
+
+   Bases: :py:obj:`agents.tracing.TracingProcessor`
+
+
+   An OpenAI Agents SDK trace processor that records the SDK's traces as OpenTelemetry spans.
+
+   The SDK has a tracing system of its own rather than OpenTelemetry. Register this
+   processor with it and every trace becomes a tree of OpenTelemetry spans under the span
+   that was current when the trace started, so a run inside a task nests under the task's
+   span:
+
+   .. code-block:: python
+
+       from agents import Runner, set_trace_processors
+
+       from airflow.providers.common.ai.tools.openai_agents import AirflowTraceProcessor
+       from airflow.providers.common.ai.tools.tracing import agent_framework_tracing
+
+       set_trace_processors([AirflowTraceProcessor()])
+       with agent_framework_tracing():
+           answer = Runner.run_sync(agent, question).final_output
+
+   ``set_trace_processors`` replaces every processor registered with the SDK, including
+   its default one, which sends every trace to OpenAI. To keep that export, or a processor
+   another tracing library registered, add this one with ``add_trace_processor`` instead.
+   Run the agent inside
+   :func:`~airflow.providers.common.ai.tools.tracing.agent_framework_tracing` so the spans
+   carry the task's identity. While an SDK span runs it is the current span, so spans
+   other instrumentation starts inside a tool or model call, such as an HTTP request,
+   nest under it.
+
+   Spans use the names of the OpenTelemetry GenAI conventions: ``invoke_agent`` for an
+   agent, ``chat`` for a model call with its model and token counts, and ``execute_tool``
+   for a tool call. The SDK's other spans, such as one per ``Runner.run`` and one per turn
+   of the agent loop, are named ``openai_agents.<kind>``. Prompts, completions, tool
+   arguments and results, and the SDK's error messages are recorded only when
+   ``[common.ai] otel_export_enabled`` and ``capture_content`` are both on, and they pass
+   through Airflow's secret masker first. The SDK records that content only while
+   ``RunConfig(trace_include_sensitive_data=True)``, its default; with it off, a model
+   call through the Responses API also carries no model name, since the SDK withholds the
+   whole response.
+
+   :param tracer_provider: The OpenTelemetry tracer provider to record spans with. By
+       default, the global one, which core tracing sets up on the worker.
+
+
+   .. py:method:: on_trace_start(trace)
+
+
+   .. py:method:: on_trace_end(trace)
+
+
+   .. py:method:: on_span_start(span)
+
+
+   .. py:method:: on_span_end(span)
+
+
+   .. py:method:: shutdown()
+
+
+   .. py:method:: force_flush()
+
+

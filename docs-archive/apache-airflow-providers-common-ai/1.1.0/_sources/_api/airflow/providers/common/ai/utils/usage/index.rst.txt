@@ -1,0 +1,54 @@
+airflow.providers.common.ai.utils.usage
+=======================================
+
+.. py:module:: airflow.providers.common.ai.utils.usage
+
+.. autoapi-nested-parse::
+
+   Coerce a templated ``usage_limits`` dict into a real ``UsageLimits`` instance.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.usage.coerce_usage_limits
+
+
+Module Contents
+---------------
+
+.. py:function:: coerce_usage_limits(usage_limits)
+
+   Coerce a rendered ``usage_limits`` dict into a real ``UsageLimits`` instance.
+
+   A ``UsageLimits`` instance has neither ``resolve`` nor ``template_fields``, so
+   Airflow's template walk is a no-op on it even though ``usage_limits`` is in the
+   operators' ``template_fields``. Passing a plain dict instead lets every field be
+   templated, but the rendered value is then not in the Dag author's control: a
+   Variable that exists but is empty renders to ``""``, and a typo renders to
+   an arbitrary non-numeric string. This function performs the defensive, per-field parsing
+   that keeps those failures loud and specific instead of a ``TypeError`` raised
+   deep inside pydantic-ai.
+
+   - ``usage_limits is None``: returned unchanged.
+   - ``usage_limits`` is already a ``UsageLimits`` instance: returned unchanged, by
+     identity -- an author who built the object themselves owns its field values.
+   - ``usage_limits`` is a dict: each value is coerced per its ``UsageLimits`` field
+     type (see ``_coerce_value``) and the result is passed to ``UsageLimits(**...)``.
+
+   The container shape can't be checked any earlier than this, at the operator's
+   ``__init__``: ``usage_limits`` is a template field, so at ``__init__`` time it may
+   still be a Jinja string that has not been rendered yet (the whole field written
+   as a single expression), and this function is the first point that only ever sees
+   the rendered value.
+
+   :raises TypeError: if ``usage_limits`` is not a ``UsageLimits``, a ``dict``, or
+       ``None`` -- a container-shape problem, checked first.
+   :raises ValueError: if the dict has an unknown key, or a value cannot be coerced
+       to its field's type, is not finite, or is negative -- a value problem, checked
+       per field.
+
+

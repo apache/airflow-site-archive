@@ -1,0 +1,95 @@
+airflow.providers.common.io.xcom.backend
+========================================
+
+.. py:module:: airflow.providers.common.io.xcom.backend
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.io.xcom.backend.T
+   airflow.providers.common.io.xcom.backend.SECTION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.io.xcom.backend.XComObjectStorageBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: T
+
+.. py:data:: SECTION
+   :value: 'common.io'
+
+
+.. py:class:: XComObjectStorageBackend
+
+   Bases: :py:obj:`airflow.sdk.bases.xcom.BaseXCom`
+
+
+   XCom backend that stores data in an object store or database depending on the size of the data.
+
+   If the value is larger than the configured threshold, it will be stored in an object store.
+   Otherwise, it will be stored in the database. If it is stored in an object store, the path
+   to the object in the store will be returned and saved in the database (by BaseXCom). Otherwise, the value
+   itself will be returned and thus saved in the database.
+
+
+   .. py:method:: store_value(coordinate, key, value)
+      :classmethod:
+
+
+      Store an XCom value for ``coordinate`` and return what its XCom row in the metadata database holds.
+
+      Override this to keep values outside the metadata database, in any format. The return value must be
+      JSON-serializable and must locate what was stored, since :meth:`load_value` and :meth:`purge` only
+      receive the row. Every iteration of a task inside a loop is a separate task instance with the same
+      ``dag_id``, ``run_id``, ``task_id``, ``map_index`` and ``key``, so the storage location must tell
+      task instances apart.
+
+      :meth:`XComCoordinate.build_path` builds such a location. When a task instance, or its trigger,
+      writes its own XCom, ``coordinate.ti_id`` is that task instance's id, and a location unique per
+      ``(coordinate.ti_id, key)`` is enough. When one task writes another's XCom, ``coordinate.ti_id`` is
+      ``None``, because only the server knows which task instance the coordinates resolve to, so the
+      location must be unique to each write. A backend that does not use ``build_path`` has to handle both
+      cases itself, or call ``super()``.
+
+      The default stores the value in the metadata database, so an override can call ``super()`` for the
+      values it does not keep elsewhere.
+
+
+
+   .. py:method:: serialize_value(value, *, key = None, task_id = None, dag_id = None, run_id = None, map_index = None)
+      :staticmethod:
+
+
+      Serialize XCom value to JSON str.
+
+
+
+   .. py:method:: deserialize_value(result)
+      :staticmethod:
+
+
+      Deserializes the value from the database or object storage.
+
+      Compression is inferred from the file extension.
+
+
+
+   .. py:method:: purge(xcom, session = None)
+      :staticmethod:
+
+
+      Purge an XCom entry from underlying storage implementations.
+
+
+

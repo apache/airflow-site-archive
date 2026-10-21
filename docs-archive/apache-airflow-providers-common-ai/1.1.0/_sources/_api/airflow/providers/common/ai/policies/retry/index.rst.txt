@@ -1,0 +1,508 @@
+airflow.providers.common.ai.policies.retry
+==========================================
+
+.. py:module:: airflow.providers.common.ai.policies.retry
+
+.. autoapi-nested-parse::
+
+   Model-backed retry policies, one per layer of a ladder from hardcoded to reasoning.
+
+   * **Fallback rules.** :class:`~airflow.sdk.definitions.retry_policy.ExceptionRetryPolicy` and
+     ``fallback_rules``: ``RetryRule`` matches on the exception type, then the task's own
+     ``retries`` and ``retry_delay``. No model. Always the floor.
+   * **Classifier.** :class:`ClassifierRetryPolicy`: the model names one of the author's
+     ``categories`` and the :class:`ErrorCategory` table decides whether that category is
+     retried, after how long, and how sure the model has to be. Tuned through descriptions and
+     a confidence bar, not through reasoning. A decision model runs here; a text model can too.
+   * **LLM.** :class:`LLMRetryPolicy`: a text model classifies the failure, decides whether to
+     retry and how long to wait from ``instructions``, and explains itself.
+
+   They chain: ``ClassifierRetryPolicy(..., fallback_policy=LLMRetryPolicy(...))`` consults the
+   LLM when the classifier is unsure or unreachable, and whatever no layer decides falls to the
+   rules.
+
+   Requires Airflow 3.3+ (RetryPolicy was added in AIP-105).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.policies.retry.DEFAULT_INSTRUCTIONS
+   airflow.providers.common.ai.policies.retry.DEFAULT_CATEGORIES
+   airflow.providers.common.ai.policies.retry.CLASSIFIER_INSTRUCTIONS
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.policies.retry.ErrorClassification
+   airflow.providers.common.ai.policies.retry.ErrorCategory
+   airflow.providers.common.ai.policies.retry.LLMRetryPolicy
+   airflow.providers.common.ai.policies.retry.ClassifierRetryPolicy
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.policies.retry.redact_registered_secrets
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_INSTRUCTIONS
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """You are an error classifier for a data pipeline system. Given an error message from a failed task, classify it into one of these categories:
+      
+      - rate_limit: API throttling or quota exceeded. Should retry after a delay.
+      - auth: Credentials invalid, expired, or missing permissions. Should NOT retry.
+      - network: Transient connectivity issue. Should retry quickly.
+      - data: Schema validation, type mismatch, or bad input data. Should NOT retry.
+      - resource: Resource not found or unavailable (e.g., missing table, bucket). Should NOT retry.
+      - transient: Temporary issue likely to resolve on its own. Should retry.
+      - permanent: Problem that won't resolve without code or config changes. Should NOT retry.
+      
+      Set suggested_delay_seconds based on the error type: 60 for rate limits, 10 for network, 30 for transient. Set 0 for errors that should not retry."""
+
+   .. raw:: html
+
+      </details>
+
+
+
+   The default system prompt of :class:`LLMRetryPolicy`: the taxonomy, retry rules and delays live here.
+
+
+.. py:class:: ErrorClassification(/, **data)
+
+   Bases: :py:obj:`pydantic.BaseModel`
+
+
+   Structured LLM output for error classification.
+
+
+   .. py:attribute:: category
+      :type:  str
+
+      One of the categories the instructions describe, by default: rate_limit, auth, network, data, resource, transient, permanent.
+
+
+
+   .. py:attribute:: should_retry
+      :type:  bool
+
+      Whether the operation should be retried.
+
+
+
+   .. py:attribute:: suggested_delay_seconds
+      :type:  int
+      :value: 0
+
+
+      How long to wait before retrying (0 if should_retry is False).
+
+
+
+   .. py:attribute:: reasoning
+      :type:  str
+
+      Brief explanation of the classification decision.
+
+
+
+.. py:class:: ErrorCategory
+
+   One kind of failure a :class:`ClassifierRetryPolicy` may name, and what it does when it does.
+
+   The value of the policy's ``categories`` mapping, keyed by the category name the model
+   answers with.
+
+   :param description: What failures belong here. Sent to the model in the output schema
+       next to the category name, so the model reads the option together with its meaning
+       rather than guessing from the name.
+   :param retry: Whether a failure in this category is retried (``True``, default) or fails
+       the task at once.
+   :param delay: How long to wait before the retry. ``None`` (default) keeps the task's own
+       ``retry_delay`` and backoff. Only meaningful with ``retry=True``.
+   :param min_confidence: A bar for this category that differs from the policy's
+       ``min_confidence``, so a category whose wrong pick costs more (``permanent`` ends
+       the task) can demand more certainty. Needs a policy bar to differ from; ``None``
+       inherits it.
+
+
+   .. py:attribute:: description
+      :type:  str
+
+
+   .. py:attribute:: retry
+      :type:  bool
+      :value: True
+
+
+
+   .. py:attribute:: delay
+      :type:  datetime.timedelta | None
+      :value: None
+
+
+
+   .. py:attribute:: min_confidence
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+.. py:data:: DEFAULT_CATEGORIES
+   :type:  collections.abc.Mapping[str, ErrorCategory]
+
+   The default ``categories`` of :class:`ClassifierRetryPolicy`: the same seven the
+   :data:`DEFAULT_INSTRUCTIONS` describe, with the same retry/fail split and delays.
+
+   Retried: ``rate_limit`` after 60s, ``network`` after 10s, ``transient`` after 30s. Failed at
+   once: ``auth``, ``data``, ``resource``, ``permanent``. Read-only; spread it into your own
+   mapping to change one entry.
+
+
+.. py:data:: CLASSIFIER_INSTRUCTIONS
+   :value: "You are an error classifier for a data pipeline system. Given an error message from a failed...
+
+
+   The default system prompt of :class:`ClassifierRetryPolicy`. It does not recite the
+   categories: those travel in the output schema with their descriptions, so a prompt built as
+   ``CLASSIFIER_INSTRUCTIONS + hints`` should teach error strings and not name categories or delays.
+
+
+.. py:function:: redact_registered_secrets(message)
+
+   Mask values registered via ``mask_secret()``; the default ``redactor`` for the policies here.
+
+
+.. py:class:: LLMRetryPolicy(llm_conn_id, model_id = None, instructions = None, fallback_rules = None, timeout = 30.0, *, redactor = None, redact_exception = True, max_exception_length = 4096, include_traceback = False)
+
+   Bases: :py:obj:`_ModelRetryPolicy`
+
+
+   Retry policy that uses an LLM to classify errors and decide retry behaviour.
+
+   Uses :class:`~airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook`
+   to call any configured LLM provider (OpenAI, Anthropic, Bedrock, Vertex,
+   Ollama, etc.) for error classification with structured output. The model
+   returns an :class:`ErrorClassification`: which category the error is, whether
+   to retry, how long to wait, and why, all steered by ``instructions``. This is
+   the reasoning layer; for a cheap typed decision from a decision model, use
+   :class:`ClassifierRetryPolicy`, which can name this policy as its ``fallback_policy``.
+
+   When the LLM call itself fails, the policy falls back to ``fallback_rules``
+   (if provided) or returns DEFAULT to use the task's standard retry logic.
+
+   :param llm_conn_id: Airflow connection ID for the LLM provider.
+   :param model_id: Model identifier override (e.g. ``"openai:gpt-5-mini"``
+       for cost efficiency). If not set, uses the model from the connection.
+   :param instructions: Custom system prompt for classification.
+       Defaults to a general-purpose error classifier, :data:`DEFAULT_INSTRUCTIONS`.
+       The instructions are the whole taxonomy: the category names, which to
+       retry, and the delays.
+   :param fallback_rules: Optional list of
+       :class:`~airflow.sdk.definitions.retry_policy.RetryRule` applied when the
+       LLM call fails. Provides a deterministic safety net.
+   :param timeout: Maximum seconds to wait for the LLM response before
+       falling back.  Defaults to 30s.  The LLM provider's own timeout
+       (e.g. 600s for Anthropic) is much longer; this keeps the retry
+       decision path fast even when the provider is degraded.
+
+
+   .. py:attribute:: __doc__
+      :value: Multiline-String
+
+      .. raw:: html
+
+         <details><summary>Show Value</summary>
+
+      .. code-block:: python
+
+         """
+         Model-backed retry policies, one per layer of a ladder from hardcoded to reasoning.
+         
+         * **Fallback rules.** :class:`~airflow.sdk.definitions.retry_policy.ExceptionRetryPolicy` and
+           ``fallback_rules``: ``RetryRule`` matches on the exception type, then the task's own
+           ``retries`` and ``retry_delay``. No model. Always the floor.
+         * **Classifier.** :class:`ClassifierRetryPolicy`: the model names one of the author's
+           ``categories`` and the :class:`ErrorCategory` table decides whether that category is
+           retried, after how long, and how sure the model has to be. Tuned through descriptions and
+           a confidence bar, not through reasoning. A decision model runs here; a text model can too.
+         * **LLM.** :class:`LLMRetryPolicy`: a text model classifies the failure, decides whether to
+           retry and how long to wait from ``instructions``, and explains itself.
+         
+         They chain: ``ClassifierRetryPolicy(..., fallback_policy=LLMRetryPolicy(...))`` consults the
+         LLM when the classifier is unsure or unreachable, and whatever no layer decides falls to the
+         rules.
+         
+         Requires Airflow 3.3+ (RetryPolicy was added in AIP-105).
+         
+             :param redactor: Callable applied to the exception text (its string
+                 representation, or the whole formatted traceback with
+                 ``include_traceback=True``) before it is added to the classification
+                 prompt. Defaults to
+                 :func:`~airflow.providers.common.ai.policies.retry.redact_registered_secrets`,
+                 which only masks values already registered via ``mask_secret()``.
+                 Pass a custom callable to replace the default masking entirely --
+                 for example to redact free-text PII the secrets masker cannot see.
+                 To disable masking altogether, use ``redact_exception=False`` --
+                 not ``redactor=None``.
+             :param redact_exception: Whether to redact the exception's string
+                 representation before it is added to the classification prompt.
+                 Defaults to ``True``. Set to ``False`` to send the raw exception
+                 text as-is. Passing ``redact_exception=False`` together with
+                 an explicit ``redactor`` raises ``ValueError`` at construction time,
+                 since the two settings would otherwise conflict silently.
+             :param max_exception_length: Maximum number of characters of the
+                 (already redacted) exception text included in the prompt. A longer
+                 message is cut to its head with a trailing ``"... (truncated)"`` marker;
+                 a longer traceback (``include_traceback=True``) is cut to its tail with a
+                 leading ``"(truncated) ..."`` marker, so the innermost frames and the
+                 final exception line survive. Must be a positive integer. Defaults to 4096.
+             :param include_traceback: Send the formatted traceback instead of
+                 ``ExceptionType: message``. Defaults to ``False``. The traceback is what
+                 :func:`traceback.format_exception` produces: the stack frames with their
+                 file paths and source lines, every chained exception (``__cause__`` and
+                 ``__context__``), and module-qualified class names such as
+                 ``botocore.exceptions.ClientError``. Local variable values of the frames
+                 are not included. The whole text goes through ``redactor`` before it is
+                 truncated. A traceback is usually many times longer than the message, so
+                 each classification costs more input tokens, up to
+                 ``max_exception_length`` characters.
+         
+             .. warning::
+                 The exception's string representation is sent to the configured
+                 external LLM provider (OpenAI, Anthropic, Bedrock, Vertex, Ollama,
+                 etc.) as part of the classification prompt, so it may leak whatever
+                 the failing task put in the exception message — connection strings,
+                 credential fragments, PII, or other secrets. With
+                 ``include_traceback=True`` that also covers the messages of chained
+                 exceptions, file paths on the worker, and the source line of each
+                 frame. By default the text is run through
+                 :func:`~airflow.providers.common.ai.policies.retry.redact_registered_secrets`
+                 via ``redactor``, which masks values already registered via
+                 ``mask_secret()`` (for example, connection passwords Airflow
+                 captured while resolving the failing task's connections). This does
+                 **not** perform general-purpose PII detection and will not catch
+                 arbitrary sensitive strings that were never registered as secrets --
+                 for free-text PII (emails, customer names, etc.) supply your own
+                 ``redactor``, or pass ``redact_exception=False`` to disable
+                 redaction altogether. You are still responsible for confirming that
+                 your task's exception messages are safe to send to a third-party
+                 LLM provider.
+         """
+
+      .. raw:: html
+
+         </details>
+
+
+
+
+   .. py:method:: evaluate(exception, try_number, max_tries, context = None)
+
+      Decide whether and how to retry given the failure.
+
+      .. note::
+         ``AirflowFailException`` and ``AirflowSensorTimeout`` always fail
+         the task immediately.  The retry policy is never consulted for
+         these exceptions.
+
+      :param exception: The exception that caused the task failure.
+      :param try_number: Current try number (1-based).
+      :param max_tries: Maximum tries configured on the task.
+      :param context: Airflow task context (may be ``None``).
+
+
+
+.. py:class:: ClassifierRetryPolicy(llm_conn_id, model_id = None, instructions = None, fallback_rules = None, timeout = 30.0, *, categories = None, min_confidence = None, fallback_policy = None, redactor = None, redact_exception = True, max_exception_length = 4096, include_traceback = False)
+
+   Bases: :py:obj:`_ModelRetryPolicy`
+
+
+   Retry policy where the model names the kind of failure and the author's table decides.
+
+   The model's only job is to pick one of ``categories``; it reads each one's description
+   from the output schema. Whether that category is retried, after how long, and how sure
+   the model has to be all come from the :class:`ErrorCategory` in the worker process.
+   That is the shape a decision model answers, with a confidence; a text model answers it too.
+
+   When the model call fails, or the answer is under its confidence bar, the policy
+   consults ``fallback_policy`` if set, then ``fallback_rules``, then returns DEFAULT to use
+   the task's standard retry logic.
+
+   :param llm_conn_id: Airflow connection ID for the model.
+   :param model_id: Model identifier override (e.g. ``"typesafe:jev-1.13.0"``).
+       If not set, uses the model from the connection.
+   :param instructions: Custom system prompt. Defaults to :data:`CLASSIFIER_INSTRUCTIONS`.
+       Instructions can teach the model your stack's error strings; the categories
+       themselves, and what each one means, are ``categories``.
+   :param fallback_rules: Optional list of
+       :class:`~airflow.sdk.definitions.retry_policy.RetryRule` applied when the model
+       call fails or the answer is under its confidence bar and ``fallback_policy`` decided
+       nothing. Provides a deterministic safety net.
+   :param timeout: Maximum seconds to wait for the model response before
+       falling back.  Defaults to 30s.
+   :param categories: The failure kinds the model chooses between, each with its
+       description, action, delay and bar. Defaults to :data:`DEFAULT_CATEGORIES`. Passing
+       this **replaces** the default mapping rather than merging into it; at least two
+       categories are required. The model is constrained to these names, so an answer
+       outside them is rejected before the policy acts on it.
+   :param min_confidence: The confidence, from 0 to 1, the model's answer needs for the
+       policy to act on it. ``None`` (default) is no bar: the answer is acted on whatever
+       the confidence. Confidence comes from models that report one, such as a decision
+       model, in ``provider_details``. Under the bar, or when a bar is set and the model
+       reported no confidence, the answer is discarded and ``fallback_policy``, then
+       ``fallback_rules``, then the task's own retry behaviour apply, so swapping the
+       connection to a text model does not silently switch off a control the author set.
+       A category's own ``min_confidence`` overrides this one for that category.
+   :param fallback_policy: A policy to consult when the answer is under its bar, reports no
+       confidence, or the model call fails; typically an :class:`LLMRetryPolicy` on a text
+       model, so the classifier handles the clear cases and a reasoning model the rest.
+       Its decision is used, with the reason prefixed by why the classifier's answer
+       was not. A DEFAULT from it counts as no decision, whatever reason it carries, and this
+       policy's ``fallback_rules`` and then the task's own retry behaviour apply. Without
+       ``min_confidence`` the classifier's answer is always acted on, so this policy is
+       consulted only when the classifier call itself fails.
+
+
+   .. py:attribute:: __doc__
+      :value: Multiline-String
+
+      .. raw:: html
+
+         <details><summary>Show Value</summary>
+
+      .. code-block:: python
+
+         """
+         Model-backed retry policies, one per layer of a ladder from hardcoded to reasoning.
+         
+         * **Fallback rules.** :class:`~airflow.sdk.definitions.retry_policy.ExceptionRetryPolicy` and
+           ``fallback_rules``: ``RetryRule`` matches on the exception type, then the task's own
+           ``retries`` and ``retry_delay``. No model. Always the floor.
+         * **Classifier.** :class:`ClassifierRetryPolicy`: the model names one of the author's
+           ``categories`` and the :class:`ErrorCategory` table decides whether that category is
+           retried, after how long, and how sure the model has to be. Tuned through descriptions and
+           a confidence bar, not through reasoning. A decision model runs here; a text model can too.
+         * **LLM.** :class:`LLMRetryPolicy`: a text model classifies the failure, decides whether to
+           retry and how long to wait from ``instructions``, and explains itself.
+         
+         They chain: ``ClassifierRetryPolicy(..., fallback_policy=LLMRetryPolicy(...))`` consults the
+         LLM when the classifier is unsure or unreachable, and whatever no layer decides falls to the
+         rules.
+         
+         Requires Airflow 3.3+ (RetryPolicy was added in AIP-105).
+         
+             :param redactor: Callable applied to the exception text (its string
+                 representation, or the whole formatted traceback with
+                 ``include_traceback=True``) before it is added to the classification
+                 prompt. Defaults to
+                 :func:`~airflow.providers.common.ai.policies.retry.redact_registered_secrets`,
+                 which only masks values already registered via ``mask_secret()``.
+                 Pass a custom callable to replace the default masking entirely --
+                 for example to redact free-text PII the secrets masker cannot see.
+                 To disable masking altogether, use ``redact_exception=False`` --
+                 not ``redactor=None``.
+             :param redact_exception: Whether to redact the exception's string
+                 representation before it is added to the classification prompt.
+                 Defaults to ``True``. Set to ``False`` to send the raw exception
+                 text as-is. Passing ``redact_exception=False`` together with
+                 an explicit ``redactor`` raises ``ValueError`` at construction time,
+                 since the two settings would otherwise conflict silently.
+             :param max_exception_length: Maximum number of characters of the
+                 (already redacted) exception text included in the prompt. A longer
+                 message is cut to its head with a trailing ``"... (truncated)"`` marker;
+                 a longer traceback (``include_traceback=True``) is cut to its tail with a
+                 leading ``"(truncated) ..."`` marker, so the innermost frames and the
+                 final exception line survive. Must be a positive integer. Defaults to 4096.
+             :param include_traceback: Send the formatted traceback instead of
+                 ``ExceptionType: message``. Defaults to ``False``. The traceback is what
+                 :func:`traceback.format_exception` produces: the stack frames with their
+                 file paths and source lines, every chained exception (``__cause__`` and
+                 ``__context__``), and module-qualified class names such as
+                 ``botocore.exceptions.ClientError``. Local variable values of the frames
+                 are not included. The whole text goes through ``redactor`` before it is
+                 truncated. A traceback is usually many times longer than the message, so
+                 each classification costs more input tokens, up to
+                 ``max_exception_length`` characters.
+         
+             .. warning::
+                 The exception's string representation is sent to the configured
+                 external LLM provider (OpenAI, Anthropic, Bedrock, Vertex, Ollama,
+                 etc.) as part of the classification prompt, so it may leak whatever
+                 the failing task put in the exception message — connection strings,
+                 credential fragments, PII, or other secrets. With
+                 ``include_traceback=True`` that also covers the messages of chained
+                 exceptions, file paths on the worker, and the source line of each
+                 frame. By default the text is run through
+                 :func:`~airflow.providers.common.ai.policies.retry.redact_registered_secrets`
+                 via ``redactor``, which masks values already registered via
+                 ``mask_secret()`` (for example, connection passwords Airflow
+                 captured while resolving the failing task's connections). This does
+                 **not** perform general-purpose PII detection and will not catch
+                 arbitrary sensitive strings that were never registered as secrets --
+                 for free-text PII (emails, customer names, etc.) supply your own
+                 ``redactor``, or pass ``redact_exception=False`` to disable
+                 redaction altogether. You are still responsible for confirming that
+                 your task's exception messages are safe to send to a third-party
+                 LLM provider.
+         """
+
+      .. raw:: html
+
+         </details>
+
+
+
+
+   .. py:attribute:: min_confidence
+      :value: None
+
+
+
+   .. py:attribute:: categories
+      :type:  dict[str, ErrorCategory]
+
+
+   .. py:attribute:: fallback_policy
+      :value: None
+
+
+
+   .. py:method:: evaluate(exception, try_number, max_tries, context = None)
+
+      Decide whether and how to retry given the failure.
+
+      .. note::
+         ``AirflowFailException`` and ``AirflowSensorTimeout`` always fail
+         the task immediately.  The retry policy is never consulted for
+         these exceptions.
+
+      :param exception: The exception that caused the task failure.
+      :param try_number: Current try number (1-based).
+      :param max_tries: Maximum tries configured on the task.
+      :param context: Airflow task context (may be ``None``).
+
+
+

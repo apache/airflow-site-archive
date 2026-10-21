@@ -26,6 +26,7 @@ Classes
    airflow.providers.openlineage.utils.utils.TaskInfo
    airflow.providers.openlineage.utils.utils.TaskInfoComplete
    airflow.providers.openlineage.utils.utils.TaskGroupInfo
+   airflow.providers.openlineage.utils.utils.TaskInstancePosition
    airflow.providers.openlineage.utils.utils.OpenLineageRedactor
 
 
@@ -49,6 +50,7 @@ Functions
    airflow.providers.openlineage.utils.utils.get_dag_parent_run_facet
    airflow.providers.openlineage.utils.utils.get_task_documentation
    airflow.providers.openlineage.utils.utils.get_dag_documentation
+   airflow.providers.openlineage.utils.utils.get_task_instance_map_index
    airflow.providers.openlineage.utils.utils.get_airflow_mapped_task_facet
    airflow.providers.openlineage.utils.utils.get_user_provided_run_facets
    airflow.providers.openlineage.utils.utils.get_fully_qualified_class_name
@@ -64,6 +66,8 @@ Functions
    airflow.providers.openlineage.utils.utils.get_airflow_job_facet
    airflow.providers.openlineage.utils.utils.get_airflow_state_run_facet
    airflow.providers.openlineage.utils.utils.is_dag_run_asset_triggered
+   airflow.providers.openlineage.utils.utils.get_orm_task_instance_positions
+   airflow.providers.openlineage.utils.utils.get_regional_task_instance_run_id
    airflow.providers.openlineage.utils.utils.build_task_instance_ol_run_id
    airflow.providers.openlineage.utils.utils.is_valid_uuid
    airflow.providers.openlineage.utils.utils.build_dag_run_ol_run_id
@@ -179,6 +183,8 @@ Module Contents
 
    Get dag documentation and mime type, truncated to _MAX_DOC_BYTES bytes length, if present.
 
+
+.. py:function:: get_task_instance_map_index(task_instance)
 
 .. py:function:: get_airflow_mapped_task_facet(task_instance)
 
@@ -451,6 +457,33 @@ Module Contents
 
    Return whether the given DAG run was triggered by an asset.
 
+
+.. py:class:: TaskInstancePosition
+
+   Where a task instance runs: inside a loop body or not, and the map index users see.
+
+   A plain mapped task keeps the region of its own expansion, so its dag, task, try, logical date and
+   map index stay unique; inside a loop they repeat on every pass, so only the execution UUID identifies
+   the run.
+
+
+   .. py:attribute:: in_loop
+      :type:  bool
+
+
+   .. py:attribute:: map_index
+      :type:  int
+
+
+.. py:function:: get_orm_task_instance_positions(task_instances, *, session)
+
+   Place stored task instances, reading the regions of those without their task in one query.
+
+   Server side only: workers never hold a session, and an instance that needs its region read without one
+   raises instead of opening a connection.
+
+
+.. py:function:: get_regional_task_instance_run_id(task_instance)
 
 .. py:function:: build_task_instance_ol_run_id(dag_id, task_id, try_number, logical_date, map_index)
 

@@ -1,0 +1,117 @@
+airflow.providers.common.ai.example_dags.example_decision_model
+===============================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_decision_model
+
+.. autoapi-nested-parse::
+
+   Example DAG using a decision model to route an incident.
+
+   A decision model answers typed questions and cannot write text, so it suits a branch
+   (pick one of these task ids) and a classification (pick one of these labels), and nothing
+   that produces prose. See the "Decision models" guide in this provider's documentation.
+
+   Prerequisites: ``pydantic-ai-slim`` 2.46.0 or later (2.53.0 for ``system-one:``), and a
+   connection ``decision_default`` with ``conn_type='pydanticai'`` whose model is a decision model,
+   either:
+
+   - TypeSafe Jev: ``password=<API key>``, ``extra='{"model": "typesafe:jev-1.13.0"}'``, and
+     ``pip install 'apache-airflow-providers-common-ai[typesafe]'``, or
+   - a server answering the System One API: ``host=<server URL>``, ``password=<API key, if any>``,
+     ``extra='{"model": "system-one:<model name>"}'``
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_decision_model.PERMISSION_FAILURE
+   airflow.providers.common.ai.example_dags.example_decision_model.UNDERDETERMINED_INCIDENT
+   airflow.providers.common.ai.example_dags.example_decision_model.ACT_ABOVE
+   airflow.providers.common.ai.example_dags.example_decision_model.REVIEW_ABOVE
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_decision_model.FailureCause
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_decision_model.example_decision_model_branch
+   airflow.providers.common.ai.example_dags.example_decision_model.example_decision_model_confidence
+
+
+Module Contents
+---------------
+
+.. py:data:: PERMISSION_FAILURE
+   :value: 'Task export_report failed: botocore.exceptions.ClientError: An error occurred (AccessDenied)...
+
+
+.. py:data:: UNDERDETERMINED_INCIDENT
+   :value: 'Task load_orders failed: psycopg2.OperationalError: connection refused to...
+
+
+.. py:data:: ACT_ABOVE
+   :value: 0.8
+
+
+.. py:data:: REVIEW_ABOVE
+   :value: 0.5
+
+
+.. py:function:: example_decision_model_branch()
+
+   Route the incident. The connection's model is the only thing that makes this a decision model.
+
+
+.. py:class:: FailureCause
+
+   Bases: :py:obj:`pydantic_ai.UseEnumMemberDocstrings`, :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Why an Airflow task failed.
+
+
+   .. py:attribute:: transient
+      :value: 'transient'
+
+
+      A fault that clears by itself: a timeout, throttling, a dropped connection.
+
+
+
+   .. py:attribute:: resource
+      :value: 'resource'
+
+
+      A dependency is down or unreachable and needs fixing before a retry can work.
+
+
+
+   .. py:attribute:: permanent
+      :value: 'permanent'
+
+
+      A bug or bad input that fails the same way however often it is retried.
+
+
+
+.. py:function:: example_decision_model_confidence()
+
+   Classify a failure and escalate when the model says it does not know.
+
+   ``LLMBranchOperator`` can gate its pick on one confidence bar through ``decision_policy``.
+   Reading the confidence in a task of your own, as here, lets you act differently in more
+   than one band.
+
+

@@ -204,7 +204,7 @@ Module Contents
 
 
 
-.. py:class:: DataflowTemplatedJobStartOperator(*, template, project_id = PROVIDE_PROJECT_ID, job_name = '{{task.task_id}}', options = None, dataflow_default_options = None, parameters = None, location = None, gcp_conn_id = 'google_cloud_default', poll_sleep = 10, impersonation_chain = None, environment = None, cancel_timeout = 10 * 60, wait_until_finished = None, append_job_name = True, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), expected_terminal_state = None, **kwargs)
+.. py:class:: DataflowTemplatedJobStartOperator(*, template, project_id = PROVIDE_PROJECT_ID, job_name = '{{task.task_id}}', options = None, dataflow_default_options = None, parameters = None, location = None, gcp_conn_id = 'google_cloud_default', poll_sleep = 10, impersonation_chain = None, environment = None, cancel_timeout = 10 * 60, wait_until_finished = None, append_job_name = True, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), expected_terminal_state = None, cancel_on_kill = True, **kwargs)
 
    Bases: :py:obj:`airflow.providers.google.cloud.operators.cloud_base.GoogleCloudBaseOperator`
 
@@ -335,6 +335,9 @@ Module Contents
            https://cloud.google.com/dataflow/docs/templates/executing-templates
 
    :param deferrable: Run operator in the deferrable mode.
+   :param cancel_on_kill: If True (default), cancel the Dataflow job when the task is killed,
+       both while the operator is running and, for a deferred task, while it waits in the
+       triggerer (Airflow 3.3+).
 
 
    .. py:attribute:: template_fields
@@ -352,6 +355,11 @@ Module Contents
 
 
    .. py:attribute:: template
+
+
+   .. py:attribute:: cancel_on_kill
+      :value: True
+
 
 
    .. py:attribute:: job_name
@@ -451,14 +459,11 @@ Module Contents
 
    .. py:method:: on_kill()
 
-      Override this method to clean up subprocesses when a task instance gets killed.
-
-      Any use of the threading, subprocess or multiprocessing module within an
-      operator needs to be cleaned up, or it will leave ghost processes behind.
+      Cancel the running job; a kill of a deferred task cancels through the trigger instead.
 
 
 
-.. py:class:: DataflowStartFlexTemplateOperator(body, location, project_id = PROVIDE_PROJECT_ID, gcp_conn_id = 'google_cloud_default', drain_pipeline = False, cancel_timeout = 10 * 60, wait_until_finished = None, impersonation_chain = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), append_job_name = True, expected_terminal_state = None, poll_sleep = 10, *args, **kwargs)
+.. py:class:: DataflowStartFlexTemplateOperator(body, location, project_id = PROVIDE_PROJECT_ID, gcp_conn_id = 'google_cloud_default', drain_pipeline = False, cancel_timeout = 10 * 60, wait_until_finished = None, impersonation_chain = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), append_job_name = True, expected_terminal_state = None, poll_sleep = 10, cancel_on_kill = True, *args, **kwargs)
 
    Bases: :py:obj:`airflow.providers.google.cloud.operators.cloud_base.GoogleCloudBaseOperator`
 
@@ -522,6 +527,9 @@ Module Contents
        Service Account Token Creator IAM role to the directly preceding identity, with first
        account from the list granting this role to the originating account (templated).
    :param deferrable: Run operator in the deferrable mode.
+   :param cancel_on_kill: If True (default), cancel the Dataflow job when the task is killed,
+       both while the operator is running and, for a deferred task, while it waits in the
+       triggerer (Airflow 3.3+).
    :param expected_terminal_state: The expected final status of the operator on which the corresponding
        Airflow task succeeds. When not specified, it will be determined by the hook.
    :param append_job_name: True if unique suffix has to be appended to job name.
@@ -540,6 +548,11 @@ Module Contents
 
 
    .. py:attribute:: body
+
+
+   .. py:attribute:: cancel_on_kill
+      :value: True
+
 
 
    .. py:attribute:: location
@@ -623,14 +636,11 @@ Module Contents
 
    .. py:method:: on_kill()
 
-      Override this method to clean up subprocesses when a task instance gets killed.
-
-      Any use of the threading, subprocess or multiprocessing module within an
-      operator needs to be cleaned up, or it will leave ghost processes behind.
+      Cancel the running job; a kill of a deferred task cancels through the trigger instead.
 
 
 
-.. py:class:: DataflowStartYamlJobOperator(*, job_name, yaml_pipeline_file, region = DEFAULT_DATAFLOW_LOCATION, project_id = PROVIDE_PROJECT_ID, gcp_conn_id = 'google_cloud_default', append_job_name = True, drain_pipeline = False, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), poll_sleep = 10, cancel_timeout = 5 * 60, expected_terminal_state = None, jinja_variables = None, options = None, impersonation_chain = None, **kwargs)
+.. py:class:: DataflowStartYamlJobOperator(*, job_name, yaml_pipeline_file, region = DEFAULT_DATAFLOW_LOCATION, project_id = PROVIDE_PROJECT_ID, gcp_conn_id = 'google_cloud_default', append_job_name = True, drain_pipeline = False, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), poll_sleep = 10, cancel_timeout = 5 * 60, expected_terminal_state = None, jinja_variables = None, options = None, impersonation_chain = None, cancel_on_kill = True, **kwargs)
 
    Bases: :py:obj:`airflow.providers.google.cloud.operators.cloud_base.GoogleCloudBaseOperator`
 
@@ -655,10 +665,13 @@ Module Contents
    :param append_job_name: Optional. Set to True if a unique suffix has to be appended to the `job_name`.
        Defaults to True.
    :param drain_pipeline: Optional. Set to True if you want to stop a streaming pipeline job by draining it
-       instead of canceling when killing the task instance. Note that this does not work for batch pipeline jobs
-       or in the deferrable mode. Defaults to False.
+       instead of canceling when killing the task instance. Note that this does not work for batch pipeline jobs.
+       Defaults to False.
        For more info see: https://cloud.google.com/dataflow/docs/guides/stopping-a-pipeline
    :param deferrable: Optional. Run operator in the deferrable mode.
+   :param cancel_on_kill: If True (default), cancel the Dataflow job when the task is killed,
+       both while the operator is running and, for a deferred task, while it waits in the
+       triggerer (Airflow 3.3+).
    :param expected_terminal_state: Optional. The expected terminal state of the Dataflow job at which the
        operator task is set to succeed. Defaults to 'JOB_STATE_DONE' for the batch jobs and 'JOB_STATE_RUNNING'
        for the streaming jobs.
@@ -696,6 +709,11 @@ Module Contents
 
 
    .. py:attribute:: job_name
+
+
+   .. py:attribute:: cancel_on_kill
+      :value: True
+
 
 
    .. py:attribute:: yaml_pipeline_file
@@ -786,8 +804,9 @@ Module Contents
 
       Cancel the dataflow job if a task instance gets killed.
 
-      This method will not be called if a task instance is killed in a deferred
-      state.
+      This method is not called for a task instance killed in a deferred state;
+      on Airflow 3.3+, the trigger requests cancellation instead, honoring cancel_on_kill
+      and drain_pipeline.
 
 
 

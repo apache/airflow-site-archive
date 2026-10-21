@@ -46,10 +46,15 @@ Module Contents
 
 .. py:class:: PowerBIDatasetRefreshOperator(*, dataset_id, group_id, conn_id = PowerBIHook.default_conn_name, timeout = 60 * 60 * 24 * 7, proxies = None, api_version = None, check_interval = 60, request_body = None, wait_for_completion = True, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
 
    Refreshes a Power BI dataset.
+
+   The refresh is started from the worker, and its id is kept in the task state store before the task
+   defers to wait for it. A retry, for instance after a worker crash, reconnects to that refresh while it
+   is still in progress, and does not start a new one once it has completed. This needs Airflow 3.3 or
+   later; on older versions every try starts a new refresh.
 
    .. seealso::
        For more information on how to use this operator, take a look at the guide:
@@ -65,6 +70,13 @@ Module Contents
    :param wait_for_completion: If True, wait for the dataset refresh to complete. If False, trigger the refresh and return immediately without waiting.
    :param deferrable: This parameter is deprecated and no longer has any effect. The operator now always
        uses deferrable execution.
+   :param durable: Reconnect to the refresh started by an earlier try instead of starting a new one
+       (default is True). Needs Airflow 3.3 or later.
+
+
+   .. py:attribute:: external_id_key
+      :value: 'powerbi_dataset_refresh_id'
+
 
 
    .. py:attribute:: template_fields
@@ -129,9 +141,62 @@ Module Contents
 
 
 
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
+
+
+
    .. py:method:: handle_refresh(context, event)
 
       Handle refresh-trigger event and optionally defer again to wait for refresh completion.
+
+      Only tasks deferred by an earlier version of this provider, whose trigger started the refresh,
+      still resume here.
 
       :param context: Airflow context dictionary
       :param event: Event dict from trigger with status and dataset_refresh_id

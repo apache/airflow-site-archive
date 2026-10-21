@@ -1,0 +1,161 @@
+airflow.providers.common.ai.sandbox.openshell
+=============================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.openshell
+
+.. autoapi-nested-parse::
+
+   NVIDIA OpenShell backend for :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.openshell.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.openshell.OpenShellSandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: OpenShellSandboxBackend(*, gateway = None, workspace = 'default', image = 'python:3.12-slim', cpu = '1', memory = '2Gi', ready_timeout = 120.0, request_timeout = 30.0)
+
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+
+
+   Run sandbox tools through an NVIDIA OpenShell gateway.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   `OpenShell <https://github.com/NVIDIA/OpenShell>`__ is a self-hosted gateway
+   that runs each sandbox on Docker, Podman or Kubernetes with Landlock and
+   seccomp inside the container and a per-sandbox supervisor that mediates
+   every outbound connection. Airflow workers only need gRPC access to the
+   gateway, with the ``openshell`` extra installed.
+
+   **Credentials are ambient.** The backend reads the gateway registration the
+   ``openshell`` CLI keeps under ``$XDG_CONFIG_HOME/openshell/gateways/<name>/``:
+   its endpoint and either mTLS material or an OIDC token. There is no Airflow
+   connection type for it; see the backend page for how to provision a worker.
+   An OIDC registration must be writable and per worker, because the SDK
+   refreshes the token and writes it back into the registration; mTLS is the
+   supported setup for a worker that mounts the registration read-only.
+
+   **Egress is deny-all unless listed, and verified.** A spec's hostnames become
+   one policy rule admitting each host on port 443 only, and a default spec
+   sends no rule at all, which OpenShell enforces as no egress; name resolution
+   is answered by the supervisor without leaving the sandbox. After create the
+   backend reads the effective policy back and destroys the sandbox unless it
+   is exactly what was asked for, comes from the sandbox rather than a
+   gateway-wide override, and cannot be widened by auto-approved proposals.
+   The same check runs before every command and file operation and after each
+   one that succeeds, because a gateway administrator, an approved draft or a
+   global policy can widen a running sandbox; a change fails the task. What it cannot see is the network the
+   gateway runs on: on Kubernetes the NetworkPolicy that keeps a sandbox pod
+   behind its supervisor is the cluster's to enforce.
+
+   **Commands run through a guest wrapper.** OpenShell's own exec timeout
+   leaves the command running, so the wrapper enforces the budget itself and
+   kills the processes in the command's session when it runs out. Output is
+   spooled to the sandbox's ``/tmp`` and each stream is capped to
+   ``max_output_bytes`` before it leaves the sandbox. ``allow_egress_to_cidrs``,
+   an open network and ``SandboxSpec.owner`` are refused. The image needs
+   ``setsid``, GNU coreutils and findutils, and a ``/bin/sh`` that is dash or bash;
+   ``python:*-slim`` has them. BusyBox ``ash``, as in Alpine, is not supported:
+   the timeout sweep does not finish under it.
+
+   :param gateway: Name of the OpenShell CLI gateway registration to use.
+       ``None`` uses ``$OPENSHELL_GATEWAY``, then the CLI's active gateway.
+   :param workspace: OpenShell workspace the sandboxes are created in.
+   :param image: Container image used for each sandbox.
+   :param cpu: CPU limit, as a Kubernetes quantity.
+   :param memory: Memory limit, as a Kubernetes quantity.
+   :param ready_timeout: Seconds to wait for a new sandbox to become ready.
+   :param request_timeout: Seconds allowed for each gateway call other than a command.
+
+
+   .. py:attribute:: name
+      :value: 'openshell'
+
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+      Every failure raised here is terminal, whichever class carries it. The
+      model has no input into provisioning, so a :class:`SandboxError` from
+      ``create`` is not something it can work around; the toolset re-raises one
+      as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
+      attempts the provisioning again.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: read_file(sandbox, path, *, max_bytes)
+
+      Read a file as raw bytes, stopping one byte past ``max_bytes`` inside the guest.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Write ``content`` over stdin, creating parent directories.
+
+      The base class's in-command payload is base64 inside the one request that
+      carries the command, so it stops at about 750 KB of content. Raw stdin in
+      chunks has no such ceiling. A file larger than one chunk is not written
+      atomically: a failure part way leaves the chunks written so far.
+
+
+
+   .. py:method:: list_directory(sandbox, path)
+
+      List as the base class does, but refuse a listing cut short at the output cap.
+
+
+
+   .. py:method:: destroy(sandbox)
+
+      Tear down the sandbox. Must be idempotent.
+
+
+

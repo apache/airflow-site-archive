@@ -1,0 +1,94 @@
+airflow.providers.common.ai.observability
+=========================================
+
+.. py:module:: airflow.providers.common.ai.observability
+
+.. autoapi-nested-parse::
+
+   OpenTelemetry tracing for pydantic-ai agents created by this provider.
+
+   pydantic-ai ships native OpenTelemetry instrumentation that emits GenAI spans
+   (agent run, model call, tool call) following the OTel GenAI semantic
+   conventions. This module turns it on and points it at Airflow's existing
+   OpenTelemetry exporter so agent spans flow to whatever OTLP backend the
+   deployment already runs, nested under the worker's task span.
+
+   It deliberately does not configure an exporter or a ``TracerProvider`` of its
+   own: it reuses the global SDK provider that core tracing (``[traces] otel_on``)
+   installs in the worker process. When that provider is absent (core tracing off,
+   or not configured in this process) no spans are emitted.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.observability.SECTION
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.observability.genai_instrumentation_settings
+   airflow.providers.common.ai.observability.build_run_identity_attributes
+   airflow.providers.common.ai.observability.make_task_instance_run_key
+   airflow.providers.common.ai.observability.stamp_identity_on_agent_spans
+
+
+Module Contents
+---------------
+
+.. py:data:: SECTION
+   :value: 'common.ai'
+
+
+.. py:function:: genai_instrumentation_settings()
+
+   Build pydantic-ai ``InstrumentationSettings`` for an agent run.
+
+   Returns ``None`` (leave the agent un-instrumented, zero overhead) when
+   export is disabled or no live OTLP ``TracerProvider`` is configured in this
+   worker process. ``include_content`` is off by default so prompts,
+   completions, and tool IO are never emitted unless explicitly opted in via
+   ``[common.ai] capture_content``.
+
+
+.. py:function:: build_run_identity_attributes(ti)
+
+   Build the Airflow identity attributes to stamp on a run's GenAI spans.
+
+   Reuses core's task-span attribute keys (see ``_make_task_span``) so agent
+   spans filter identically to the task span they nest under, plus the
+   per-attempt task-instance id as the run join key carried on every span.
+   Airflow 2 task instances have no id, so the attribute is left out there.
+
+
+.. py:function:: make_task_instance_run_key(ti)
+
+   Return a per-attempt key for ``ti``: its id on Airflow 3, a composite on Airflow 2.
+
+   Airflow 2 task instances have no ``id`` column; dag, run, task, map index and try
+   number identify one attempt just as uniquely.
+
+
+.. py:function:: stamp_identity_on_agent_spans(agent, attributes)
+
+   Stamp *attributes* on every GenAI span *agent* emits during its run.
+
+   pydantic-ai opens all of a run's agent/model/tool spans from
+   ``InstrumentationSettings.tracer``, so wrapping that one tracer reaches them
+   all without touching the shared core ``TracerProvider``. No-op when the
+   agent is not instrumented with an ``InstrumentationSettings`` (tracing off,
+   or the caller supplied its own non-settings ``instrument`` value).
+
+   The settings object may be caller-owned and shared across agents (a single
+   module-level ``InstrumentationSettings`` handed to several tasks) or reused
+   across HITL re-runs. Mutating it in place would leak one run's identity into
+   another and nest ``_IdentityTracer`` wrappers on each stamp, so we wrap a copy
+   and swap it onto this agent, leaving the original untouched.
+
+

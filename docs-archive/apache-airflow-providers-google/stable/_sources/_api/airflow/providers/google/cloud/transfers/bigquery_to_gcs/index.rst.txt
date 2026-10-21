@@ -20,7 +20,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: BigQueryToGCSOperator(*, source_project_dataset_table, destination_cloud_storage_uris, project_id = PROVIDE_PROJECT_ID, compression = 'NONE', export_format = 'CSV', field_delimiter = ',', print_header = True, gcp_conn_id = 'google_cloud_default', labels = None, location = None, impersonation_chain = None, result_retry = DEFAULT_RETRY, result_timeout = None, job_id = None, force_rerun = False, reattach_states = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), **kwargs)
+.. py:class:: BigQueryToGCSOperator(*, source_project_dataset_table, destination_cloud_storage_uris, project_id = PROVIDE_PROJECT_ID, compression = 'NONE', export_format = 'CSV', field_delimiter = ',', print_header = True, gcp_conn_id = 'google_cloud_default', labels = None, location = None, impersonation_chain = None, result_retry = DEFAULT_RETRY, result_timeout = None, job_id = None, force_rerun = False, reattach_states = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), cancel_on_kill = True, **kwargs)
 
    Bases: :py:obj:`airflow.providers.google.version_compat.BaseOperator`
 
@@ -70,6 +70,10 @@ Module Contents
    :param reattach_states: Set of BigQuery job's states in case of which we should reattach
        to the job. Should be other than final states.
    :param deferrable: Run operator in the deferrable mode
+   :param cancel_on_kill: Flag which indicates whether cancel the hook's job or not, when on_kill is called.
+       With ``force_rerun=False``, a retry reuses the same job ID, and a cancelled job cannot be
+       reattached through ``reattach_states``. Set ``force_rerun=True`` for retries to start a new
+       job, or ``cancel_on_kill=False`` to keep reattaching to the running one.
    :return: URIs for the objects created in Google Cloud Storage
 
 
@@ -175,6 +179,11 @@ Module Contents
    .. py:attribute:: deferrable
 
 
+   .. py:attribute:: cancel_on_kill
+      :value: True
+
+
+
    .. py:method:: execute(context)
 
       Derive when creating an operator.
@@ -191,6 +200,15 @@ Module Contents
       Return immediately and relies on trigger to throw a success event. Callback for the trigger.
 
       Relies on trigger to throw an exception, otherwise it assumes execution was successful.
+
+
+
+   .. py:method:: on_kill()
+
+      Override this method to clean up subprocesses when a task instance gets killed.
+
+      Any use of the threading, subprocess or multiprocessing module within an
+      operator needs to be cleaned up, or it will leave ghost processes behind.
 
 
 

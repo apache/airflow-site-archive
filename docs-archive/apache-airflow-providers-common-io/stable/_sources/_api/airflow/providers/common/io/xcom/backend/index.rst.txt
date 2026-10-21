@@ -43,6 +43,30 @@ Module Contents
    itself will be returned and thus saved in the database.
 
 
+   .. py:method:: store_value(coordinate, key, value)
+      :classmethod:
+
+
+      Store an XCom value for ``coordinate`` and return what its XCom row in the metadata database holds.
+
+      Override this to keep values outside the metadata database, in any format. The return value must be
+      JSON-serializable and must locate what was stored, since :meth:`load_value` and :meth:`purge` only
+      receive the row. Every iteration of a task inside a loop is a separate task instance with the same
+      ``dag_id``, ``run_id``, ``task_id``, ``map_index`` and ``key``, so the storage location must tell
+      task instances apart.
+
+      :meth:`XComCoordinate.build_path` builds such a location. When a task instance, or its trigger,
+      writes its own XCom, ``coordinate.ti_id`` is that task instance's id, and a location unique per
+      ``(coordinate.ti_id, key)`` is enough. When one task writes another's XCom, ``coordinate.ti_id`` is
+      ``None``, because only the server knows which task instance the coordinates resolve to, so the
+      location must be unique to each write. A backend that does not use ``build_path`` has to handle both
+      cases itself, or call ``super()``.
+
+      The default stores the value in the metadata database, so an override can call ``super()`` for the
+      values it does not keep elsewhere.
+
+
+
    .. py:method:: serialize_value(value, *, key = None, task_id = None, dag_id = None, run_id = None, map_index = None)
       :staticmethod:
 

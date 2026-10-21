@@ -1,0 +1,57 @@
+airflow.providers.common.compat.connection
+==========================================
+
+.. py:module:: airflow.providers.common.compat.connection
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.compat.connection.get_async_connection
+   airflow.providers.common.compat.connection.get_async_extra_dejson
+
+
+Package Contents
+----------------
+
+.. py:function:: get_async_connection(conn_id, hook = None)
+   :async:
+
+
+   Get an asynchronous Airflow connection that is backwards compatible.
+
+   Before Airflow 3.3.2, ``BaseHook.aget_connection`` masks the connection's secrets with a
+   synchronous call to the supervisor, which raises ``DeadlockImminentError`` when another
+   async call is in flight on the same event loop. On those versions the synchronous
+   ``get_connection`` runs in a worker thread instead, unless the hook overrides
+   ``aget_connection``.
+
+   :param conn_id: The provided connection ID.
+   :param hook: Hook (class or instance) to resolve the connection through, so a
+       subclass override of ``aget_connection``/``get_connection`` is honored.
+       Defaults to ``BaseHook``.
+   :returns: Connection
+
+
+.. py:function:: get_async_extra_dejson(conn)
+   :async:
+
+
+   Get the connection's extra as a dict, asynchronously and backwards compatible.
+
+   The async counterpart of ``Connection.extra_dejson``, for hooks running on an event loop
+   (async tasks, triggers). ``extra_dejson`` masks the extra's secrets with a synchronous
+   call to the supervisor, which raises ``DeadlockImminentError`` when another async call
+   is in flight on the same event loop.
+
+   On Airflow 3.3.2+ this awaits ``Connection.aextra_dejson()``, which masks the secrets
+   asynchronously. On older versions the synchronous ``extra_dejson`` runs in a worker
+   thread, where blocking on the supervisor is safe, the same way
+   :func:`get_async_connection` falls back to ``get_connection``.
+
+   :param conn: The connection, e.g. from :func:`get_async_connection`.
+   :returns: The deserialized extra, with its secrets masked.
+
+
