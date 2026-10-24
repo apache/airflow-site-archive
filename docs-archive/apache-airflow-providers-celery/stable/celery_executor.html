@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.25.0</span>
+        <span class="version-label">Version: </span><span class="version">3.26.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -478,7 +478,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.25.0</span>
+        <span class="version-label">Version: </span><span class="version">3.26.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -695,6 +695,20 @@ to start a Flower web server:</p>
 <li><p>Tasks can consume resources. Make sure your worker has enough resources to run <code class="docutils literal notranslate"><span class="pre">worker_concurrency</span></code> tasks</p></li>
 <li><p>Queue names are limited to 256 characters, but each broker backend might have its own restrictions</p></li>
 </ul>
+<section id="postgresql-result-backends">
+<h2>PostgreSQL result backends<a class="headerlink" href="#postgresql-result-backends" title="Link to this heading">¶</a></h2>
+<p>For result backends using psycopg (v3), Airflow defaults <code class="docutils literal notranslate"><span class="pre">connect_args.prepare_threshold</span></code> to
+<code class="docutils literal notranslate"><span class="pre">None</span></code> to disable automatic prepared statements. This supports a transaction-mode connection
+pooler that does not track prepared statements. The setting also works when connecting directly
+to PostgreSQL. Other database drivers, including psycopg2, do not receive this parameter.</p>
+<p>An explicit value in <code class="docutils literal notranslate"><span class="pre">[celery]</span> <span class="pre">result_backend_sqlalchemy_engine_options</span></code> takes precedence.
+For example, when connecting directly to PostgreSQL or using a pooler configured to support
+prepared statements, you can restore psycopg’s default preparation threshold:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[celery]</span>
+<span class="na">result_backend_sqlalchemy_engine_options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">{"connect_args": {"prepare_threshold": 5}}</span>
+</pre></div>
+</div>
+</section>
 <section id="redis-maintenance">
 <h2>Redis maintenance<a class="headerlink" href="#redis-maintenance" title="Link to this heading">¶</a></h2>
 <p>When Redis is used as the Celery broker, Airflow uses it for transient Celery messages: queued task
@@ -835,6 +849,10 @@ components) or override it for the worker alone with the <code class="docutils l
 <span class="na">json_logs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">True</span>
 </pre></div>
 </div>
+<p>A Celery worker runs up to <code class="docutils literal notranslate"><span class="pre">worker_concurrency</span></code> tasks at once, so lines from concurrent
+tasks interleave on the worker’s stdout. Raw <code class="docutils literal notranslate"><span class="pre">print</span></code>/stderr lines are forwarded with
+only <code class="docutils literal notranslate"><span class="pre">logger=&quot;task.stdout&quot;</span></code> and carry no task instance ID, so a log collector cannot
+attribute them to a task.</p>
 <p>The lookup order is:</p>
 <ol class="arabic simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">[celery]</span> <span class="pre">json_logs</span></code> — if set, takes precedence.</p></li>
@@ -850,6 +868,48 @@ code.</p>
 global key is silently ignored (<code class="docutils literal notranslate"><span class="pre">fallback=False</span></code>), so setting only
 <code class="docutils literal notranslate"><span class="pre">[celery]</span> <span class="pre">json_logs</span> <span class="pre">=</span> <span class="pre">True</span></code> is the safe way to enable JSON logs regardless
 of the core version.</p>
+</div>
+</section>
+<section id="task-log-forwarding-to-stdout">
+<h2>Task log forwarding to stdout<a class="headerlink" href="#task-log-forwarding-to-stdout" title="Link to this heading">¶</a></h2>
+<p>Task logs are normally only written to the task-log handler (and surfaced in the
+UI). To also forward each task’s subprocess stdout/stderr to the Celery worker’s
+own stdout — so a container-level log collector (e.g. Kubernetes/Loki) captures
+them too — enable it via the <code class="docutils literal notranslate"><span class="pre">[logging]</span></code> section or override it for the Celery
+worker alone with the <code class="docutils literal notranslate"><span class="pre">[celery]</span></code> section. <code class="docutils literal notranslate"><span class="pre">[logging]</span> <span class="pre">task_logs_to_stdout</span></code> is not a
+global switch: it only applies to components that read it, or that leave
+<code class="docutils literal notranslate"><span class="pre">subprocess_logs_to_stdout</span></code> unset when calling <code class="docutils literal notranslate"><span class="pre">run_workload</span></code> (currently the Celery
+worker and the Edge3 worker’s fork path). Executors that always forward task logs to stdout, such as the
+LocalExecutor and the Kubernetes, ECS, Batch and Lambda executors, ignore it:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="c1"># Default for components that don't set the behaviour themselves (Celery, Edge3):</span>
+<span class="k">[logging]</span>
+<span class="na">task_logs_to_stdout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">True</span>
+
+<span class="c1"># Or override for the Celery worker only, leaving other components unchanged:</span>
+<span class="k">[celery]</span>
+<span class="na">task_logs_to_stdout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">True</span>
+</pre></div>
+</div>
+<p>A Celery worker runs up to <code class="docutils literal notranslate"><span class="pre">worker_concurrency</span></code> tasks at once, so lines from concurrent
+tasks interleave on the worker’s stdout. Raw <code class="docutils literal notranslate"><span class="pre">print</span></code>/stderr lines are forwarded with
+only <code class="docutils literal notranslate"><span class="pre">logger=&quot;task.stdout&quot;</span></code> and carry no task instance ID, so a log collector cannot
+attribute them to a task.</p>
+<p>The lookup order is:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[celery]</span> <span class="pre">task_logs_to_stdout</span></code> — if set, takes precedence.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[logging]</span> <span class="pre">task_logs_to_stdout</span></code> — used when the celery-specific key is absent.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">False</span></code> — the default when neither key is configured.</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This is Airflow 3+ only. On <code class="docutils literal notranslate"><span class="pre">apache-airflow&lt;3.0.0</span></code>, Celery tasks are routed
+through <code class="docutils literal notranslate"><span class="pre">execute_command</span></code> and never reach <code class="docutils literal notranslate"><span class="pre">supervise</span></code>, so setting either key
+has no effect there.</p>
+<p><code class="docutils literal notranslate"><span class="pre">[logging]</span> <span class="pre">task_logs_to_stdout</span></code> is consulted natively by Airflow core starting
+in 3.4.0. On earlier 3.x versions this provider resolves the <code class="docutils literal notranslate"><span class="pre">[celery]</span></code>/
+<code class="docutils literal notranslate"><span class="pre">[logging]</span></code> fallback itself, so the global key still takes effect on
+Airflow 3.0–3.3 as long as this provider version is installed — it is not
+limited to 3.4+.</p>
 </div>
 </section>
 <section id="queues">
@@ -955,10 +1015,12 @@ supported Airflow versions retain coordinate keys; the provider’s minimum Airf
         <div class="wy-menu-vertical">
             <ul>
 <li><a class="reference internal" href="#">Celery Executor</a><ul>
+<li><a class="reference internal" href="#postgresql-result-backends">PostgreSQL result backends</a></li>
 <li><a class="reference internal" href="#redis-maintenance">Redis maintenance</a></li>
 <li><a class="reference internal" href="#architecture">Architecture</a></li>
 <li><a class="reference internal" href="#task-execution-process">Task execution process</a></li>
 <li><a class="reference internal" href="#worker-logging">Worker logging</a></li>
+<li><a class="reference internal" href="#task-log-forwarding-to-stdout">Task log forwarding to stdout</a></li>
 <li><a class="reference internal" href="#queues">Queues</a></li>
 <li><a class="reference internal" href="#task-instance-identity">Task-instance identity</a></li>
 </ul>
@@ -1180,7 +1242,7 @@ supported Airflow versions retain coordinate keys; the provider’s minimum Airf
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=a26bbffe"></script>
+        <script src="_static/documentation_options.js?v=30146115"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

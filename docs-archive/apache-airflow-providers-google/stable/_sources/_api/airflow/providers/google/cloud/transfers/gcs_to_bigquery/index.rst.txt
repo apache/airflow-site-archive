@@ -32,7 +32,7 @@ Module Contents
    :value: ['CSV', 'NEWLINE_DELIMITED_JSON', 'AVRO', 'GOOGLE_SHEETS', 'DATASTORE_BACKUP', 'PARQUET', 'ORC']
 
 
-.. py:class:: GCSToBigQueryOperator(*, bucket, source_objects, destination_project_dataset_table, schema_fields=None, schema_object=None, schema_object_bucket=None, source_format='CSV', compression='NONE', create_disposition='CREATE_IF_NEEDED', skip_leading_rows=None, write_disposition='WRITE_EMPTY', field_delimiter=',', max_bad_records=0, quote_character=None, ignore_unknown_values=False, allow_quoted_newlines=False, allow_jagged_rows=False, encoding='UTF-8', max_id_key=None, gcp_conn_id='google_cloud_default', schema_update_options=(), src_fmt_configs=None, extra_config = None, external_table=False, time_partitioning=None, range_partitioning=None, cluster_fields=None, autodetect=True, encryption_configuration=None, location=None, impersonation_chain = None, labels=None, description=None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), result_retry = DEFAULT_RETRY, result_timeout = None, cancel_on_kill = True, job_id = None, force_rerun = True, reattach_states = None, project_id = PROVIDE_PROJECT_ID, force_delete = False, **kwargs)
+.. py:class:: GCSToBigQueryOperator(*, bucket, source_objects, destination_project_dataset_table, schema_fields=None, schema_object=None, schema_object_bucket=None, source_format='CSV', compression='NONE', create_disposition='CREATE_IF_NEEDED', skip_leading_rows=None, write_disposition='WRITE_EMPTY', field_delimiter=',', max_bad_records=0, quote_character=None, ignore_unknown_values=False, allow_quoted_newlines=False, allow_jagged_rows=False, encoding='UTF-8', max_id_key=None, gcp_conn_id='google_cloud_default', schema_update_options=(), src_fmt_configs=None, extra_config = None, external_table=False, time_partitioning=None, range_partitioning=None, cluster_fields=None, autodetect = True, encryption_configuration=None, location=None, impersonation_chain = None, labels=None, description=None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), result_retry = DEFAULT_RETRY, result_timeout = None, cancel_on_kill = True, job_id = None, force_rerun = True, reattach_states = None, project_id = PROVIDE_PROJECT_ID, force_delete = False, **kwargs)
 
    Bases: :py:obj:`airflow.providers.google.version_compat.BaseOperator`
 
@@ -93,6 +93,9 @@ Module Contents
        If true, the extra values are ignored. If false, records with extra columns
        are treated as bad records, and if there are too many bad records, an
        invalid error is returned in the job result.
+       For CSV and JSON sources with ``autodetect=True`` and no schema provided, the values are
+       checked against the schema inferred from the source data rather than the destination
+       table's schema - see ``autodetect``.
    :param allow_quoted_newlines: Whether to allow quoted newlines (true) or not (false).
    :param allow_jagged_rows: Accept rows that are missing trailing optional columns.
        The missing values are treated as nulls. If false, records with missing trailing
@@ -135,12 +138,11 @@ Module Contents
        by one or more columns. BigQuery supports clustering for both partitioned and
        non-partitioned tables. The order of columns given determines the sort order.
        Not applicable for external tables.
-   :param autodetect: [Optional] Indicates if we should automatically infer the
-       options and schema for CSV and JSON sources. (Default: ``True``).
-       Parameter must be set to True if 'schema_fields' and 'schema_object' are undefined.
-       It is suggested to set to True if table are create outside of Airflow.
-       If autodetect is None and no schema is provided (neither via schema_fields
-       nor a schema_object), assume the table already exists.
+   :param autodetect: [Optional] Whether to infer the schema from the source data for CSV and
+       JSON sources when neither ``schema_fields`` nor ``schema_object`` is provided. If ``True``,
+       the schema is inferred from the source data. If ``False``, either ``schema_fields`` or
+       ``schema_object`` must be provided. If ``None``, the existing destination table's schema
+       is used. (Default: ``True``).
    :param encryption_configuration: [Optional] Custom encryption configuration (e.g., Cloud KMS keys).
 
        .. code-block:: python

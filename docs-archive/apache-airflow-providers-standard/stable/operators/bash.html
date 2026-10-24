@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.20.1</span>
+        <span class="version-label">Version: </span><span class="version">1.21.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -478,7 +478,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.20.1</span>
+        <span class="version-label">Version: </span><span class="version">1.21.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -878,17 +878,22 @@ individual values by name instead of pulling the whole dictionary and indexing i
 <span class="s2">        set -e</span>
 <span class="s2">        dag_folder="$AIRFLOW_HOME/dags"</span>
 <span class="s2">        file_count=$(find "$dag_folder" -type f -name '*.py' 2&gt;/dev/null | wc -l)</span>
-<span class="s2">        printf '{"dag_folder": "</span><span class="si">%s</span><span class="s2">", "file_count": </span><span class="si">%s</span><span class="s2">}</span><span class="se">\\</span><span class="s2">n' "$dag_folder" "$file_count"</span>
+<span class="s2">        printf '{"dag_folder": "</span><span class="si">%s</span><span class="s2">", "file_count": "</span><span class="si">%s</span><span class="s2">"}</span><span class="se">\\</span><span class="s2">n' "$dag_folder" "$file_count"</span>
 <span class="s2">    """</span>
 
 <span class="n">dag_stats</span> <span class="o">=</span> <span class="n">describe_dag_folder</span><span class="p">()</span>
 
 <span class="nd">@task</span><span class="o">.</span><span class="n">bash</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">show_dag_folder_stats</span><span class="p">(</span><span class="n">folder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s1">'echo "found </span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s1"> Dag file(s) under </span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s1">"'</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">show_dag_folder_stats</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="s1">'echo "found $FILE_COUNT Dag file(s) under $DAG_FOLDER"'</span>
 
-<span class="c1"># Each key of the returned dict is available as its own XCom.</span>
-<span class="n">show_dag_folder_stats</span><span class="p">(</span><span class="n">folder</span><span class="o">=</span><span class="n">dag_stats</span><span class="p">[</span><span class="s2">"dag_folder"</span><span class="p">],</span> <span class="n">count</span><span class="o">=</span><span class="n">dag_stats</span><span class="p">[</span><span class="s2">"file_count"</span><span class="p">])</span>
+<span class="c1"># Each key of the returned dict is available as its own XCom. Values produced by another task</span>
+<span class="c1"># reach the command through the environment, so the shell never parses them as command text.</span>
+<span class="c1"># Environment values must be strings, which is why describe_dag_folder emits file_count as one.</span>
+<span class="n">show_dag_folder_stats</span><span class="o">.</span><span class="n">override</span><span class="p">(</span>
+    <span class="n">env</span><span class="o">=</span><span class="p">{</span><span class="s2">"DAG_FOLDER"</span><span class="p">:</span> <span class="n">dag_stats</span><span class="p">[</span><span class="s2">"dag_folder"</span><span class="p">],</span> <span class="s2">"FILE_COUNT"</span><span class="p">:</span> <span class="n">dag_stats</span><span class="p">[</span><span class="s2">"file_count"</span><span class="p">]},</span>
+    <span class="n">append_env</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)()</span>
 </pre></div>
 </div>
 </div>
@@ -911,13 +916,16 @@ BashOperator</label><div class="sd-tab-content docutils">
     <span class="n">output_processor</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="c1"># Each key of the pushed dict is available as its own XCom.</span>
+<span class="c1"># Each key of the pushed dict is available as its own XCom. Values produced by another task</span>
+<span class="c1"># reach the command through the environment, so the shell never parses them as command text.</span>
 <span class="n">show_dag_folder_stats</span> <span class="o">=</span> <span class="n">BashOperator</span><span class="p">(</span>
     <span class="n">task_id</span><span class="o">=</span><span class="s2">"show_dag_folder_stats"</span><span class="p">,</span>
-    <span class="n">bash_command</span><span class="o">=</span><span class="p">(</span>
-        <span class="s2">"echo </span><span class="se">\"</span><span class="s2">found {{ ti.xcom_pull(task_ids='describe_dag_folder', key='file_count') }}"</span>
-        <span class="s2">" Dag file(s) under {{ ti.xcom_pull(task_ids='describe_dag_folder', key='dag_folder') }}</span><span class="se">\"</span><span class="s2">"</span>
-    <span class="p">),</span>
+    <span class="n">bash_command</span><span class="o">=</span><span class="s1">'echo "found $FILE_COUNT Dag file(s) under $DAG_FOLDER"'</span><span class="p">,</span>
+    <span class="n">env</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">"DAG_FOLDER"</span><span class="p">:</span> <span class="s2">"{{ ti.xcom_pull(task_ids='describe_dag_folder', key='dag_folder') }}"</span><span class="p">,</span>
+        <span class="s2">"FILE_COUNT"</span><span class="p">:</span> <span class="s2">"{{ ti.xcom_pull(task_ids='describe_dag_folder', key='file_count') }}"</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">append_env</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -1432,7 +1440,7 @@ or even build the Bash command(s) to execute.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=8e1671ee"></script>
+        <script src="../_static/documentation_options.js?v=5bbbbfae"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
