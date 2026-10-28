@@ -18,7 +18,7 @@ description: Options for pushing an XCom value. dagId , taskId , and runId defau
 }"
 />
 
-<SourceLink href="/source/src/sdk/client-types-ts/#L49" label="client-types.ts:49" />
+<SourceLink href="/source/src/sdk/client-types-ts/#L44" label="client-types.ts:44" />
 
 Options for pushing an XCom value.
 
@@ -30,24 +30,24 @@ Options for pushing an XCom value.
 
 <MemberHeading id="dagid" depth="3" name="dagId" sig="dagId: string" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L52" sourceLabel="client-types.ts:52" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L47" sourceLabel="client-types.ts:47" />
 
 <MemberHeading id="key" depth="3" name="key" sig="key: string" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L50" sourceLabel="client-types.ts:50" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L45" sourceLabel="client-types.ts:45" />
 
 <MemberHeading id="mapindex" depth="3" name="mapIndex" sig="mapIndex: number | null" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L55" sourceLabel="client-types.ts:55" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L50" sourceLabel="client-types.ts:50" />
 
 <MemberHeading id="runid" depth="3" name="runId" sig="runId: string" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L53" sourceLabel="client-types.ts:53" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L48" sourceLabel="client-types.ts:48" />
 
 <MemberHeading id="taskid" depth="3" name="taskId" sig="taskId: string" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L54" sourceLabel="client-types.ts:54" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L49" sourceLabel="client-types.ts:49" />
 
 <MemberHeading id="value" depth="3" name="value" sig="value: JsonValue" />
 
-<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L51" sourceLabel="client-types.ts:51" />
+<MemberMeta sourceHref="/source/src/sdk/client-types-ts/#L46" sourceLabel="client-types.ts:46" />

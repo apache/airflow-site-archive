@@ -12,24 +12,35 @@ longname: module:Authoring
 
 ## Classes
 
+- [`Bundle`](/module/authoring/bundle)
 - [`Dag`](/module/authoring/dag)
-- [`DagRegistry`](/module/authoring/dagregistry)
+- [`Label`](/module/authoring/label)
+- [`TaskHandler`](/module/authoring/taskhandler)
 
 ## Interfaces
 
+- [`DagSpec`](/module/authoring/dagspec)
 - [`TaskClient`](/module/authoring/taskclient)
 - [`TaskContext`](/module/authoring/taskcontext)
-- [`TaskHandlerArgs`](/module/authoring/taskhandlerargs)
-- [`TaskOptions`](/module/authoring/taskoptions)
 - [`TaskRef`](/module/authoring/taskref)
+- [`TaskSpec`](/module/authoring/taskspec)
+- [`TaskStateStore`](/module/authoring/taskstatestore)
 
 ## Type Aliases
 
-- [`DagSpec`](/module/authoring/dagspec)
-- [`TaskHandler`](/module/authoring/taskhandler)
+- [`ArgNameMap`](/module/authoring/argnamemap)
+- [`Registerable`](/module/authoring/registerable)
+- [`TaskFunction`](/module/authoring/taskfunction)
 - [`TaskInputs`](/module/authoring/taskinputs)
-- [`TaskSpec`](/module/authoring/taskspec)
+- [`TaskOptions`](/module/authoring/taskoptions)
 
 ## Functions
 
-- [`serveDags`](/module/authoring/servedags)
+- [`getClient`](/module/authoring/getclient)
+- [`getContext`](/module/authoring/getcontext)
+- [`triggerDagRun`](/module/authoring/triggerdagrun)
+- [`withArgNames`](/module/authoring/withargnames)
+
+## Variables
+
+- [`NEVER_EXPIRE`](/module/authoring/never-expire)

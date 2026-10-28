@@ -15,6 +15,7 @@ longname: module:Types
 - [`ConnectionResult`](/module/types/connectionresult)
 - [`GetXComOpts`](/module/types/getxcomopts)
 - [`SetXComOpts`](/module/types/setxcomopts)
+- [`TaskStateStoreSetOpts`](/module/types/taskstatestoresetopts)
 
 ## Type Aliases
 

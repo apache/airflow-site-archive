@@ -2,15 +2,17 @@
 title: TaskInputs
 kind: typedef
 longname: module:Authoring.TaskInputs
-description: Task references keyed by input name. Stored and validated, but they do not create dependencies or pass values yet — see {@link module:Authoring.TaskOptions#inputs|TaskOptions.inputs}. Each must identify an earlier task in the same Dag. Literal values are not supported.
+description: The inputs of a task, keyed by the name of the argument each one supplies.
 ---
 
 # TaskInputs
 
-<Signature code="TaskInputs = Readonly<Record<string, TaskRef>>" />
+<Signature code="TaskInputs<TArgs> = { [K in keyof TArgs]: TaskRef | JsonCompatible<TArgs[K]> }" />
 
-<SourceLink href="/source/src/sdk/dag-ts/#L79" label="dag.ts:79" />
+<SourceLink href="/source/src/sdk/dag-ts/#L514" label="dag.ts:514" />
 
-Task references keyed by input name.
+The inputs of a task, keyed by the name of the argument each one supplies.
 
-Stored and validated, but they do not create dependencies or pass values yet — see [TaskOptions.inputs](/module/authoring/taskoptions#inputs). Each must identify an earlier task in the same Dag. Literal values are not supported.
+**Type Parameters**
+
+- `TArgs`
