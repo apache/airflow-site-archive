@@ -15,15 +15,15 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
             <link rel="next" title="Vendor-managed agents: ManagedAgentToolset" href="../toolsets/managed_agent.html" />
-            <link rel="prev" title="Sandbox configuration and lifecycle" href="configuration.html" />
+            <link rel="prev" title="Configure a sandbox" href="configuration.html" />
 
     <link rel="canonical" href="https://airflow.apache.org/docs/apache-airflow-providers-common-ai/stable/sandbox/backends.html" />
 
@@ -763,7 +763,7 @@ carrying pre-installed packages. Default <code class="docutils literal notransla
 Modal’s own default is 300, which is below a plausible agent run.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">idle_timeout</span></code>: Seconds of inactivity after which Modal reclaims the sandbox,
 or <code class="docutils literal notranslate"><span class="pre">None</span></code> to rely on <code class="docutils literal notranslate"><span class="pre">sandbox_timeout</span></code> alone. Default <code class="docutils literal notranslate"><span class="pre">None</span></code>; see
-<a class="reference internal" href="configuration.html#sandbox-configuring"><span class="std std-ref">Configuring a sandbox</span></a>.</p></li>
+<a class="reference internal" href="configuration.html#sandbox-timeouts"><span class="std std-ref">Size the sandbox and its timeouts</span></a>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">workdir</span></code>: Working directory for commands, created if the image lacks it.
 Default <code class="docutils literal notranslate"><span class="pre">&quot;/workspace&quot;</span></code>. It is a starting directory, not a jail: absolute paths
 and <code class="docutils literal notranslate"><span class="pre">..</span></code> are passed through, and commands run as root, so the model can read
@@ -1339,9 +1339,13 @@ guarantee this backend cannot make, and since <code class="docutils literal notr
 <code class="docutils literal notranslate"><span class="pre">sbx</span> <span class="pre">policy</span> <span class="pre">init</span> <span class="pre">deny-all</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;allow-all&quot;</span></code> to state that egress is open
 and pass <code class="docutils literal notranslate"><span class="pre">SandboxSpec(block_network=False)</span></code> to match.</p></li>
 </ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">sbx</span></code> CLI has no way to pass environment variables at creation, so the backend
+writes <code class="docutils literal notranslate"><span class="pre">SandboxSpec.env</span></code> as <code class="docutils literal notranslate"><span class="pre">export</span></code> lines to <code class="docutils literal notranslate"><span class="pre">/etc/profile</span></code> inside the
+sandbox. Anything in the sandbox can read that file for as long as the sandbox
+exists.</p>
 </section>
 <section id="what-differs-between-the-backends">
-<h2>What differs between the backends<a class="headerlink" href="#what-differs-between-the-backends" title="Link to this heading">¶</a></h2>
+<span id="sandbox-backend-differences"></span><h2>What differs between the backends<a class="headerlink" href="#what-differs-between-the-backends" title="Link to this heading">¶</a></h2>
 <p>Swapping the backend is one constructor argument, and tool names, spec and prompt
 do not change. Four behaviours do, so read them before assuming the same Dag
 behaves identically everywhere:</p>
@@ -1375,7 +1379,7 @@ described under <a class="reference internal" href="#sandbox-backend-openshell">
 and OpenShell, which write the target and leave the link in place, and replaces
 the link with a regular file on Modal and OpenSandbox.</p></li>
 <li><p><strong>Attaching.</strong> A Modal sandbox can be provisioned by one task and used by an
-agent in another (<a class="reference internal" href="configuration.html#sandbox-attach"><span class="std std-ref">A sandbox another task owns</span></a>). An <code class="docutils literal notranslate"><span class="pre">sbx</span></code> microVM lives on the worker
+agent in another (<a class="reference internal" href="configuration.html#sandbox-attach"><span class="std std-ref">Share a sandbox between tasks</span></a>). An <code class="docutils literal notranslate"><span class="pre">sbx</span></code> microVM lives on the worker
 that created it and cannot be reached from another task, OpenSandbox, Boat and
 Islo have no per-sandbox metadata the ownership rules could be kept in, and
 OpenShell does not implement attaching yet, so all five refuse <code class="docutils literal notranslate"><span class="pre">SandboxSpec.owner</span></code>
@@ -1435,7 +1439,7 @@ provision a weaker sandbox than the Dag author asked for.</p></li>
 <p><strong>If your sandboxes can be found again from another process</strong>, subclass
 <code class="xref py py-class docutils literal notranslate"><span class="pre">AttachableSandboxBackend</span></code> instead,
 and a <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> can provision a sandbox for an agent task to attach to
-(<a class="reference internal" href="configuration.html#sandbox-attach"><span class="std std-ref">A sandbox another task owns</span></a>). It adds two methods, <code class="docutils literal notranslate"><span class="pre">read_tags</span></code> and <code class="docutils literal notranslate"><span class="pre">write_tags</span></code>,
+(<a class="reference internal" href="configuration.html#sandbox-attach"><span class="std std-ref">Share a sandbox between tasks</span></a>). It adds two methods, <code class="docutils literal notranslate"><span class="pre">read_tags</span></code> and <code class="docutils literal notranslate"><span class="pre">write_tags</span></code>,
 over whatever key-value metadata the vendor keeps on a sandbox, and the ownership
 rules are written once on the base class on top of them. Three things the base
 class relies on: <code class="docutils literal notranslate"><span class="pre">read_tags</span></code> raises <code class="docutils literal notranslate"><span class="pre">SandboxTerminalError</span></code> for a sandbox that
@@ -1454,7 +1458,7 @@ lifetime itself; a backend clamps only if its own file operations need it.</p>
 
 
     <div class="pager" role="navigation" aria-label="related navigation">
-            <a rel="prev" title="Sandbox configuration and lifecycle" href="configuration.html" >
+            <a rel="prev" title="Configure a sandbox" href="configuration.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="p">Previous</button>
             </a>
             <a rel="next" title="Vendor-managed agents: ManagedAgentToolset" href="../toolsets/managed_agent.html" >

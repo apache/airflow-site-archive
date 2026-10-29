@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -721,6 +721,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">TypedDict</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.batch</span><span class="w"> </span><span class="kn">import</span> <span class="n">dispatch</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMBatchLimitExceededError</span><span class="p">,</span> <span class="n">LLMBatchModelMismatchError</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -747,7 +748,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">prompt</span><span class="p">:</span> <span class="n">Required</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></div>
 
     <span class="c1">#: Per-request model override, written as ``"&lt;provider&gt;:&lt;model&gt;"`` (the same form the</span>
-    <span class="c1">#: operator's own ``model_id`` uses). ``None`` inherits the batch-level ``model_id``.</span>
+    <span class="c1">#: operator's own ``model_id`` uses, so a bare name takes the connection's Default</span>
+    <span class="c1">#: Provider). ``None`` inherits the batch-level ``model_id``.</span>
     <span class="c1">#: Anthropic allows a different model per request in the same batch; OpenAI requires</span>
     <span class="c1">#: every request in a batch to resolve to the same model.</span>
 <div class="viewcode-block" id="BatchRequest.model">
@@ -1112,15 +1114,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        Resolve a per-request ``model`` override to this adapter's bare model name.</span>
 
 <span class="sd">        ``request_model`` must be ``None`` (inherit the batch-level default,</span>
-<span class="sd">        already bare) or a ``"&lt;provider&gt;:&lt;model&gt;"`` string whose prefix equals</span>
-<span class="sd">        :attr:`name`. A request naming a different provider is rejected before</span>
-<span class="sd">        any network call rather than sent to the wrong provider's model</span>
-<span class="sd">        namespace.</span>
+<span class="sd">        already bare) or a ``"&lt;provider&gt;:&lt;model&gt;"`` string whose prefix selects</span>
+<span class="sd">        this adapter (:attr:`name`, or an alias such as ``openai-chat``). A</span>
+<span class="sd">        request naming a different provider is rejected before any network call</span>
+<span class="sd">        rather than sent to the wrong provider's model namespace.</span>
 <span class="sd">        """</span>
         <span class="k">if</span> <span class="n">request_model</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">default_bare_model</span>
         <span class="n">prefix</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">bare</span> <span class="o">=</span> <span class="n">request_model</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">sep</span> <span class="ow">or</span> <span class="n">prefix</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">bare</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sep</span> <span class="ow">or</span> <span class="n">dispatch</span><span class="o">.</span><span class="n">adapter_name_for_prefix</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">bare</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">LLMBatchModelMismatchError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Request </span><span class="si">{</span><span class="n">request_index</span><span class="si">}</span><span class="s2"> sets model=</span><span class="si">{</span><span class="n">request_model</span><span class="si">!r}</span><span class="s2">, which does not resolve "</span>
                 <span class="sa">f</span><span class="s2">"to the </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> adapter this batch is using. Per-request model overrides "</span>

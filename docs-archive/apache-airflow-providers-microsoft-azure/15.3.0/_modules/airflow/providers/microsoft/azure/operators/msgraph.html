@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -700,11 +700,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">XCOM_RETURN_KEY</span><span class="p">,</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">TaskDeferred</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">MSGraphPageNotInTaskStateStoreError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.hooks.msgraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">KiotaRequestAdapterHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.triggers.msgraph</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">MSGraphTrigger</span><span class="p">,</span>
     <span class="n">ResponseSerializer</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_3_PLUS</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span>
@@ -715,38 +717,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.execution_time.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskStateStoreAccessor</span>
 
 <span class="c1"># Keys in the task state store of a durable MSGraphAsyncOperator.</span>
-<div class="viewcode-block" id="CURSOR_KEY">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.CURSOR_KEY">[docs]</a>
-<span class="n">CURSOR_KEY</span> <span class="o">=</span> <span class="s2">"msgraph_cursor"</span></div>
-
-<div class="viewcode-block" id="PAGE_KEY_PREFIX">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.PAGE_KEY_PREFIX">[docs]</a>
-<span class="n">PAGE_KEY_PREFIX</span> <span class="o">=</span> <span class="s2">"msgraph_page_"</span></div>
-
-<div class="viewcode-block" id="COMPLETED_KEY">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.COMPLETED_KEY">[docs]</a>
-<span class="n">COMPLETED_KEY</span> <span class="o">=</span> <span class="s2">"msgraph_completed"</span></div>
+<span class="n">_CURSOR_KEY</span> <span class="o">=</span> <span class="s2">"msgraph_cursor"</span>
+<span class="n">_PAGE_KEY_PREFIX</span> <span class="o">=</span> <span class="s2">"msgraph_page_"</span>
+<span class="n">_COMPLETED_KEY</span> <span class="o">=</span> <span class="s2">"msgraph_completed"</span>
+<span class="c1"># The version of the kept pages and their cursor. 15.3.0rc1 kept the pages unwrapped, under a cursor without</span>
+<span class="c1"># a version; a cursor of another version is not read back, its pages go and the pagination starts again.</span>
+<span class="n">_CURSOR_VERSION</span> <span class="o">=</span> <span class="mi">1</span>
 
 
-
-<div class="viewcode-block" id="PaginationCursor">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.PaginationCursor">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">PaginationCursor</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_PaginationCursor</span><span class="p">(</span><span class="n">TypedDict</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Where a durable MSGraphAsyncOperator continues: the next link and the number of pages kept."""</span>
 
-<div class="viewcode-block" id="PaginationCursor.url">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.PaginationCursor.url">[docs]</a>
-    <span class="n">url</span><span class="p">:</span> <span class="nb">str</span></div>
-
-<div class="viewcode-block" id="PaginationCursor.query_parameters">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.PaginationCursor.query_parameters">[docs]</a>
-    <span class="n">query_parameters</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span></div>
-
-<div class="viewcode-block" id="PaginationCursor.pages">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.PaginationCursor.pages">[docs]</a>
-    <span class="n">pages</span><span class="p">:</span> <span class="nb">int</span></div>
-</div>
-
+    <span class="n">version</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">url</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">query_parameters</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="n">pages</span><span class="p">:</span> <span class="nb">int</span>
 
 
 <div class="viewcode-block" id="default_event_handler">
@@ -826,9 +811,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        crash, resumes instead of starting over (default is False). Every processed page is kept with the</span>
 <span class="sd">        link to the next one, so the retry continues at the page it stopped at. The result of a request</span>
 <span class="sd">        that is not a GET is kept too, so the retry returns it instead of sending the request again. A</span>
-<span class="sd">        crash between a response and its write to the store still repeats that one request. Pages are</span>
-<span class="sd">        stored as they are, so pages larger than the store's ``max_value_storage_bytes`` need a state</span>
-<span class="sd">        store backend that offloads large values. Needs Airflow 3.3 or later.</span>
+<span class="sd">        crash between a response and its write to the store still repeats that one request. The pages</span>
+<span class="sd">        are removed from the store once the result is returned. Pages are stored as they are, so pages</span>
+<span class="sd">        larger than the store's ``max_value_storage_bytes`` need a state store backend that offloads</span>
+<span class="sd">        large values. Needs Airflow 3.3 or later.</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="MSGraphAsyncOperator.template_fields">
@@ -870,6 +856,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">durable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">"`durable` has no effect on Airflow versions below 3.3."</span><span class="p">,</span> <span class="ne">UserWarning</span><span class="p">,</span> <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">durable</span> <span class="o">=</span> <span class="kc">False</span>
 <div class="viewcode-block" id="MSGraphAsyncOperator.url">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.MSGraphAsyncOperator.url">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">url</span> <span class="o">=</span> <span class="n">url</span></div>
@@ -951,17 +940,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.MSGraphAsyncOperator.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">task_state_store</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_task_state_store</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">completed</span> <span class="o">:=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">COMPLETED_KEY</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">completed</span> <span class="o">:=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_COMPLETED_KEY</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Returning the result of the request completed by an earlier try."</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">"dict[str, Any]"</span><span class="p">,</span> <span class="n">completed</span><span class="p">)[</span><span class="s2">"result"</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">cursor</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">):</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Resuming at page </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"pages"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"url"</span><span class="p">])</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">query_parameters</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"query_parameters"</span><span class="p">]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">defer_to_next_link</span><span class="p">(</span>
-                    <span class="n">url</span><span class="o">=</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"url"</span><span class="p">],</span>
-                    <span class="n">query_parameters</span><span class="o">=</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"query_parameters"</span><span class="p">],</span>
-                    <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute_complete</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">cursor</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"version"</span><span class="p">)</span> <span class="o">!=</span> <span class="n">_CURSOR_VERSION</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">"Removing the pages kept by an earlier version of the provider, "</span>
+                        <span class="s2">"starting again from the first page."</span>
+                    <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_remove_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">,</span> <span class="n">cursor</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Resuming at page </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"pages"</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"url"</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">defer_to_next_link</span><span class="p">(</span>
+                        <span class="n">url</span><span class="o">=</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"url"</span><span class="p">],</span>
+                        <span class="n">query_parameters</span><span class="o">=</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"query_parameters"</span><span class="p">],</span>
+                        <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute_complete</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                    <span class="p">)</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">durable</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">"task_state_store not available in context, crash recovery is disabled for this run"</span>
@@ -1065,8 +1060,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">results</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">elif</span> <span class="n">task_state_store</span><span class="p">:</span>
                 <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pull_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">task_state_store</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">"GET"</span><span class="p">:</span>
-                <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">COMPLETED_KEY</span><span class="p">,</span> <span class="p">{</span><span class="s2">"result"</span><span class="p">:</span> <span class="n">results</span><span class="p">})</span>
+            <span class="k">if</span> <span class="n">task_state_store</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_clean_up</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">,</span> <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">results</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
@@ -1081,18 +1076,51 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="MSGraphAsyncOperator.get_cursor">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.MSGraphAsyncOperator.get_cursor">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PaginationCursor</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">"PaginationCursor | None"</span><span class="p">,</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CURSOR_KEY</span><span class="p">))</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_PaginationCursor</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="s2">"_PaginationCursor | None"</span><span class="p">,</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_CURSOR_KEY</span><span class="p">))</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_cursor_of_this_version</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_PaginationCursor</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the cursor the kept pages can be read back with, or none when no page is kept.</span>
+
+<span class="sd">        The pages kept by an earlier version of the provider are not read back: an unwrapped page of</span>
+<span class="sd">        15.3.0rc1 that happens to be a dict with a ``result`` key would pass for a wrapped one. They go,</span>
+<span class="sd">        with their cursor, so the next try starts again from the first page.</span>
+<span class="sd">        """</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cursor</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">cursor</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"version"</span><span class="p">)</span> <span class="o">==</span> <span class="n">_CURSOR_VERSION</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cursor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_remove_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">,</span> <span class="n">cursor</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">MSGraphPageNotInTaskStateStoreError</span><span class="p">(</span>
+            <span class="s2">"The pages were kept by an earlier version of the provider, so the next try starts again from "</span>
+            <span class="s2">"the first page."</span>
+        <span class="p">)</span>
 
 <div class="viewcode-block" id="MSGraphAsyncOperator.pull_pages">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/operators/msgraph/index.html#airflow.providers.microsoft.azure.operators.msgraph.MSGraphAsyncOperator.pull_pages">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">pull_pages</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">"""Return the results of the pages processed so far, kept in the task state store."""</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the results of the pages processed so far, kept in the task state store.</span>
+
+<span class="sd">        A page is kept wrapped in a dict, so a page whose result is ``None`` is told apart from a page</span>
+<span class="sd">        that is gone, for instance because it expired under ``[state_store] default_retention_days``.</span>
+<span class="sd">        A missing page removes the pages and the cursor, so the next try starts again from the first page</span>
+<span class="sd">        instead of returning results with a hole in them.</span>
+<span class="sd">        """</span>
         <span class="n">results</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_cursor_of_this_version</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"pages"</span><span class="p">]</span> <span class="k">if</span> <span class="n">cursor</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">append_result</span><span class="p">(</span><span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">PAGE_KEY_PREFIX</span><span class="si">}{</span><span class="n">page</span><span class="si">}</span><span class="s2">"</span><span class="p">))</span>
+            <span class="n">kept</span> <span class="o">=</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_PAGE_KEY_PREFIX</span><span class="si">}{</span><span class="n">page</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">kept</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">"result"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kept</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_remove_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">,</span> <span class="n">cursor</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">MSGraphPageNotInTaskStateStoreError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Page </span><span class="si">{</span><span class="n">page</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> is no longer in the task state store, so the next try starts again from "</span>
+                    <span class="s2">"the first page."</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">append_result</span><span class="p">(</span><span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="n">cast</span><span class="p">(</span><span class="s2">"dict[str, Any]"</span><span class="p">,</span> <span class="n">kept</span><span class="p">)[</span><span class="s2">"result"</span><span class="p">])</span>
         <span class="k">return</span> <span class="n">results</span></div>
 
 
@@ -1107,18 +1135,43 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        The page goes in before the cursor that counts it, so a crash in between only fetches that page</span>
 <span class="sd">        again.</span>
 <span class="sd">        """</span>
-        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_cursor_of_this_version</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">)</span>
         <span class="n">page</span> <span class="o">=</span> <span class="n">cursor</span><span class="p">[</span><span class="s2">"pages"</span><span class="p">]</span> <span class="k">if</span> <span class="n">cursor</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">PAGE_KEY_PREFIX</span><span class="si">}{</span><span class="n">page</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_PAGE_KEY_PREFIX</span><span class="si">}{</span><span class="n">page</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"result"</span><span class="p">:</span> <span class="n">result</span><span class="p">})</span>
         <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span>
-            <span class="n">CURSOR_KEY</span><span class="p">,</span>
+            <span class="n">_CURSOR_KEY</span><span class="p">,</span>
             <span class="p">{</span>
+                <span class="s2">"version"</span><span class="p">:</span> <span class="n">_CURSOR_VERSION</span><span class="p">,</span>
                 <span class="s2">"url"</span><span class="p">:</span> <span class="n">deferred</span><span class="o">.</span><span class="n">trigger</span><span class="o">.</span><span class="n">url</span><span class="p">,</span>
                 <span class="s2">"query_parameters"</span><span class="p">:</span> <span class="p">(</span><span class="n">deferred</span><span class="o">.</span><span class="n">kwargs</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"query_parameters"</span><span class="p">),</span>
                 <span class="s2">"pages"</span><span class="p">:</span> <span class="n">page</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="p">},</span>
         <span class="p">)</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clean_up</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span><span class="p">,</span> <span class="n">results</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Remove the pages and the cursor from the task state store once the result is returned.</span>
+
+<span class="sd">        A non GET result is written before the pages go, so a crash in between does not resend the request.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">"GET"</span><span class="p">:</span>
+            <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">_COMPLETED_KEY</span><span class="p">,</span> <span class="p">{</span><span class="s2">"result"</span><span class="p">:</span> <span class="n">results</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_remove_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cursor</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">))</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remove_pages</span><span class="p">(</span><span class="n">task_state_store</span><span class="p">:</span> <span class="n">TaskStateStoreAccessor</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="n">_PaginationCursor</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Delete the pages and the cursor by their keys.</span>
+
+<span class="sd">        ``task_state_store.clear()`` would delete every key of the task instance, including keys a</span>
+<span class="sd">        ``result_processor`` or a subclass wrote.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">cursor</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cursor</span><span class="p">[</span><span class="s2">"pages"</span><span class="p">]):</span>
+            <span class="n">task_state_store</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_PAGE_KEY_PREFIX</span><span class="si">}{</span><span class="n">page</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">task_state_store</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">_CURSOR_KEY</span><span class="p">)</span>
 
     <span class="nd">@classmethod</span>
 <div class="viewcode-block" id="MSGraphAsyncOperator.append_result">

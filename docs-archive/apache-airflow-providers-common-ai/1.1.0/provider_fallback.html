@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="Pydantic AI connection" href="connections/pydantic_ai.html" />
@@ -756,9 +756,11 @@ Bedrock primary’s native id reaches a Bedrock fallback but not an Azure one. F
 a Bedrock primary with <code class="docutils literal notranslate"><span class="pre">fallback_conn_ids:</span> <span class="pre">[&quot;bedrock_dr&quot;]</span></code> forwards
 <code class="docutils literal notranslate"><span class="pre">&quot;us.anthropic.claude-opus-4-6-v1:0&quot;</span></code> to <code class="docutils literal notranslate"><span class="pre">bedrock_dr</span></code> unchanged; the same primary with
 <code class="docutils literal notranslate"><span class="pre">fallback_conn_ids:</span> <span class="pre">[&quot;azure_dr&quot;]</span></code> does not forward it to <code class="docutils literal notranslate"><span class="pre">azure_dr</span></code> at all, and
-<code class="docutils literal notranslate"><span class="pre">azure_dr</span></code> raises “no model specified” unless its own extra sets a <code class="docutils literal notranslate"><span class="pre">model</span></code>. See
-<a class="reference internal" href="connections/pydantic_ai_azure.html"><span class="doc">Pydantic AI (Azure OpenAI) connection</span></a>, <a class="reference internal" href="connections/pydantic_ai_bedrock.html"><span class="doc">Pydantic AI (AWS Bedrock) connection</span></a> and
-<a class="reference internal" href="connections/pydantic_ai_vertex.html"><span class="doc">Pydantic AI (Google Vertex AI) connection</span></a> for how each vendor connection resolves a bare name.</p>
+<code class="docutils literal notranslate"><span class="pre">azure_dr</span></code> raises “no model specified” unless its own extra sets a <code class="docutils literal notranslate"><span class="pre">model</span></code>. A generic
+<code class="docutils literal notranslate"><span class="pre">pydanticai</span></code> connection with Default Model Provider set counts as being on that platform. See
+<a class="reference internal" href="connections/pydantic_ai.html"><span class="doc">Pydantic AI connection</span></a>, <a class="reference internal" href="connections/pydantic_ai_azure.html"><span class="doc">Pydantic AI (Azure OpenAI) connection</span></a>,
+<a class="reference internal" href="connections/pydantic_ai_bedrock.html"><span class="doc">Pydantic AI (AWS Bedrock) connection</span></a> and <a class="reference internal" href="connections/pydantic_ai_vertex.html"><span class="doc">Pydantic AI (Google Vertex AI) connection</span></a> for how
+each connection type resolves a bare name.</p>
 </section>
 <section id="configure-it-on-the-operator">
 <h2>Configure it on the operator<a class="headerlink" href="#configure-it-on-the-operator" title="Link to this heading">¶</a></h2>
@@ -910,16 +912,12 @@ task; see <em>Verifying a chain</em> below.</p>
 <p>Two checks, neither of which requires waiting for a real outage:</p>
 <p><em>Test the connection.</em> <code class="docutils literal notranslate"><span class="pre">test_connection</span></code> on the primary resolves every connection in the
 chain, so a fallback with a missing <code class="docutils literal notranslate"><span class="pre">model</span></code> or an unknown connection ID is reported by name
-there rather than discovered mid-incident. Credential fields a provider class rejects with a
-<code class="docutils literal notranslate"><span class="pre">TypeError</span></code> are caught by the hook, which retries with the env-var-based provider
-constructor and logs a warning either way; if the required env var is also missing, that
-retry raises <code class="docutils literal notranslate"><span class="pre">pydantic_ai.exceptions.UserError</span></code>, which <code class="docutils literal notranslate"><span class="pre">test_connection</span></code> does surface
-since it wraps the whole resolution in a broad exception handler. What it cannot show is the
-opposite case: the env var <em>is</em> set on the worker, the retry quietly succeeds, and
-<code class="docutils literal notranslate"><span class="pre">test_connection</span></code> reports success even though the credentials you configured on the
-connection were silently ignored – check the logs for that warning rather than relying on
-<code class="docutils literal notranslate"><span class="pre">test_connection</span></code> alone. It also does not call the provider, so a well-formed but revoked
-key still passes – that is what the drill below is for.</p>
+there rather than discovered mid-incident. Fields a provider class cannot be built from (a
+<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>) fail the resolution with a <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> naming the connection, the provider and
+the fields passed, with the provider’s <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> text – the hook never falls back to
+environment-variable auth, which would authenticate as a different identity – and
+<code class="docutils literal notranslate"><span class="pre">test_connection</span></code> reports it as a failure. It does not call the provider, so a well-formed
+but revoked key still passes – that is what the drill below is for.</p>
 <p><em>Drill it.</em> Point the primary at an endpoint nothing listens on and run the Dag. The task
 should still succeed, and the run summary in its log names the model that answered:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>::group::LLM run complete: model=claude-haiku-4-5-20251001, requests=1, ...

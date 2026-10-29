@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -692,7 +692,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseSensorOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AirflowException</span><span class="p">,</span>
+    <span class="n">AirflowSensorTimeout</span><span class="p">,</span>
+    <span class="n">BaseSensorOperator</span><span class="p">,</span>
+    <span class="n">timezone</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.standard.triggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">TimeDeltaTrigger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.hooks.msgraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">KiotaRequestAdapterHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.microsoft.azure.operators.msgraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_callable</span>
@@ -831,6 +836,18 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="MSGraphSensor.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/sensors/msgraph/index.html#airflow.providers.microsoft.azure.sensors.msgraph.MSGraphSensor.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_defer_request</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">timestamp</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MSGraphSensor.retry_execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/sensors/msgraph/index.html#airflow.providers.microsoft.azure.sensors.msgraph.MSGraphSensor.retry_execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">retry_execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">sensor_started_at</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="n">started_at</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started_at</span><span class="p">(</span><span class="n">sensor_started_at</span><span class="p">)</span>
+        <span class="n">remaining</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_remaining_timeout</span><span class="p">(</span><span class="n">started_at</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry_delay</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_defer_request</span><span class="p">(</span><span class="n">started_at</span><span class="p">,</span> <span class="n">remaining</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_defer_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">started_at</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">remaining</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
             <span class="n">trigger</span><span class="o">=</span><span class="n">MSGraphTrigger</span><span class="p">(</span>
                 <span class="n">url</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">url</span><span class="p">,</span>
@@ -842,25 +859,22 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">headers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">headers</span><span class="p">,</span>
                 <span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
                 <span class="n">conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn_id</span><span class="p">,</span>
-                <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
                 <span class="n">proxies</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">proxies</span><span class="p">,</span>
                 <span class="n">scopes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scopes</span><span class="p">,</span>
                 <span class="n">api_version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">api_version</span><span class="p">,</span>
                 <span class="n">serializer</span><span class="o">=</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">serializer</span><span class="p">),</span>
             <span class="p">),</span>
             <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute_complete</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-        <span class="p">)</span></div>
+            <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">"sensor_started_at"</span><span class="p">:</span> <span class="n">started_at</span><span class="p">},</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">remaining</span><span class="p">),</span>
+        <span class="p">)</span>
 
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_started_at</span><span class="p">(</span><span class="n">sensor_started_at</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">sensor_started_at</span> <span class="k">if</span> <span class="n">sensor_started_at</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">timestamp</span><span class="p">()</span>
 
-<div class="viewcode-block" id="MSGraphSensor.retry_execute">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/sensors/msgraph/index.html#airflow.providers.microsoft.azure.sensors.msgraph.MSGraphSensor.retry_execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">retry_execute</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span></div>
-
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remaining_timeout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">started_at</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">-</span> <span class="nb">max</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">timestamp</span><span class="p">()</span> <span class="o">-</span> <span class="n">started_at</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 
 <div class="viewcode-block" id="MSGraphSensor.execute_complete">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/microsoft/azure/sensors/msgraph/index.html#airflow.providers.microsoft.azure.sensors.msgraph.MSGraphSensor.execute_complete">[docs]</a>
@@ -868,6 +882,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
         <span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">sensor_started_at</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Execute callback when MSGraphSensor finishes execution.</span>
@@ -912,11 +927,18 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
                     <span class="k">return</span> <span class="n">result</span>
 
-                <span class="c1"># Re-defer with timeout so Airflow enforces the sensor timeout natively</span>
+                <span class="n">started_at</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_started_at</span><span class="p">(</span><span class="n">sensor_started_at</span><span class="p">)</span>
+                <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remaining_timeout</span><span class="p">(</span><span class="n">started_at</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">remaining</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">AirflowSensorTimeout</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Sensor has timed out; run duration of </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">remaining</span><span class="si">}</span><span class="s2"> seconds "</span>
+                        <span class="sa">f</span><span class="s2">"exceeds the specified timeout of </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="si">}</span><span class="s2">."</span>
+                    <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
-                    <span class="n">trigger</span><span class="o">=</span><span class="n">TimeDeltaTrigger</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retry_delay</span><span class="p">),</span>
+                    <span class="n">trigger</span><span class="o">=</span><span class="n">TimeDeltaTrigger</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retry_delay</span><span class="p">,</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">remaining</span><span class="p">))),</span>
                     <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">retry_execute</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-                    <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">"sensor_started_at"</span><span class="p">:</span> <span class="n">started_at</span><span class="p">},</span>
+                    <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">remaining</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry_delay</span><span class="p">,</span>
                 <span class="p">)</span>
 
         <span class="k">return</span> <span class="kc">None</span></div>

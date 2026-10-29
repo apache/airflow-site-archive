@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -715,6 +715,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">jinja2</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemplateError</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.output_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">dump_output_to_json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">describe_prompt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_3_PLUS</span>
 
 <span class="k">if</span> <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">:</span>
@@ -729,6 +730,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserContent</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.notifier</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseNotifier</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
@@ -828,7 +831,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="DeferForApprovalProtocol.prompt">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/approval/index.html#airflow.providers.common.ai.mixins.approval.DeferForApprovalProtocol.prompt">[docs]</a>
-    <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span></div>
+    <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">UserContent</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="DeferForApprovalProtocol.task_id">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/approval/index.html#airflow.providers.common.ai.mixins.approval.DeferForApprovalProtocol.task_id">[docs]</a>
@@ -894,7 +897,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    - ``on_approval_timeout`` (``Literal["fail", "approve", "reject"]``)</span>
 <span class="sd">    - ``approval_notifiers`` (``Sequence[BaseNotifier]``)</span>
 <span class="sd">    - ``approval_assigned_users`` (``list[HITLUser]``)</span>
-<span class="sd">    - ``prompt`` (``str``)</span>
+<span class="sd">    - ``prompt`` (``str`` or ``Sequence[UserContent]``)</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="LLMApprovalMixin.APPROVE">
@@ -913,16 +916,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="LLMApprovalMixin.validate_approval_prompt">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/approval/index.html#airflow.providers.common.ai.mixins.approval.LLMApprovalMixin.validate_approval_prompt">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">validate_approval_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">:</span> <span class="n">DeferForApprovalProtocol</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Fail fast when the prompt cannot be rendered as text in the approval review body."""</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: require_approval=True is not supported "</span>
-                <span class="sa">f</span><span class="s2">"with a non-string prompt (got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">). "</span>
-                <span class="s2">"The approval review body renders the prompt as text; passing a "</span>
-                <span class="s2">"Sequence[UserContent] would expose object reprs (and any embedded "</span>
-                <span class="s2">"bytes) in the human review UI. Return a str prompt, or disable "</span>
-                <span class="s2">"require_approval."</span>
-            <span class="p">)</span></div>
+<span class="w">        </span><span class="sd">"""Check the prompt before the review opens; the default accepts every prompt."""</span></div>
 
 
 <div class="viewcode-block" id="LLMApprovalMixin.defer_for_approval">
@@ -981,7 +975,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">subject</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Review output for task `</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">`"</span>
 
         <span class="k">if</span> <span class="n">body</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">body</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"```</span><span class="se">\n</span><span class="s2">Prompt: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="si">}</span><span class="se">\n\n</span><span class="si">{</span><span class="n">output</span><span class="si">}</span><span class="se">\n</span><span class="s2">```"</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"```</span><span class="se">\n</span><span class="s2">Prompt: </span><span class="si">{</span><span class="n">describe_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">)</span><span class="si">}</span><span class="se">\n\n</span><span class="si">{</span><span class="n">output</span><span class="si">}</span><span class="se">\n</span><span class="s2">```"</span>
 
         <span class="n">hitl_params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_modifications</span><span class="p">:</span>

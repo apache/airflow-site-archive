@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../search.html" />
 
@@ -682,8 +682,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Collection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextvars</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextVar</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NamedTuple</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">dateutil.parser</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse</span>
@@ -705,6 +707,26 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.log">[docs]</a>
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
+
+
+<span class="c1"># Marks every log line describing why event validation failed, so whatever reads the logs of a failed check can</span>
+<span class="c1"># report just these lines. Every problem of a failed check is logged with it, keep the tag stable.</span>
+<div class="viewcode-block" id="VALIDATION_ERROR_TAG">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.VALIDATION_ERROR_TAG">[docs]</a>
+<span class="n">VALIDATION_ERROR_TAG</span> <span class="o">=</span> <span class="s2">"[OL_VALIDATION_ERROR]"</span></div>
+
+
+<span class="c1"># The key of the events being checked, which prefixes the validation errors logged meanwhile</span>
+<span class="n">_validated_key</span><span class="p">:</span> <span class="n">ContextVar</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">ContextVar</span><span class="p">(</span><span class="s2">"_validated_key"</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="log_validation_error">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.log_validation_error">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">log_validation_error</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">msg</span> <span class="o">%</span> <span class="n">args</span> <span class="k">if</span> <span class="n">args</span> <span class="k">else</span> <span class="n">msg</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">key</span> <span class="o">:=</span> <span class="n">_validated_key</span><span class="o">.</span><span class="n">get</span><span class="p">())</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">VALIDATION_ERROR_TAG</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></div>
 
 
 
@@ -851,13 +873,15 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expected</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="c1"># Only keys present in expected are checked — extra keys in the actual event are ignored.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected a dict but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
+            <span class="n">log_validation_error</span><span class="p">(</span>
+                <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected a dict but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">expected</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="c1"># null sentinel: assert the key must NOT appear in the actual event.</span>
             <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-                    <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="n">log_validation_error</span><span class="p">(</span>
                         <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: key `</span><span class="si">%s</span><span class="s2">` must be absent but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
                         <span class="n">path_str</span><span class="p">,</span>
                         <span class="n">k</span><span class="p">,</span>
@@ -886,7 +910,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 
             <span class="c1"># At this point v is a plain template (dict, list, or scalar) with no sentinels.</span>
             <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: key `</span><span class="si">%s</span><span class="s2">` not found in received event"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+                <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: key `</span><span class="si">%s</span><span class="s2">` not found in received event"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
                 <span class="k">return</span> <span class="kc">False</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">result</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">env</span><span class="p">,</span> <span class="n">path</span> <span class="o">+</span> <span class="p">[</span><span class="n">k</span><span class="p">]):</span>
                 <span class="k">return</span> <span class="kc">False</span>
@@ -894,10 +918,14 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="c1"># Lists must match exactly in length and order. Each element is compared recursively,</span>
         <span class="c1"># so nested sentinels (null, $optional) work inside list items too.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected a list but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
+            <span class="n">log_validation_error</span><span class="p">(</span>
+                <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected a list but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected </span><span class="si">%d</span><span class="s2"> item(s) but got </span><span class="si">%d</span><span class="s2">"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">expected</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">))</span>
+            <span class="n">log_validation_error</span><span class="p">(</span>
+                <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected </span><span class="si">%d</span><span class="s2"> item(s) but got </span><span class="si">%d</span><span class="s2">"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">expected</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">expected</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">env</span><span class="p">,</span> <span class="n">path</span> <span class="o">+</span> <span class="p">[</span><span class="n">i</span><span class="p">]):</span>
@@ -911,11 +939,11 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">rendered</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="p">)</span>
             <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">TemplateError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: failed to render template `</span><span class="si">%s</span><span class="s2">`: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: failed to render template `</span><span class="si">%s</span><span class="s2">`: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">path_str</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
                 <span class="k">return</span> <span class="kc">False</span>
             <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">rendered</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"true"</span> <span class="ow">or</span> <span class="n">rendered</span> <span class="o">==</span> <span class="n">result</span><span class="p">:</span>
                 <span class="k">return</span> <span class="kc">True</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+            <span class="n">log_validation_error</span><span class="p">(</span>
                 <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: template `</span><span class="si">%s</span><span class="s2">` rendered to `</span><span class="si">%s</span><span class="s2">` but expected `true` or actual value `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
                 <span class="n">path_str</span><span class="p">,</span>
                 <span class="n">expected</span><span class="p">,</span>
@@ -926,7 +954,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="kc">False</span>
         <span class="c1"># Plain string: exact equality check.</span>
         <span class="k">if</span> <span class="n">expected</span> <span class="o">!=</span> <span class="n">result</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+            <span class="n">log_validation_error</span><span class="p">(</span>
                 <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected `</span><span class="si">%s</span><span class="s2">` (str) but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
                 <span class="n">path_str</span><span class="p">,</span>
                 <span class="n">expected</span><span class="p">,</span>
@@ -936,7 +964,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="kc">False</span>
     <span class="k">elif</span> <span class="n">expected</span> <span class="o">!=</span> <span class="n">result</span><span class="p">:</span>
         <span class="c1"># Scalar (int, bool, float, …): exact equality check.</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+        <span class="n">log_validation_error</span><span class="p">(</span>
             <span class="s2">"Path `</span><span class="si">%s</span><span class="s2">`: expected `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">) but got `</span><span class="si">%s</span><span class="s2">` (</span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
             <span class="n">path_str</span><span class="p">,</span>
             <span class="n">expected</span><span class="p">,</span>
@@ -946,6 +974,200 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
     <span class="k">return</span> <span class="kc">True</span></div>
+
+
+
+<div class="viewcode-block" id="Attempt">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Attempt</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Which execution of a job an event belongs to.</span>
+
+<span class="sd">    ``try_number``, ``map_index``, ``loop_index`` and ``region_id`` are None for a Dag event and when the task has</span>
+<span class="sd">    none. ``clear_number`` plays for a Dag run the role ``try_number`` plays for a task instance, and ``region_id``</span>
+<span class="sd">    tells apart two executions of one loop iteration after the loop was cleared, which can share every other field.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="Attempt.dag_run_id">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.dag_run_id">[docs]</a>
+    <span class="n">dag_run_id</span><span class="p">:</span> <span class="n">Any</span></div>
+
+<div class="viewcode-block" id="Attempt.clear_number">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.clear_number">[docs]</a>
+    <span class="n">clear_number</span><span class="p">:</span> <span class="n">Any</span></div>
+
+<div class="viewcode-block" id="Attempt.try_number">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.try_number">[docs]</a>
+    <span class="n">try_number</span><span class="p">:</span> <span class="n">Any</span></div>
+
+<div class="viewcode-block" id="Attempt.map_index">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.map_index">[docs]</a>
+    <span class="n">map_index</span><span class="p">:</span> <span class="n">Any</span></div>
+
+<div class="viewcode-block" id="Attempt.loop_index">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.loop_index">[docs]</a>
+    <span class="n">loop_index</span><span class="p">:</span> <span class="n">Any</span></div>
+
+<div class="viewcode-block" id="Attempt.region_id">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.Attempt.region_id">[docs]</a>
+    <span class="n">region_id</span><span class="p">:</span> <span class="n">Any</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_attempt</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Attempt</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the attempt of an event, or None for an event without the airflow facet."""</span>
+    <span class="n">facets</span> <span class="o">=</span> <span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"run"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"facets"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="c1"># Task events carry the airflow facet, Dag run events carry the same content in airflowDagRun.</span>
+    <span class="n">airflow_facet</span> <span class="o">=</span> <span class="n">facets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">facets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflowDagRun"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">airflow_facet</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">dag_run</span> <span class="o">=</span> <span class="n">airflow_facet</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dagRun"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">task_instance</span> <span class="o">=</span> <span class="n">airflow_facet</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"taskInstance"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="n">Attempt</span><span class="p">(</span>
+        <span class="n">dag_run_id</span><span class="o">=</span><span class="n">dag_run</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"run_id"</span><span class="p">),</span>
+        <span class="n">clear_number</span><span class="o">=</span><span class="n">dag_run</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"clear_number"</span><span class="p">),</span>
+        <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"try_number"</span><span class="p">),</span>
+        <span class="n">map_index</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">),</span>
+        <span class="n">loop_index</span><span class="o">=</span><span class="p">(</span><span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"index"</span><span class="p">),</span>
+        <span class="n">region_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"region_id"</span><span class="p">),</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_job_type</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(((</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"job"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"facets"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"jobType"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"jobType"</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="check_run_id_integrity">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.check_run_id_integrity">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_run_id_integrity</span><span class="p">(</span>
+    <span class="n">events_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]],</span> <span class="n">repeated_start_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Check that ``run.runId`` identifies exactly one attempt of exactly one job, and return the problems found.</span>
+
+<span class="sd">    Events are grouped by ``runId``. The attempt of an event is its Dag run id and clear number, plus for a task</span>
+<span class="sd">    event ``(try_number, map_index, loop.index, region_id)``, all from ``run.facets.airflow`` (``airflowDagRun`` for Dag</span>
+<span class="sd">    events). Query events, which are child runs of a task, have no attempt. For every group:</span>
+
+<span class="sd">    1. all events share one ``job.name``;</span>
+<span class="sd">    2. all events share one attempt, so another Dag run, clear, retry, map index or loop iteration can't reuse</span>
+<span class="sd">       a ``runId``;</span>
+<span class="sd">    3. the lifecycle is complete, so START and COMPLETE/FAIL of an attempt can't carry different ``runId`` values:</span>
+
+<span class="sd">       * task and query: exactly one START, or several when the key of the START events is in</span>
+<span class="sd">         ``repeated_start_keys`` (deferral re-emits START on every resume), and exactly one COMPLETE or FAIL;</span>
+<span class="sd">       * Dag run: one START and at most one COMPLETE or FAIL. The Dag run that contains the checking task is</span>
+<span class="sd">         still running when the check happens, so its COMPLETE/FAIL is missing, while Dag runs triggered by it</span>
+<span class="sd">         can already have finished.</span>
+
+<span class="sd">    Across groups:</span>
+
+<span class="sd">    4. one attempt of a job has one ``runId``.</span>
+
+<span class="sd">    For a task in a loop, i.e. with ``task.loop``, also:</span>
+
+<span class="sd">    5. ``runId`` is ``taskInstance.id``, as its iterations share every other coordinate;</span>
+<span class="sd">    6. ``taskInstance.loop.region_id`` is ``taskInstance.region_id`` for a task that isn't mapped, and another region</span>
+<span class="sd">       for a mapped one, whose own region is its expansion inside the loop's;</span>
+<span class="sd">    7. one run of a loop, i.e. its Dag run, clear and ``loop.trajectory``, has one ``loop.region_id``.</span>
+
+<span class="sd">    Only the events passed in are checked, i.e. those of the keys listed in the expected events.</span>
+<span class="sd">    """</span>
+    <span class="n">problems</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">groups</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">events</span> <span class="ow">in</span> <span class="n">events_by_key</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+            <span class="n">run_id</span> <span class="o">=</span> <span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"run"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"runId"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">run_id</span><span class="p">:</span>
+                <span class="n">groups</span><span class="p">[</span><span class="n">run_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">event</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'eventType'</span><span class="p">)</span><span class="si">}</span><span class="s2"> event has no run.runId"</span><span class="p">)</span>
+
+    <span class="n">run_ids_by_attempt</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">set</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">run_id</span><span class="p">,</span> <span class="n">members</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+        <span class="n">job_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">event</span><span class="p">[</span><span class="s2">"job"</span><span class="p">][</span><span class="s2">"name"</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">job_names</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"runId </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2"> is shared by different jobs: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">job_names</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">job_name</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">job_names</span><span class="p">))</span>
+
+        <span class="n">attempts</span> <span class="o">=</span> <span class="p">{</span><span class="n">attempt</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span> <span class="k">if</span> <span class="p">(</span><span class="n">attempt</span> <span class="o">:=</span> <span class="n">_get_attempt</span><span class="p">(</span><span class="n">event</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">attempts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"runId </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2"> of `</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">` is shared by different attempts: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">attempts</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="n">attempts</span><span class="p">:</span>
+            <span class="n">run_ids_by_attempt</span><span class="p">[(</span><span class="n">job_name</span><span class="p">,</span> <span class="n">attempt</span><span class="p">)]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">run_id</span><span class="p">)</span>
+
+        <span class="n">job_type</span> <span class="o">=</span> <span class="n">_get_job_type</span><span class="p">(</span><span class="n">members</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">job_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"TASK"</span><span class="p">,</span> <span class="s2">"QUERY"</span><span class="p">,</span> <span class="s2">"DAG"</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="n">event_types</span> <span class="o">=</span> <span class="p">[</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"eventType"</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span><span class="p">]</span>
+        <span class="n">start_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span> <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"eventType"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"START"</span><span class="p">}</span>
+        <span class="n">terminals</span> <span class="o">=</span> <span class="p">[</span><span class="n">event_type</span> <span class="k">for</span> <span class="n">event_type</span> <span class="ow">in</span> <span class="n">event_types</span> <span class="k">if</span> <span class="n">event_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"COMPLETE"</span><span class="p">,</span> <span class="s2">"FAIL"</span><span class="p">)]</span>
+        <span class="n">starts</span> <span class="o">=</span> <span class="n">event_types</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">"START"</span><span class="p">)</span>
+        <span class="n">repeated_starts_allowed</span> <span class="o">=</span> <span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">start_keys</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">repeated_start_keys</span><span class="p">))</span>
+        <span class="n">too_many_starts</span> <span class="o">=</span> <span class="n">starts</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">repeated_starts_allowed</span>
+        <span class="n">too_many_terminals</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">terminals</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="p">(</span><span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">terminals</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">starts</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">too_many_starts</span> <span class="ow">or</span> <span class="n">too_many_terminals</span><span class="p">:</span>
+            <span class="n">expected</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="s2">"one START (several only if the Dag expects repeated STARTs, see event_count_assertions) "</span>
+                <span class="s2">"and one COMPLETE/FAIL"</span>
+                <span class="k">if</span> <span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span>
+                <span class="k">else</span> <span class="s2">"one START and at most one COMPLETE/FAIL"</span>
+            <span class="p">)</span>
+            <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"runId </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">job_type</span><span class="si">}</span><span class="s2"> `</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">` should have </span><span class="si">{</span><span class="n">expected</span><span class="si">}</span><span class="s2">, "</span>
+                <span class="sa">f</span><span class="s2">"got: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">event_type</span><span class="p">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">event_type</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">event_types</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">job_name</span><span class="p">,</span> <span class="n">attempt_fields</span><span class="p">),</span> <span class="n">run_ids</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">run_ids_by_attempt</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="nb">str</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">run_ids</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"`</span><span class="si">{</span><span class="n">job_name</span><span class="si">}</span><span class="s2">` </span><span class="si">{</span><span class="n">attempt_fields</span><span class="si">}</span><span class="s2"> has several runIds: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">run_ids</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">problems</span> <span class="o">+</span> <span class="n">_check_loop_runs</span><span class="p">(</span><span class="n">groups</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_loop_runs</span><span class="p">(</span><span class="n">groups</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Check the events of tasks in a loop, see ``check_run_id_integrity``."""</span>
+    <span class="n">problems</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">loop_region_ids</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">,</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">set</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">run_id</span><span class="p">,</span> <span class="n">members</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span><span class="p">:</span>
+            <span class="n">airflow_facet</span> <span class="o">=</span> <span class="p">((</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"run"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"facets"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">loop_group</span> <span class="o">:=</span> <span class="p">((</span><span class="n">airflow_facet</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"task"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"group_id"</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">task_instance</span> <span class="o">=</span> <span class="n">airflow_facet</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"taskInstance"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"id"</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">run_id</span><span class="p">):</span>
+                <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] runId </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2"> in loop `</span><span class="si">{</span><span class="n">loop_group</span><span class="si">}</span><span class="s2">` isn't taskInstance.id"</span><span class="p">)</span>
+            <span class="n">loop</span> <span class="o">=</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">loop_region_id</span> <span class="o">:=</span> <span class="n">loop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"region_id"</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">mapped</span> <span class="o">=</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">loop_region_id</span> <span class="o">==</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"region_id"</span><span class="p">))</span> <span class="ow">is</span> <span class="n">mapped</span><span class="p">:</span>
+                <span class="n">problem</span> <span class="o">=</span> <span class="s2">"of a mapped task is its own region_id"</span> <span class="k">if</span> <span class="n">mapped</span> <span class="k">else</span> <span class="s2">"differs from its region_id"</span>
+                <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] runId </span><span class="si">{</span><span class="n">run_id</span><span class="si">}</span><span class="s2">: loop.region_id </span><span class="si">{</span><span class="n">problem</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="n">dag_run</span> <span class="o">=</span> <span class="n">airflow_facet</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dagRun"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="n">run</span> <span class="o">=</span> <span class="p">(</span><span class="n">dag_run</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"run_id"</span><span class="p">),</span> <span class="n">dag_run</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"clear_number"</span><span class="p">),</span> <span class="n">loop_group</span><span class="p">,</span> <span class="n">loop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"trajectory"</span><span class="p">))</span>
+            <span class="n">loop_region_ids</span><span class="p">[</span><span class="n">run</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">loop_region_id</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">run</span><span class="p">,</span> <span class="n">region_ids</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">loop_region_ids</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="nb">str</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">region_ids</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">problems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"loop run </span><span class="si">{</span><span class="n">run</span><span class="si">}</span><span class="s2"> has several loop.region_id: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">region_ids</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">problems</span>
+
+
+<div class="viewcode-block" id="sort_by_execution">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.sort_by_execution">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sort_by_execution</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Order the events of a task's executions by loop iteration, map index and try, as ``event_sort_fn``."""</span>
+    <span class="c1"># Dag run events have no airflow facet</span>
+    <span class="n">task_instance</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"run"</span><span class="p">][</span><span class="s2">"facets"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"taskInstance"</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"index"</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span> <span class="k">if</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"try_number"</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span></div>
 
 
 
@@ -989,6 +1211,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">        ascending before comparison. Useful for mapped tasks whose events arrive in non-deterministic</span>
 <span class="sd">        order. When the template for a key is a list, sorting is required for pairwise comparison to</span>
 <span class="sd">        be meaningful.</span>
+<span class="sd">    :param check_run_ids: if True (default), additionally check the collected events with</span>
+<span class="sd">        ``check_run_id_integrity``: START and COMPLETE/FAIL of one attempt share a ``runId``, while another</span>
+<span class="sd">        try, map index or loop iteration gets its own. Set to False only for a Dag whose expected events</span>
+<span class="sd">        intentionally list a task's lifecycle partially. It runs only once every key matches its template.</span>
 
 <span class="sd">    Special sentinel values in expected dicts:</span>
 
@@ -1016,8 +1242,12 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="n">clear_variables</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">fail_fast</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">event_sort_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">check_run_ids</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
+        <span class="c1"># Never from the Dag's default_args: a retry would hide the mismatch the first try failed on, as that try</span>
+        <span class="c1"># deletes the Variables it checked</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"retries"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 <div class="viewcode-block" id="OpenLineageTestOperator.event_templates">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.event_templates">[docs]</a>
@@ -1043,6 +1273,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.fail_fast">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">fail_fast</span> <span class="o">=</span> <span class="n">fail_fast</span></div>
 
+<div class="viewcode-block" id="OpenLineageTestOperator.check_run_ids">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.check_run_ids">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_run_ids</span> <span class="o">=</span> <span class="n">check_run_ids</span></div>
+
 <div class="viewcode-block" id="OpenLineageTestOperator.event_sort_fn">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.event_sort_fn">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">event_sort_fn</span> <span class="o">=</span> <span class="n">event_sort_fn</span></div>
@@ -1059,30 +1293,56 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Reading OpenLineage event templates from file `</span><span class="si">%s</span><span class="s2">`"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">)</span>
-            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-                <span class="n">events</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
-                <span class="n">key</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"job"</span><span class="p">][</span><span class="s2">"name"</span><span class="p">]</span> <span class="o">+</span> <span class="s2">".event."</span> <span class="o">+</span> <span class="n">event</span><span class="p">[</span><span class="s2">"eventType"</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"$absent"</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"$absent"</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">"$absent"</span><span class="p">]}</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">existing</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">existing</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">event</span>
-                    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">existing</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-                        <span class="n">existing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                    <span class="n">events</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"job"</span><span class="p">][</span><span class="s2">"name"</span><span class="p">]</span> <span class="o">+</span> <span class="s2">".event."</span> <span class="o">+</span> <span class="n">event</span><span class="p">[</span><span class="s2">"eventType"</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"$absent"</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"$absent"</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">"$absent"</span><span class="p">]}</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">existing</span><span class="p">,</span> <span class="n">event</span><span class="p">]</span>
+                        <span class="n">existing</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">existing</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">event</span>
+                        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">existing</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                            <span class="n">existing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">existing</span><span class="p">,</span> <span class="n">event</span><span class="p">]</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log_validation_error</span><span class="p">(</span>
+                    <span class="s2">"Can't read the expected events from `</span><span class="si">%s</span><span class="s2">`: </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">e</span>
+                <span class="p">)</span>
+                <span class="k">raise</span>
         <span class="n">errors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">events_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">template</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>  <span class="c1"># type: ignore[union-attr]</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Checking key: `</span><span class="si">%s</span><span class="s2">`"</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                <span class="n">token</span> <span class="o">=</span> <span class="n">_validated_key</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_check_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">events_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="c1"># Not only a mismatch (ValueError): a malformed event or template must not hide the other keys</span>
+                    <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">e</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">is</span> <span class="ne">ValueError</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_fast</span><span class="p">:</span>
                         <span class="k">raise</span>
-                    <span class="n">errors</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">is</span> <span class="ne">ValueError</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span>
+                <span class="k">finally</span><span class="p">:</span>
+                    <span class="n">_validated_key</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_run_ids</span> <span class="ow">and</span> <span class="n">errors</span><span class="p">:</span>
+                <span class="c1"># A key that failed its template is missing from events_by_key, so its runIds would look incomplete</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Skipping the runId integrity check until the event templates match"</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_run_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">problems</span> <span class="o">:=</span> <span class="n">check_run_id_integrity</span><span class="p">(</span>
+                    <span class="n">events_by_key</span><span class="p">,</span>
+                    <span class="n">repeated_start_keys</span><span class="o">=</span><span class="p">{</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">events_by_key</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expects_repeated_events</span><span class="p">(</span><span class="n">key</span><span class="p">)},</span>
+                <span class="p">):</span>
+                    <span class="k">for</span> <span class="n">problem</span> <span class="ow">in</span> <span class="n">problems</span><span class="p">:</span>
+                        <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">problem</span><span class="p">)</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"    </span><span class="si">{</span><span class="n">problem</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">problem</span> <span class="ow">in</span> <span class="n">problems</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_fast</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"runId integrity check failed:</span><span class="se">\n</span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="s2">"&lt;runId integrity&gt;"</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">"</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">clear_variables</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">:</span>  <span class="c1"># type: ignore[union-attr]</span>
@@ -1090,10 +1350,11 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
                     <span class="n">Variable</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
             <span class="n">failures</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  [</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">errors</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Event check failures:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">failures</span><span class="p">)</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Event check failures:</span><span class="se">\n</span><span class="si">{</span><span class="n">failures</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_check_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_check_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">"$absent"</span> <span class="ow">in</span> <span class="n">template</span><span class="p">:</span>
             <span class="n">reason</span> <span class="o">=</span> <span class="n">template</span><span class="p">[</span><span class="s2">"$absent"</span><span class="p">]</span>
             <span class="k">try</span><span class="p">:</span>
@@ -1101,7 +1362,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Expected no events for key </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">), got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">actual</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">NoVariableError</span><span class="p">:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Key `</span><span class="si">%s</span><span class="s2">` absent as expected (</span><span class="si">%s</span><span class="s2">)."</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">reason</span><span class="p">)</span>
-                <span class="k">return</span>
+                <span class="k">return</span> <span class="p">[]</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">actual_events</span> <span class="o">=</span> <span class="n">Variable</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">deserialize_json</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1127,15 +1388,17 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="n">default_count</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">template</span><span class="p">))</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"1"</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_assert_event_count</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">actual_events</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="n">default_count</span><span class="p">)</span>
 
+        <span class="n">parsed_events</span> <span class="o">=</span> <span class="p">[</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">evt_str</span><span class="p">)</span> <span class="k">for</span> <span class="n">evt_str</span> <span class="ow">in</span> <span class="n">actual_events</span><span class="p">]</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="c1"># Multiple expected events: compare each one after sorting.</span>
-            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">tmpl</span><span class="p">,</span> <span class="n">evt_str</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">actual_events</span><span class="p">)):</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">tmpl</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">evt_str</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="p">[</span><span class="n">i</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">tmpl</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">parsed_events</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">tmpl</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="p">[</span><span class="n">i</span><span class="p">]):</span>
                     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Event at index </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> does not match template for key `</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">`"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># Last event is checked against the template</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">actual_events</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">parsed_events</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Event received does not match one specified in test for key `</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">`"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">parsed_events</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_assert_event_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">actual</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"1"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -1146,13 +1409,25 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">        templates, str(len(template)) for list templates — supplied by the caller).</span>
 <span class="sd">        Delegates the numeric check to _check_count_expr.</span>
 <span class="sd">        """</span>
-        <span class="n">expr</span> <span class="o">=</span> <span class="n">default</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_count_expr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">actual</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_count_expr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_count_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_count_assertions</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">count_expr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_count_assertions</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-                    <span class="n">expr</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">count_expr</span><span class="p">)</span>
-                    <span class="k">break</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_check_count_expr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">actual</span><span class="p">,</span> <span class="n">expr</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">count_expr</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">default</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_expects_repeated_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Tell whether the Dag declares that a START key holds several START events of one run.</span>
+
+<span class="sd">        An open-ended ``"&gt;=N"`` (N &gt;= 2) assertion on a START key does that, e.g. for a deferrable task that</span>
+<span class="sd">        emits START again after every resume. Exact counts don't: they also cover mapped tasks, where each</span>
+<span class="sd">        instance emits its own START under its own ``runId``.</span>
+<span class="sd">        """</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_count_expr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">"1"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">key</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">".event.start"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">expr</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"&gt;="</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">expr</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span> <span class="o">&gt;=</span> <span class="mi">2</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_count_expr</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">actual</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

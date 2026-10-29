@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -705,6 +705,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">concurrent.futures</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">contextvars</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">overload</span>
@@ -714,7 +718,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelAPIError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">infer_model</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models.fallback</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallbackModel</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.providers</span><span class="w"> </span><span class="kn">import</span> <span class="n">infer_provider</span><span class="p">,</span> <span class="n">infer_provider_class</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.providers</span><span class="w"> </span><span class="kn">import</span> <span class="n">infer_provider_class</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParamSpec</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.observability</span><span class="w"> </span><span class="kn">import</span> <span class="n">genai_instrumentation_settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">MaskingCapability</span>
@@ -729,6 +734,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.OutputT">[docs]</a>
 <span class="n">OutputT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"OutputT"</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="P">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.P">[docs]</a>
+<span class="n">P</span> <span class="o">=</span> <span class="n">ParamSpec</span><span class="p">(</span><span class="s2">"P"</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="R">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.R">[docs]</a>
+<span class="n">R</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"R"</span><span class="p">)</span></div>
+
 
 <span class="c1"># Sentinel distinguishing "caller did not pass ``instrument``" from an explicit</span>
 <span class="c1"># ``instrument=None`` / ``instrument=False`` (which mean "do not instrument, and</span>
@@ -739,9 +752,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.FALLBACK_CONN_IDS_EXTRA_KEY">[docs]</a>
 <span class="n">FALLBACK_CONN_IDS_EXTRA_KEY</span> <span class="o">=</span> <span class="s2">"fallback_conn_ids"</span></div>
 
+<div class="viewcode-block" id="MODEL_PROVIDER_EXTRA_KEY">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.MODEL_PROVIDER_EXTRA_KEY">[docs]</a>
+<span class="n">MODEL_PROVIDER_EXTRA_KEY</span> <span class="o">=</span> <span class="s2">"model_provider"</span></div>
+
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">MutableMapping</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">MutableMapping</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">KnownModelName</span><span class="p">,</span> <span class="n">Model</span>
 
@@ -758,10 +775,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    ``infer_provider_class`` actually recognizes counts as a platform prefix.</span>
 <span class="sd">    """</span>
     <span class="n">prefix</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">model_name</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">sep</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">sep</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_is_recognized_provider</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_recognized_provider</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return whether *name* is a provider ``infer_provider_class`` recognizes."""</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">infer_provider_class</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
+        <span class="n">infer_provider_class</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">True</span>  <span class="c1"># recognized provider; its optional dependency just isn't installed</span>
     <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
@@ -788,6 +808,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    warning even if it was meant as a typo'd provider name.</span>
 <span class="sd">    """</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_PROVIDER_SLUG_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">prefix</span><span class="p">))</span>
+
+
+<span class="c1"># The async methods run their blocking lookups here, never on asyncio's default executor:</span>
+<span class="c1"># ``asend()`` reads its reply on that executor while it holds the comms lock, so blocking</span>
+<span class="c1"># lookups that fill it leave nothing to run the read and the task hangs. One worker also</span>
+<span class="c1"># serializes this process's hook lookups on Airflow 3.0 and 3.1, where the channel to the</span>
+<span class="c1"># supervisor has no lock of its own.</span>
+<span class="n">_executor</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">thread_name_prefix</span><span class="o">=</span><span class="s2">"pydantic-ai-hook"</span><span class="p">)</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_run_off_loop</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="n">P</span><span class="p">,</span> <span class="n">R</span><span class="p">],</span> <span class="o">/</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">P</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">P</span><span class="o">.</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">R</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Run ``fn`` on the hook's own worker thread, with the caller's context variables (task logging binds them)."""</span>
+    <span class="n">call</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">contextvars</span><span class="o">.</span><span class="n">copy_context</span><span class="p">()</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span><span class="n">_executor</span><span class="p">,</span> <span class="n">call</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_registered_hooks</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">MutableMapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
@@ -820,7 +854,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        - **password**: API key</span>
 <span class="sd">        - **host**: Base URL (optional, e.g. ``https://api.openai.com/v1``)</span>
 <span class="sd">        - **extra** JSON: ``{"model": "openai:gpt-5",</span>
-<span class="sd">          "fallback_conn_ids": ["anthropic_prod", "bedrock_dr"]}``</span>
+<span class="sd">          "fallback_conn_ids": ["anthropic_prod", "bedrock_dr"]}``; add</span>
+<span class="sd">          ``"model_provider": "openai-chat"`` to resolve bare model names on this connection</span>
 
 <span class="sd">    :param llm_conn_id: Airflow connection ID for the LLM provider.</span>
 <span class="sd">    :param model_id: Model identifier. A name whose segment before the first ``:``</span>
@@ -832,8 +867,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        platform: vendor subclasses (:class:`PydanticAIAzureHook`,</span>
 <span class="sd">        :class:`PydanticAIBedrockHook`, :class:`PydanticAIVertexHook`) each default</span>
 <span class="sd">        to their own platform via :attr:`model_provider`; the generic connection</span>
-<span class="sd">        type has none, so a bare name there raises ``ValueError`` instead of</span>
-<span class="sd">        reaching pydantic-ai's own, less actionable ``Unknown model`` error.</span>
+<span class="sd">        type uses the ``model_provider`` in its extra, and without one a bare name there</span>
+<span class="sd">        raises ``ValueError`` instead of reaching pydantic-ai's own, less actionable</span>
+<span class="sd">        ``Unknown model`` error.</span>
 <span class="sd">        Overrides the model stored in the connection's extra field. Whichever of</span>
 <span class="sd">        the two configures the primary's model is forwarded (only while still</span>
 <span class="sd">        bare) down the fallback chain -- see :meth:`_resolve_fallback_models`.</span>
@@ -864,8 +900,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.hook_name">[docs]</a>
     <span class="n">hook_name</span> <span class="o">=</span> <span class="s2">"Pydantic AI"</span></div>
 
-    <span class="c1"># Platform to prefix a bare model_id with (e.g. "azure"); None for the generic</span>
-    <span class="c1"># connection type, which has no platform of its own. Vendor subclasses override this.</span>
+    <span class="c1"># Platform to prefix a bare model_id with (e.g. "azure"). Vendor subclasses set it; the</span>
+    <span class="c1"># generic connection type leaves it None and reads extra["model_provider"] instead (see</span>
+    <span class="c1"># _get_model_provider).</span>
 <div class="viewcode-block" id="PydanticAIHook.model_provider">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.model_provider">[docs]</a>
     <span class="n">model_provider</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
@@ -934,7 +971,30 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="sa">f</span><span class="s2">"one of </span><span class="si">{</span><span class="n">expected_types</span><span class="si">}</span><span class="s2">. Change the connection type to 'pydanticai', put the API key "</span>
                 <span class="s2">"in the API Key field (stored as the password) and the model (e.g. 'openai:gpt-5') in Model."</span>
             <span class="p">)</span>
-        <span class="k">return</span> <span class="n">conn</span><span class="o">.</span><span class="n">get_hook</span><span class="p">(</span><span class="n">hook_params</span><span class="o">=</span><span class="n">hook_params</span><span class="p">)</span></div>
+        <span class="c1"># The check above guarantees a ``PydanticAIHook``. Seeding saves the second fetch of</span>
+        <span class="c1"># this same connection its first ``get_conn`` would make.</span>
+        <span class="n">hook</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">get_hook</span><span class="p">(</span><span class="n">hook_params</span><span class="o">=</span><span class="n">hook_params</span><span class="p">)</span>
+        <span class="n">hook</span><span class="o">.</span><span class="n">_seed_connection</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">hook</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="PydanticAIHook.aget_hook">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.aget_hook">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">aget_hook</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">conn_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">hook_params</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the hook for ``conn_id``, built with ``hook_params``, for use inside an async task.</span>
+
+<span class="sd">        The async counterpart of :meth:`get_hook`, with the same connection type check and</span>
+<span class="sd">        the connection already cached on the hook. ``get_connection`` sends to the supervisor</span>
+<span class="sd">        synchronously, which blocks the event loop while another async call is in flight (from</span>
+<span class="sd">        Airflow 3.3.1 it raises ``DeadlockImminentError`` instead), but only waits its turn from</span>
+<span class="sd">        any other thread, so the lookup runs on the hook's own worker thread.</span>
+
+<span class="sd">        :raises ValueError: if the connection's type is registered to a hook that is not a</span>
+<span class="sd">            ``PydanticAIHook``.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">_run_off_loop</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">get_hook</span><span class="p">,</span> <span class="n">conn_id</span><span class="p">,</span> <span class="n">hook_params</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -988,19 +1048,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_conn_and_extra</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Connection</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">"""Return this hook's connection and its deserialized extra, fetching at most once."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_conn_extra_dejson</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">extra_dejson</span>
+            <span class="c1"># Published together, once both are in hand: a reader never sees the connection</span>
+            <span class="c1"># next to the empty default extra, whether ``extra_dejson`` is still masking in</span>
+            <span class="c1"># another thread (``get_conn()`` called from two threads on one hook) or raised.</span>
+            <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">)</span>
+            <span class="n">extra</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn_extra_dejson</span> <span class="o">=</span> <span class="n">conn</span><span class="p">,</span> <span class="n">extra</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn_extra_dejson</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_seed_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Prime this hook's connection cache with an already-fetched ``Connection``.</span>
+<span class="sd">        Prime this hook's connection cache with a ``Connection`` the caller already fetched.</span>
 
-<span class="sd">        Used by :meth:`_resolve_fallback_models`, which must call ``conn.get_hook()`` to</span>
-<span class="sd">        dispatch a fallback's hook class from its ``conn_type`` and so already holds the</span>
-<span class="sd">        ``Connection`` that call built the hook from. Without this, :meth:`_get_conn_and_extra`</span>
-<span class="sd">        would fetch that same connection a second time the first time it runs, doubling the</span>
-<span class="sd">        Execution API round trips a fallback chain costs.</span>
+<span class="sd">        A caller that dispatches the hook class from ``conn.get_hook()`` holds the</span>
+<span class="sd">        ``Connection`` it built the hook from: :meth:`get_hook` for the hook it returns,</span>
+<span class="sd">        :meth:`_resolve_fallback_models` for each fallback. Without this,</span>
+<span class="sd">        :meth:`_get_conn_and_extra` would fetch that same connection a second time the first</span>
+<span class="sd">        time it runs.</span>
 <span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="o">=</span> <span class="n">conn</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_conn_extra_dejson</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span>
@@ -1053,6 +1117,49 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span></div>
 
 
+<div class="viewcode-block" id="PydanticAIHook.aget_conn">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.aget_conn">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">aget_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Model</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the configured pydantic-ai ``Model``, for use inside an async task.</span>
+
+<span class="sd">        The same model as :meth:`get_conn`, fallback chain included. Resolving it reads</span>
+<span class="sd">        connections with ``get_connection`` and ``extra_dejson``, and a subclass's</span>
+<span class="sd">        :meth:`_get_provider_kwargs` may read more (Snowflake's builds a ``SnowflakeHook``);</span>
+<span class="sd">        each of those sends to the supervisor synchronously, which blocks the event loop while</span>
+<span class="sd">        another async call is in flight (from Airflow 3.3.1 it raises ``DeadlockImminentError``</span>
+<span class="sd">        instead), but only waits its turn from any other thread, so the resolution runs on the</span>
+<span class="sd">        hook's own worker thread.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">_run_off_loop</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_model_provider</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the platform to prefix a bare model name with.</span>
+
+<span class="sd">        A vendor subclass's own :attr:`model_provider` wins: its credential fields are mapped</span>
+<span class="sd">        for that one platform, so a ``model_provider`` in its extra is ignored. The generic</span>
+<span class="sd">        connection type takes the ``model_provider`` in its extra, if any.</span>
+
+<span class="sd">        :raises ValueError: if the extra's ``model_provider`` is not a provider pydantic-ai recognizes.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">extra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_conn_and_extra</span><span class="p">()</span>
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">extra</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">provider</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">provider</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">_is_recognized_provider</span><span class="p">(</span><span class="n">provider</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">' sets '</span><span class="si">{</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="si">}</span><span class="s2">' to </span><span class="si">{</span><span class="n">provider</span><span class="si">!r}</span><span class="s2">, "</span>
+                <span class="s2">"which is not a provider pydantic-ai recognizes (e.g. 'openai', 'openai-chat', "</span>
+                <span class="s2">"'anthropic')."</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">provider</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_qualify_model_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">forwarded_from_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Prefix a bare model name with this connection's platform.</span>
@@ -1073,9 +1180,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="n">model_name</span>
         <span class="k">if</span> <span class="n">_has_recognized_provider_prefix</span><span class="p">(</span><span class="n">model_name</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">model_name</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">model_provider</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_model_provider</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">model_provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prefix</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">model_name</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">sep</span> <span class="ow">and</span> <span class="n">_looks_like_unrecognized_provider_prefix</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+            <span class="c1"># Only a vendor type warns: behind a generic connection's Default Model Provider, a</span>
+            <span class="c1"># "name:tag" id such as Ollama's "llama3:70b" is the normal spelling, not a typo.</span>
+            <span class="k">if</span> <span class="n">sep</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">_looks_like_unrecognized_provider_prefix</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                     <span class="s2">"Model name '</span><span class="si">%s</span><span class="s2">' on connection '</span><span class="si">%s</span><span class="s2">' contains ':' but its prefix '</span><span class="si">%s</span><span class="s2">' is not a "</span>
                     <span class="s2">"provider pydantic-ai recognizes; treating the whole string as a bare </span><span class="si">%s</span><span class="s2"> model id "</span>
@@ -1084,19 +1194,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">model_name</span><span class="p">,</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">,</span>
                     <span class="n">prefix</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span><span class="p">,</span>
+                    <span class="n">model_provider</span><span class="p">,</span>
+                    <span class="n">model_provider</span><span class="p">,</span>
                     <span class="n">model_name</span><span class="p">,</span>
                     <span class="n">prefix</span><span class="p">,</span>
                 <span class="p">)</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">"</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">model_provider</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">"</span>
 
         <span class="k">if</span> <span class="n">forwarded_from_conn_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">' has no default model provider, so the bare model "</span>
                 <span class="sa">f</span><span class="s2">"name '</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">' -- forwarded from primary connection '</span><span class="si">{</span><span class="n">forwarded_from_conn_id</span><span class="si">}</span><span class="s2">' "</span>
                 <span class="sa">f</span><span class="s2">"-- cannot be resolved here. Give '</span><span class="si">{</span><span class="n">forwarded_from_conn_id</span><span class="si">}</span><span class="s2">' a 'provider:model' "</span>
-                <span class="sa">f</span><span class="s2">"string, or set an explicit 'model' on '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">'."</span>
+                <span class="sa">f</span><span class="s2">"string, or set an explicit 'model' or a '</span><span class="si">{</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="si">}</span><span class="s2">' in the extra "</span>
+                <span class="sa">f</span><span class="s2">"of '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">'."</span>
             <span class="p">)</span>
 
         <span class="n">prefix</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">model_name</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
@@ -1105,13 +1216,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="sa">f</span><span class="s2">"Connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">' has no default model provider, and '</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">' is "</span>
                 <span class="sa">f</span><span class="s2">"not a provider pydantic-ai recognizes, so '</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">' cannot be resolved. If "</span>
                 <span class="s2">"this is a vendor's own model id containing a ':' (e.g. a Bedrock-style "</span>
-                <span class="s2">"version-suffixed id), use a vendor connection type (Azure/Bedrock/Vertex) instead; "</span>
-                <span class="sa">f</span><span class="s2">"if '</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">' is meant to be a provider prefix, check it for a typo."</span>
+                <span class="s2">"version-suffixed id), use a vendor connection type (Azure/Bedrock/Vertex) or set a "</span>
+                <span class="sa">f</span><span class="s2">"default '</span><span class="si">{</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="si">}</span><span class="s2">' in the connection's extra; if '</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">' is "</span>
+                <span class="s2">"meant to be a provider prefix, check it for a typo."</span>
             <span class="p">)</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"Connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">' has no default model provider, so the bare model name "</span>
-            <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">' cannot be resolved. Use a vendor connection type (Azure/Bedrock/Vertex) "</span>
-            <span class="s2">"or set an explicit 'provider:model' string."</span>
+            <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">' cannot be resolved. Use a vendor connection type (Azure/Bedrock/Vertex), "</span>
+            <span class="sa">f</span><span class="s2">"set an explicit 'provider:model' string, or set a default '</span><span class="si">{</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="si">}</span><span class="s2">' "</span>
+            <span class="s2">"in the connection's extra."</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_configured_model_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">KnownModelName</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
@@ -1137,14 +1250,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">            name with an embedded ``:`` of its own (a vendor's own native id, e.g.</span>
 <span class="sd">            Bedrock's version-suffixed ``us.anthropic.claude-opus-4-6-v1:0``) is only</span>
 <span class="sd">            forwarded when *forwarded_model_provider* matches this connection's own</span>
-<span class="sd">            :attr:`model_provider` -- that spelling is only meaningful on the</span>
-<span class="sd">            platform that produced it.</span>
+<span class="sd">            platform (see :meth:`_get_model_provider`) -- that spelling is only</span>
+<span class="sd">            meaningful on the platform that produced it.</span>
 <span class="sd">        :param forwarded_from_conn_id: The primary connection's ID, for error messages</span>
 <span class="sd">            attributing an unresolvable forwarded name to where it actually came from.</span>
-<span class="sd">        :param forwarded_model_provider: The primary connection's :attr:`model_provider`;</span>
+<span class="sd">        :param forwarded_model_provider: The primary connection's platform;</span>
 <span class="sd">            see *forwarded_model_id* above for how it gates forwarding.</span>
 <span class="sd">        """</span>
         <span class="n">conn</span><span class="p">,</span> <span class="n">extra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_conn_and_extra</span><span class="p">()</span>
+        <span class="c1"># Read up front, so a bad ``model_provider`` in the extra fails even when the model name pins its own.</span>
+        <span class="n">model_provider</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_model_provider</span><span class="p">()</span>
 
         <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">KnownModelName</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_configured_model_name</span><span class="p">()</span>
         <span class="n">forwarded</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1152,7 +1267,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="ow">not</span> <span class="n">model_name</span>
             <span class="ow">and</span> <span class="n">forwarded_model_id</span>
             <span class="ow">and</span> <span class="ow">not</span> <span class="n">_has_recognized_provider_prefix</span><span class="p">(</span><span class="n">forwarded_model_id</span><span class="p">)</span>
-            <span class="ow">and</span> <span class="p">(</span><span class="s2">":"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">forwarded_model_id</span> <span class="ow">or</span> <span class="n">forwarded_model_provider</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="p">(</span><span class="s2">":"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">forwarded_model_id</span> <span class="ow">or</span> <span class="n">forwarded_model_provider</span> <span class="o">==</span> <span class="n">model_provider</span><span class="p">)</span>
         <span class="p">):</span>
             <span class="n">model_name</span> <span class="o">=</span> <span class="n">forwarded_model_id</span>
             <span class="n">forwarded</span> <span class="o">=</span> <span class="kc">True</span>
@@ -1181,13 +1296,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">def</span><span class="w"> </span><span class="nf">_provider_factory</span><span class="p">(</span><span class="n">pname</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">infer_provider_class</span><span class="p">(</span><span class="n">pname</span><span class="p">)(</span><span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                        <span class="s2">"Provider '</span><span class="si">%s</span><span class="s2">' rejected kwargs </span><span class="si">%s</span><span class="s2">; falling back to env-var auth"</span><span class="p">,</span>
-                        <span class="n">pname</span><span class="p">,</span>
-                        <span class="nb">list</span><span class="p">(</span><span class="n">_kwargs</span><span class="p">),</span>
-                    <span class="p">)</span>
-                    <span class="k">return</span> <span class="n">infer_provider</span><span class="p">(</span><span class="n">pname</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">TypeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Could not build provider '</span><span class="si">{</span><span class="n">pname</span><span class="si">}</span><span class="s2">' from the fields on connection "</span>
+                        <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">' (fields passed: </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_kwargs</span><span class="p">)</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. "</span>
+                        <span class="s2">"Not falling back to environment-variable auth, which would authenticate as a different identity."</span>
+                    <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
             <span class="k">return</span> <span class="n">infer_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">provider_factory</span><span class="o">=</span><span class="n">_provider_factory</span><span class="p">)</span>
 
@@ -1240,6 +1354,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="p">[]</span>
 
         <span class="n">forwarded_model_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_configured_model_name</span><span class="p">()</span>
+        <span class="n">forwarded_model_provider</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_model_provider</span><span class="p">()</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Resolving LLM fallback chain: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="s2">" -&gt; "</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">,</span> <span class="o">*</span><span class="n">fallback_conn_ids</span><span class="p">]))</span>
 
@@ -1284,7 +1399,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">hook</span><span class="o">.</span><span class="n">_resolve_own_model</span><span class="p">(</span>
                     <span class="n">forwarded_model_id</span><span class="o">=</span><span class="n">forwarded_model_id</span><span class="p">,</span>
                     <span class="n">forwarded_from_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">,</span>
-                    <span class="n">forwarded_model_provider</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model_provider</span><span class="p">,</span>
+                    <span class="n">forwarded_model_provider</span><span class="o">=</span><span class="n">forwarded_model_provider</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
 
@@ -1407,17 +1522,73 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">agent</span><span class="o">.</span><span class="n">instrument</span> <span class="o">=</span> <span class="n">settings</span>
         <span class="k">return</span> <span class="n">agent</span>
 
+    <span class="nd">@overload</span>
+<div class="viewcode-block" id="PydanticAIHook.acreate_agent">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.acreate_agent">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">acreate_agent</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">output_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">OutputT</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">instructions</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">agent_kwargs</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="n">OutputT</span><span class="p">]:</span> <span class="o">...</span></div>
+
+
+    <span class="nd">@overload</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">acreate_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">instructions</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">agent_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">acreate_agent</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">output_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">OutputT</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">spec_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">instructions</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">agent_kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="n">OutputT</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="nd">@overload</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">acreate_agent</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">spec_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">instructions</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">agent_kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">acreate_agent</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">output_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">instructions</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">spec_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">agent_kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Create a pydantic-ai Agent configured with this hook's model, for use inside an async task.</span>
+
+<span class="sd">        The async counterpart of :meth:`create_agent`, with the same parameters, built on the</span>
+<span class="sd">        hook's own worker thread for the reason given in :meth:`aget_conn`. Run the agent with</span>
+<span class="sd">        ``await agent.run(...)``.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">spec_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">build</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">create_agent</span><span class="p">,</span> <span class="n">output_type</span><span class="p">,</span> <span class="n">spec_file</span><span class="o">=</span><span class="n">spec_file</span><span class="p">,</span> <span class="n">instructions</span><span class="o">=</span><span class="n">instructions</span><span class="p">,</span> <span class="o">**</span><span class="n">agent_kwargs</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">instructions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"instructions is required when spec_file is not provided."</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">build</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">create_agent</span><span class="p">,</span> <span class="n">output_type</span><span class="p">,</span> <span class="n">instructions</span><span class="o">=</span><span class="n">instructions</span><span class="p">,</span> <span class="o">**</span><span class="n">agent_kwargs</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">_run_off_loop</span><span class="p">(</span><span class="n">build</span><span class="p">)</span>
+
 <div class="viewcode-block" id="PydanticAIHook.test_connection">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.test_connection">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">test_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Test connection by resolving the model.</span>
 
-<span class="sd">        A success here can come from this connection's own credentials, or -- when a</span>
-<span class="sd">        provider class rejects them with a ``TypeError`` -- from a silent retry against</span>
-<span class="sd">        the standard environment variables, which ignores those credentials entirely.</span>
-<span class="sd">        See :doc:`/provider_fallback`'s *Verifying a chain* section for how to tell the</span>
-<span class="sd">        two apart. Does NOT make an LLM API call — that would be expensive and fail for</span>
+<span class="sd">        A provider class that cannot be built from the connection's fields is reported as a failure</span>
+<span class="sd">        naming the provider, the fields passed and the provider's ``TypeError`` text.</span>
+
+<span class="sd">        Does NOT make an LLM API call — that would be expensive and fail for</span>
 <span class="sd">        reasons unrelated to connectivity (quotas, billing, rate limits).</span>
 
 <span class="sd">        Every connection in ``fallback_conn_ids`` is resolved too, so a</span>
@@ -1426,9 +1597,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        """</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
-            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"Model resolved successfully."</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span></div>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"Model resolved successfully."</span></div>
 </div>
 
 
@@ -1623,7 +1794,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="sd">    1. ``service_account_info`` (JSON object) in ``extra``</span>
 <span class="sd">       — loaded into a ``google.auth.credentials.Credentials``</span>
-<span class="sd">       object and passed as ``credentials`` to ``GoogleProvider``.</span>
+<span class="sd">       object and passed as ``credentials`` to ``GoogleCloudProvider``.</span>
 <span class="sd">    2. ``api_key`` in ``extra`` — for Generative Language API (non-Vertex) or</span>
 <span class="sd">       Vertex API-key auth.</span>
 <span class="sd">    3. Application Default Credentials (``GOOGLE_APPLICATION_CREDENTIALS``,</span>
@@ -1655,8 +1826,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    above), so its presence alone cannot tell the two platforms apart; guessing</span>
 <span class="sd">    would risk silently authenticating against the wrong endpoint. To use the</span>
 <span class="sd">    Generative Language API, set an explicit ``google:``-prefixed model id (on</span>
-<span class="sd">    the hook or the connection's ``model`` extra) -- that spelling already</span>
-<span class="sd">    works today.</span>
+<span class="sd">    the hook or the connection's ``model`` extra). ``GoogleProvider`` accepts only</span>
+<span class="sd">    ``api_key`` and ``base_url`` (without a key it reads ``GOOGLE_API_KEY``), so on</span>
+<span class="sd">    this connection type that spelling must not set Vertex-only fields</span>
+<span class="sd">    (``project``, ``location``, ``service_account_info``): they are rejected</span>
+<span class="sd">    (fail closed).</span>
 
 <span class="sd">    :param llm_conn_id: Airflow connection ID.</span>
 <span class="sd">    :param model_id: Model identifier, e.g. ``"google-cloud:gemini-2.5-flash"``. A</span>
@@ -1709,7 +1883,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">sa_info</span> <span class="o">=</span> <span class="n">extra</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"service_account_info"</span><span class="p">)</span>
         <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="c1"># Direct GoogleProvider scalar kwargs.</span>
+        <span class="c1"># Scalar kwargs: GoogleCloudProvider takes all four; GoogleProvider only api_key/base_url.</span>
         <span class="k">for</span> <span class="n">_key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"api_key"</span><span class="p">,</span> <span class="s2">"project"</span><span class="p">,</span> <span class="s2">"location"</span><span class="p">,</span> <span class="s2">"base_url"</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">extra</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_key</span><span class="p">):</span>
                 <span class="n">kwargs</span><span class="p">[</span><span class="n">_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">extra</span><span class="p">[</span><span class="n">_key</span><span class="p">]</span>
@@ -1717,11 +1891,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="c1"># "vertexai" predates pydantic-ai splitting GoogleProvider (Generative Language API)</span>
         <span class="c1"># from GoogleCloudProvider (Vertex AI, which hardcodes vertexai=True internally and</span>
         <span class="c1"># accepts no such constructor kwarg) in pydantic/pydantic-ai#5336. Forwarding it would</span>
-        <span class="c1"># raise TypeError, which the base hook's `except TypeError` in get_conn() would then</span>
-        <span class="c1"># catch: it logs a warning and falls back to env-var auth rather than raising --</span>
-        <span class="c1"># authenticating as the wrong identity (with *all* other kwargs discarded). Accept</span>
-        <span class="c1"># the field for backward compatibility but never forward it: which API is used is</span>
-        <span class="c1"># now controlled by the model prefix.</span>
+        <span class="c1"># raise TypeError, which the base hook's `except TypeError` in get_conn() would turn</span>
+        <span class="c1"># into a ValueError rejecting the whole connection. Accept the field for backward</span>
+        <span class="c1"># compatibility but never forward it: which API is used is now controlled by the</span>
+        <span class="c1"># model prefix.</span>
         <span class="k">if</span> <span class="n">extra</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"vertexai"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">"The 'vertexai' connection field is ignored; Vertex AI vs. Generative Language "</span>

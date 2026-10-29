@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -716,6 +716,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="sd">    extend_global_openlineage_emission_policy(dag, emit_dag_events=False)</span>
 
+<span class="sd">**Drop the per-chunk objects a task writes, keeping the rest of its lineage**::</span>
+
+<span class="sd">    extend_global_openlineage_emission_policy(upload, exclude_datasets=["s3://my-bucket/staging/part_.*"])</span>
+
 <span class="sd">**Works with XComArg** — flags are applied to the underlying operator::</span>
 
 <span class="sd">    result = extend_global_openlineage_emission_policy(</span>
@@ -752,12 +756,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">EMIT</span><span class="p">,</span>
     <span class="n">EMIT_DAG_EVENTS</span><span class="p">,</span>
     <span class="n">EMIT_TASK_EVENTS</span><span class="p">,</span>
+    <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
     <span class="n">EXTRACT_OPERATOR_METADATA</span><span class="p">,</span>
     <span class="n">HOOK_LINEAGE</span><span class="p">,</span>
     <span class="n">INCLUDE_FULL_TASK_INFO</span><span class="p">,</span>
     <span class="n">INCLUDE_SOURCE_CODE</span><span class="p">,</span>
     <span class="n">OL_EMISSION_POLICY_PARAM</span><span class="p">,</span>
+    <span class="n">ControlValue</span><span class="p">,</span>
     <span class="n">_merge_param</span><span class="p">,</span>
+    <span class="n">find_invalid_pattern</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -784,6 +791,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">include_source_code</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">hook_lineage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">include_full_task_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">exclude_datasets</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Extend the global OpenLineage emission policy with per-task / per-DAG overrides.</span>
@@ -795,8 +803,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    When called on a **DAG**, flags are applied as follows:</span>
 
 <span class="sd">    - Task-relevant flags (``emit``, ``emit_task_events``, ``extract_operator_metadata``,</span>
-<span class="sd">      ``include_source_code``, ``hook_lineage``, ``include_full_task_info``) are</span>
-<span class="sd">      **propagated to all tasks** in the Dag at the time of the call.</span>
+<span class="sd">      ``include_source_code``, ``hook_lineage``, ``include_full_task_info``,</span>
+<span class="sd">      ``exclude_datasets``) are **propagated to all tasks** in the Dag at the time of the call.</span>
 <span class="sd">    - DAG-run-level flags (``emit``, ``emit_dag_events``) are stored on the Dag itself.</span>
 <span class="sd">    - ``emit_dag_events`` is meaningless on a task and logs a warning if provided.</span>
 
@@ -843,6 +851,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param include_source_code: Whether to include operator source code in Python/Bash operator events.</span>
 <span class="sd">    :param hook_lineage: Whether to use ``HookLineageCollector`` as a fallback.</span>
 <span class="sd">    :param include_full_task_info: Whether to include the full serialized operator state.</span>
+<span class="sd">    :param exclude_datasets: Regex patterns matched with ``re.fullmatch`` against</span>
+<span class="sd">        ``"&lt;namespace&gt;/&lt;name&gt;"`` of each OpenLineage dataset of the task (without a doubled ``/``</span>
+<span class="sd">        when the name starts with one); matching datasets are</span>
+<span class="sd">        dropped. Replaces, instead of extending, any list from the ``emission_policy`` config,</span>
+<span class="sd">        including lists set for specific hooks.</span>
+<span class="sd">    :raises ValueError: If ``exclude_datasets`` is not a list of valid regex patterns.</span>
 <span class="sd">    :return: The same *obj* — allows use as a decorator or in chained calls.</span>
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">XComArg</span><span class="p">):</span>
@@ -855,6 +869,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">include_source_code</span><span class="o">=</span><span class="n">include_source_code</span><span class="p">,</span>
             <span class="n">hook_lineage</span><span class="o">=</span><span class="n">hook_lineage</span><span class="p">,</span>
             <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">include_full_task_info</span><span class="p">,</span>
+            <span class="n">exclude_datasets</span><span class="o">=</span><span class="n">exclude_datasets</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">obj</span>
 
@@ -869,7 +884,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="s2">"configuration with a global rule ('scope': </span><span class="si">{}</span><span class="s2">) instead."</span>
         <span class="p">)</span>
 
-    <span class="n">provided</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># A bad pattern stored here would only fail during lineage extraction, where the error is</span>
+    <span class="c1"># swallowed and the task silently loses its lineage.</span>
+    <span class="k">if</span> <span class="n">exclude_datasets</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span><span class="n">invalid</span> <span class="o">:=</span> <span class="n">find_invalid_pattern</span><span class="p">(</span><span class="n">EXCLUDE_DATASETS</span><span class="p">,</span> <span class="n">exclude_datasets</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"extend_global_openlineage_emission_policy(): </span><span class="si">{</span><span class="n">invalid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">provided</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ControlValue</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
         <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">{</span>
             <span class="n">EMIT</span><span class="p">:</span> <span class="n">emit</span><span class="p">,</span>
@@ -879,6 +899,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">INCLUDE_SOURCE_CODE</span><span class="p">:</span> <span class="n">include_source_code</span><span class="p">,</span>
             <span class="n">HOOK_LINEAGE</span><span class="p">:</span> <span class="n">hook_lineage</span><span class="p">,</span>
             <span class="n">INCLUDE_FULL_TASK_INFO</span><span class="p">:</span> <span class="n">include_full_task_info</span><span class="p">,</span>
+            <span class="n">EXCLUDE_DATASETS</span><span class="p">:</span> <span class="n">exclude_datasets</span><span class="p">,</span>
         <span class="p">}</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
     <span class="p">}</span>

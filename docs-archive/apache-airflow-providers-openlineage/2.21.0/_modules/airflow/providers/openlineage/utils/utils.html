@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -683,9 +683,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">Mapping</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">decimal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Decimal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">wraps</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">importlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">metadata</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">attrs</span>
@@ -734,6 +736,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">,</span>
+    <span class="n">AIRFLOW_V_3_2_2_PLUS</span><span class="p">,</span>
     <span class="n">AIRFLOW_V_3_2_PLUS</span><span class="p">,</span>
     <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">,</span>
     <span class="n">AIRFLOW_V_3_4_PLUS</span><span class="p">,</span>
@@ -747,6 +750,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.mappedoperator</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># type: ignore[attr-defined,no-redef]</span>
         <span class="n">MappedOperator</span> <span class="k">as</span> <span class="n">SerializedMappedOperator</span><span class="p">,</span>
     <span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.definitions.taskgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">MappedTaskGroup</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># Airflow 2</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.task_group</span><span class="w"> </span><span class="kn">import</span> <span class="n">MappedTaskGroup</span>  <span class="c1"># type: ignore[no-redef]</span>
 
 <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">provide_session</span>
@@ -802,6 +810,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="n">_NOMINAL_TIME_FORMAT</span> <span class="o">=</span> <span class="s2">"%Y-%m-</span><span class="si">%d</span><span class="s2">T%H:%M:%S.</span><span class="si">%f</span><span class="s2">Z"</span>
 <span class="n">_MAX_DOC_BYTES</span> <span class="o">=</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span>  <span class="c1"># 64 kilobytes</span>
 <span class="n">_PRODUCER</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"https://github.com/apache/airflow/tree/providers-openlineage/</span><span class="si">{</span><span class="n">OPENLINEAGE_PROVIDER_VERSION</span><span class="si">}</span><span class="s2">"</span>
+<span class="n">_JOB_TYPE_DAG</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"DAG"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"DAG"</span>
+<span class="n">_JOB_TYPE_TASK</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"TASK"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"TASK"</span>
 
 
 <div class="viewcode-block" id="try_import_from_string">
@@ -1047,14 +1057,33 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
     <span class="k">return</span> <span class="p">{</span>
         <span class="o">**</span><span class="p">(</span><span class="n">additional_job_facets</span> <span class="ow">or</span> <span class="p">{}),</span>
-        <span class="s2">"jobType"</span><span class="p">:</span> <span class="n">job_type_job</span><span class="o">.</span><span class="n">JobTypeJobFacet</span><span class="p">(</span>
-            <span class="n">jobType</span><span class="o">=</span><span class="s2">"TASK"</span><span class="p">,</span> <span class="n">integration</span><span class="o">=</span><span class="s2">"AIRFLOW"</span><span class="p">,</span> <span class="n">processingType</span><span class="o">=</span><span class="s2">"BATCH"</span><span class="p">,</span> <span class="n">producer</span><span class="o">=</span><span class="n">_PRODUCER</span>
-        <span class="p">),</span>
+        <span class="o">**</span><span class="n">_get_job_type_facets</span><span class="p">(</span><span class="n">get_airflow_job_type</span><span class="p">(</span><span class="n">_JOB_TYPE_TASK</span><span class="p">)),</span>
         <span class="o">**</span><span class="n">documentation_facet</span><span class="p">,</span>
         <span class="o">**</span><span class="n">ownership_facet</span><span class="p">,</span>
         <span class="o">**</span><span class="n">tags_facet</span><span class="p">,</span>
     <span class="p">}</span></div>
 
+
+
+<div class="viewcode-block" id="get_airflow_job_type">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_airflow_job_type">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_airflow_job_type</span><span class="p">(</span><span class="n">job_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"DAG"</span><span class="p">,</span> <span class="s2">"TASK"</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the job type facet fields of an Airflow Dag or task."""</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"processingType"</span><span class="p">:</span> <span class="s2">"BATCH"</span><span class="p">,</span> <span class="s2">"integration"</span><span class="p">:</span> <span class="s2">"AIRFLOW"</span><span class="p">,</span> <span class="s2">"jobType"</span><span class="p">:</span> <span class="n">job_type</span><span class="p">}</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_job_type_facets</span><span class="p">(</span><span class="n">job_type</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">JobFacet</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">job_type</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">"jobType"</span><span class="p">:</span> <span class="n">job_type_job</span><span class="o">.</span><span class="n">JobTypeJobFacet</span><span class="p">(</span>
+            <span class="n">processingType</span><span class="o">=</span><span class="n">job_type</span><span class="p">[</span><span class="s2">"processingType"</span><span class="p">],</span>
+            <span class="n">integration</span><span class="o">=</span><span class="n">job_type</span><span class="p">[</span><span class="s2">"integration"</span><span class="p">],</span>
+            <span class="n">jobType</span><span class="o">=</span><span class="n">job_type</span><span class="p">[</span><span class="s2">"jobType"</span><span class="p">],</span>
+            <span class="n">producer</span><span class="o">=</span><span class="n">_PRODUCER</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_parent_run_facet</span><span class="p">(</span>
@@ -1064,18 +1093,30 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">root_parent_run_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">root_parent_job_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">root_parent_job_namespace</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parent_job_type</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">root_parent_job_type</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Create the parent run facet from identifiers."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">((</span><span class="n">root_parent_run_id</span><span class="p">,</span> <span class="n">root_parent_job_name</span><span class="p">,</span> <span class="n">root_parent_job_namespace</span><span class="p">)):</span>
+        <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="n">parent_job_type</span>
     <span class="n">root_parent_run_id</span> <span class="o">=</span> <span class="n">root_parent_run_id</span> <span class="ow">or</span> <span class="n">parent_run_id</span>
     <span class="n">root_parent_job_name</span> <span class="o">=</span> <span class="n">root_parent_job_name</span> <span class="ow">or</span> <span class="n">parent_job_name</span>
     <span class="n">root_parent_job_namespace</span> <span class="o">=</span> <span class="n">root_parent_job_namespace</span> <span class="ow">or</span> <span class="n">parent_job_namespace</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s2">"parent"</span><span class="p">:</span> <span class="n">parent_run</span><span class="o">.</span><span class="n">ParentRunFacet</span><span class="p">(</span>
             <span class="n">run</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">Run</span><span class="p">(</span><span class="n">runId</span><span class="o">=</span><span class="n">parent_run_id</span><span class="p">),</span>
-            <span class="n">job</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">Job</span><span class="p">(</span><span class="n">namespace</span><span class="o">=</span><span class="n">parent_job_namespace</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">parent_job_name</span><span class="p">),</span>
+            <span class="n">job</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">Job</span><span class="p">(</span>
+                <span class="n">namespace</span><span class="o">=</span><span class="n">parent_job_namespace</span><span class="p">,</span>
+                <span class="n">name</span><span class="o">=</span><span class="n">parent_job_name</span><span class="p">,</span>
+                <span class="n">facets</span><span class="o">=</span><span class="n">_get_job_type_facets</span><span class="p">(</span><span class="n">parent_job_type</span><span class="p">),</span>
+            <span class="p">),</span>
             <span class="n">root</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">Root</span><span class="p">(</span>
                 <span class="n">run</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">RootRun</span><span class="p">(</span><span class="n">runId</span><span class="o">=</span><span class="n">root_parent_run_id</span><span class="p">),</span>
-                <span class="n">job</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">RootJob</span><span class="p">(</span><span class="n">namespace</span><span class="o">=</span><span class="n">root_parent_job_namespace</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">root_parent_job_name</span><span class="p">),</span>
+                <span class="n">job</span><span class="o">=</span><span class="n">parent_run</span><span class="o">.</span><span class="n">RootJob</span><span class="p">(</span>
+                    <span class="n">namespace</span><span class="o">=</span><span class="n">root_parent_job_namespace</span><span class="p">,</span>
+                    <span class="n">name</span><span class="o">=</span><span class="n">root_parent_job_name</span><span class="p">,</span>
+                    <span class="n">facets</span><span class="o">=</span><span class="n">_get_job_type_facets</span><span class="p">(</span><span class="n">root_parent_job_type</span><span class="p">),</span>
+                <span class="p">),</span>
             <span class="p">),</span>
         <span class="p">)</span>
     <span class="p">}</span>
@@ -1093,6 +1134,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">dr_conf</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Retrieve the parent run facet."""</span>
+    <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">all_root_info</span> <span class="o">=</span> <span class="p">(</span><span class="n">root_parent_run_id</span><span class="p">,</span> <span class="n">root_parent_job_namespace</span><span class="p">,</span> <span class="n">root_parent_job_name</span><span class="p">)</span>
     <span class="c1"># If not all root identifiers are provided explicitly, try to get them from dagrun conf.</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">all_root_info</span><span class="p">):</span>
@@ -1113,11 +1155,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">root_parent_run_id</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_run_id"</span><span class="p">]</span>
                 <span class="n">root_parent_job_namespace</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_job_namespace"</span><span class="p">]</span>
                 <span class="n">root_parent_job_name</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_job_name"</span><span class="p">]</span>
+                <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="n">root_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"root_parent_job_type"</span><span class="p">)</span>
             <span class="c1"># If not present, check for parent identifiers in dagrun conf and use them as root</span>
             <span class="k">elif</span> <span class="n">parent_info</span> <span class="o">:=</span> <span class="n">get_parent_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">):</span>
                 <span class="n">root_parent_run_id</span> <span class="o">=</span> <span class="n">parent_info</span><span class="p">[</span><span class="s2">"parent_run_id"</span><span class="p">]</span>
                 <span class="n">root_parent_job_namespace</span> <span class="o">=</span> <span class="n">parent_info</span><span class="p">[</span><span class="s2">"parent_job_namespace"</span><span class="p">]</span>
                 <span class="n">root_parent_job_name</span> <span class="o">=</span> <span class="n">parent_info</span><span class="p">[</span><span class="s2">"parent_job_name"</span><span class="p">]</span>
+                <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="n">parent_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"parent_job_type"</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_get_parent_run_facet</span><span class="p">(</span>
         <span class="n">parent_run_id</span><span class="o">=</span><span class="n">parent_run_id</span><span class="p">,</span>
@@ -1126,6 +1170,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">root_parent_run_id</span><span class="o">=</span><span class="n">root_parent_run_id</span><span class="p">,</span>
         <span class="n">root_parent_job_namespace</span><span class="o">=</span><span class="n">root_parent_job_namespace</span><span class="p">,</span>
         <span class="n">root_parent_job_name</span><span class="o">=</span><span class="n">root_parent_job_name</span><span class="p">,</span>
+        <span class="n">parent_job_type</span><span class="o">=</span><span class="n">get_airflow_job_type</span><span class="p">(</span><span class="n">_JOB_TYPE_DAG</span><span class="p">),</span>
+        <span class="n">root_parent_job_type</span><span class="o">=</span><span class="n">root_parent_job_type</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -1138,9 +1184,31 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">ol_data</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ol_data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_job_type_from_ol_data</span><span class="p">(</span><span class="n">ol_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the job type facet fields stored under ``key`` if they are all valid, otherwise None."""</span>
+    <span class="n">job_type</span> <span class="o">=</span> <span class="n">ol_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">job_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">required_fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"processingType"</span><span class="p">,</span> <span class="s2">"integration"</span><span class="p">,</span> <span class="s2">"jobType"</span><span class="p">)</span>
+    <span class="c1"># The spec allows partial job type, but only complete information is supported for now.</span>
+    <span class="c1"># Other fields (e.g. `_producer` of a serialized facet) are ignored.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job_type</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">job_type</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">),</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">job_type</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">required_fields</span>
+    <span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">"Invalid OpenLineage </span><span class="si">%s</span><span class="s2"> '</span><span class="si">%s</span><span class="s2">' in DAG run config - expected a dictionary with non-empty "</span>
+            <span class="s2">"string values for all of: </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span>
+            <span class="n">key</span><span class="p">,</span>
+            <span class="n">job_type</span><span class="p">,</span>
+            <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">required_fields</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">field</span><span class="p">:</span> <span class="n">job_type</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">required_fields</span><span class="p">}</span>
+
+
 <div class="viewcode-block" id="get_root_information_from_dagrun_conf">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_root_information_from_dagrun_conf">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_root_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_root_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Extract root parent run and job information from a DAG run config."""</span>
     <span class="n">ol_data</span> <span class="o">=</span> <span class="n">_get_openlineage_data_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">ol_data</span><span class="p">:</span>
@@ -1182,17 +1250,20 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">root_parent_job_namespace</span><span class="p">,</span>
         <span class="n">root_parent_job_name</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="p">{</span>
+    <span class="n">root_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">"root_parent_run_id"</span><span class="p">:</span> <span class="n">root_parent_run_id</span><span class="p">,</span>
         <span class="s2">"root_parent_job_namespace"</span><span class="p">:</span> <span class="n">root_parent_job_namespace</span><span class="p">,</span>
         <span class="s2">"root_parent_job_name"</span><span class="p">:</span> <span class="n">root_parent_job_name</span><span class="p">,</span>
-    <span class="p">}</span></div>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">root_parent_job_type</span> <span class="o">:=</span> <span class="n">_get_job_type_from_ol_data</span><span class="p">(</span><span class="n">ol_data</span><span class="p">,</span> <span class="s2">"rootParentJobType"</span><span class="p">):</span>
+        <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_job_type"</span><span class="p">]</span> <span class="o">=</span> <span class="n">root_parent_job_type</span>
+    <span class="k">return</span> <span class="n">root_info</span></div>
 
 
 
 <div class="viewcode-block" id="get_parent_information_from_dagrun_conf">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_parent_information_from_dagrun_conf">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_parent_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_parent_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Extract parent run and job information from a DAG run config."""</span>
     <span class="n">ol_data</span> <span class="o">=</span> <span class="n">_get_openlineage_data_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">ol_data</span><span class="p">:</span>
@@ -1235,11 +1306,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">parent_job_name</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="k">return</span> <span class="p">{</span>
+    <span class="n">parent_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">"parent_run_id"</span><span class="p">:</span> <span class="n">parent_run_id</span><span class="p">,</span>
         <span class="s2">"parent_job_namespace"</span><span class="p">:</span> <span class="n">parent_job_namespace</span><span class="p">,</span>
         <span class="s2">"parent_job_name"</span><span class="p">:</span> <span class="n">parent_job_name</span><span class="p">,</span>
-    <span class="p">}</span></div>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">parent_job_type</span> <span class="o">:=</span> <span class="n">_get_job_type_from_ol_data</span><span class="p">(</span><span class="n">ol_data</span><span class="p">,</span> <span class="s2">"parentJobType"</span><span class="p">):</span>
+        <span class="n">parent_info</span><span class="p">[</span><span class="s2">"parent_job_type"</span><span class="p">]</span> <span class="o">=</span> <span class="n">parent_job_type</span>
+    <span class="k">return</span> <span class="n">parent_info</span></div>
 
 
 
@@ -1277,10 +1351,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="p">{}</span>
 
     <span class="n">root_parent_run_id</span><span class="p">,</span> <span class="n">root_parent_job_namespace</span><span class="p">,</span> <span class="n">root_parent_job_name</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">root_info</span> <span class="o">:=</span> <span class="n">get_root_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="p">):</span>
         <span class="n">root_parent_run_id</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_run_id"</span><span class="p">]</span>
         <span class="n">root_parent_job_namespace</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_job_namespace"</span><span class="p">]</span>
         <span class="n">root_parent_job_name</span> <span class="o">=</span> <span class="n">root_info</span><span class="p">[</span><span class="s2">"root_parent_job_name"</span><span class="p">]</span>
+        <span class="n">root_parent_job_type</span> <span class="o">=</span> <span class="n">root_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"root_parent_job_type"</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
             <span class="s2">"Missing OpenLineage root identifiers in DAG run config, "</span>
@@ -1295,6 +1371,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">root_parent_run_id</span><span class="o">=</span><span class="n">root_parent_run_id</span><span class="p">,</span>
         <span class="n">root_parent_job_namespace</span><span class="o">=</span><span class="n">root_parent_job_namespace</span><span class="p">,</span>
         <span class="n">root_parent_job_name</span><span class="o">=</span><span class="n">root_parent_job_name</span><span class="p">,</span>
+        <span class="n">parent_job_type</span><span class="o">=</span><span class="n">parent_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"parent_job_type"</span><span class="p">),</span>
+        <span class="n">root_parent_job_type</span><span class="o">=</span><span class="n">root_parent_job_type</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -1335,25 +1413,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="ow">not</span> <span class="n">operator</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
 
-    <span class="n">doc</span><span class="p">,</span> <span class="n">mime_type</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc</span><span class="p">:</span>
-        <span class="n">doc</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc</span>
-        <span class="n">mime_type</span> <span class="o">=</span> <span class="s2">"text/plain"</span>
-    <span class="k">elif</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_md</span><span class="p">:</span>
-        <span class="n">doc</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_md</span>
-        <span class="n">mime_type</span> <span class="o">=</span> <span class="s2">"text/markdown"</span>
-    <span class="k">elif</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_json</span><span class="p">:</span>
-        <span class="n">doc</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_json</span>
-        <span class="n">mime_type</span> <span class="o">=</span> <span class="s2">"application/json"</span>
-    <span class="k">elif</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_yaml</span><span class="p">:</span>
-        <span class="n">doc</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_yaml</span>
-        <span class="n">mime_type</span> <span class="o">=</span> <span class="s2">"application/x-yaml"</span>
-    <span class="k">elif</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_rst</span><span class="p">:</span>
-        <span class="n">doc</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">doc_rst</span>
-        <span class="n">mime_type</span> <span class="o">=</span> <span class="s2">"text/x-rst"</span>
-
-    <span class="k">if</span> <span class="n">doc</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_truncate_string_to_byte_size</span><span class="p">(</span><span class="n">doc</span><span class="p">),</span> <span class="n">mime_type</span>
+    <span class="k">for</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">mime_type</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="p">(</span><span class="s2">"doc"</span><span class="p">,</span> <span class="s2">"text/plain"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"doc_md"</span><span class="p">,</span> <span class="s2">"text/markdown"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"doc_json"</span><span class="p">,</span> <span class="s2">"application/json"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"doc_yaml"</span><span class="p">,</span> <span class="s2">"application/x-yaml"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"doc_rst"</span><span class="p">,</span> <span class="s2">"text/x-rst"</span><span class="p">),</span>
+    <span class="p">):</span>
+        <span class="c1"># The scheduler's mapped operator leaves the ones its task doesn't set undefined</span>
+        <span class="k">if</span> <span class="n">doc</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">operator</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_truncate_string_to_byte_size</span><span class="p">(</span><span class="n">doc</span><span class="p">),</span> <span class="n">mime_type</span>
     <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span></div>
 
 
@@ -1580,7 +1649,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="p">,</span>
             <span class="o">**</span><span class="p">{</span><span class="n">field</span><span class="p">:</span> <span class="n">InfoJsonEncodable</span><span class="o">.</span><span class="n">_cast_basic_types</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">))</span> <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="p">},</span>
         <span class="p">)</span>
-        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">obj</span>
+        <span class="c1"># Drop the build-time attributes, keeping the dict items set above. Attributes may hold live Airflow</span>
+        <span class="c1"># objects that can't be pickled for the listener's process pool, which would drop the event.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_cast_basic_types</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
@@ -1640,8 +1711,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                     <span class="s2">"nor is defined as an attrs class."</span>
                 <span class="p">)</span>
             <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">obj_fields</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="c1"># Keys that aren't identifiers are set by libraries rather than being attributes, e.g. the</span>
+                <span class="c1"># unpicklable ``__wire|&lt;class&gt;|&lt;method&gt;`` caches of ``methodtools.lru_cache``.</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">field</span><span class="o">.</span><span class="n">isidentifier</span><span class="p">():</span>
+                    <span class="k">continue</span>
                 <span class="k">if</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span> <span class="ow">and</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">excludes</span> <span class="ow">and</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">renames</span><span class="p">:</span>
-                    <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+                    <span class="c1"># Any attribute may hold live Airflow objects, even nested ones that can't be pickled</span>
+                    <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">_convert_to_json_safe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cast_basic_types</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="n">field</span><span class="p">))</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">field</span><span class="p">)</span></div>
 
 
@@ -1922,13 +1998,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="TaskInstanceInfo.includes">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstanceInfo.includes">[docs]</a>
-    <span class="n">includes</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"duration"</span><span class="p">,</span> <span class="s2">"log_url"</span><span class="p">,</span> <span class="s2">"pool"</span><span class="p">,</span> <span class="s2">"queued_dttm"</span><span class="p">,</span> <span class="s2">"try_number"</span><span class="p">]</span></div>
+    <span class="n">includes</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"log_url"</span><span class="p">,</span> <span class="s2">"max_tries"</span><span class="p">,</span> <span class="s2">"pool"</span><span class="p">,</span> <span class="s2">"queued_dttm"</span><span class="p">,</span> <span class="s2">"state"</span><span class="p">,</span> <span class="s2">"try_number"</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="TaskInstanceInfo.casts">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstanceInfo.casts">[docs]</a>
     <span class="n">casts</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">"log_url"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">ti</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"log_url"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-        <span class="s2">"note"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">ti</span><span class="p">:</span> <span class="n">safe_getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"note"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>  <span class="c1"># From manual state changes only</span>
+        <span class="s2">"dag_version_id"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">ti</span><span class="p">:</span> <span class="p">(</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">dag_version_id</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="n">dag_version_id</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"dag_version_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">),</span>
         <span class="s2">"dag_bundle_version"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">ti</span><span class="p">:</span> <span class="p">(</span>
             <span class="n">ti</span><span class="o">.</span><span class="n">bundle_instance</span><span class="o">.</span><span class="n">version</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"bundle_instance"</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="p">),</span>
@@ -1936,11 +2014,134 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="p">}</span></div>
 
 
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="TaskInstanceInfo.get_rendered_map_index">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstanceInfo.get_rendered_map_index">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_rendered_map_index</span><span class="p">(</span><span class="n">ti</span><span class="p">:</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="n">RuntimeTaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the label a mapped task rendered with ``map_index_template``, as the worker sends it."""</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">TaskInstance</span><span class="p">):</span>
+            <span class="c1"># Its rendered_map_index falls back to the map index when no label was rendered, the worker's doesn't</span>
+            <span class="k">return</span> <span class="n">safe_getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"_rendered_map_index"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"rendered_map_index"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">obj</span><span class="p">,</span>
+        <span class="n">position</span><span class="p">:</span> <span class="n">TaskInstancePosition</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dag</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">dag_run</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">end_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># Pass the position when the caller has already placed the task instance, e.g. from its stored region or</span>
+        <span class="c1"># with get_task_instance_position; it is then used as is.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_position</span> <span class="o">=</span> <span class="n">position</span>
+        <span class="c1"># A stored task instance's bundle comes from these, as the worker's does, without a query</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dag</span> <span class="o">=</span> <span class="n">dag</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dag_run</span> <span class="o">=</span> <span class="n">dag_run</span>
+        <span class="c1"># The end date a terminal event is timed with, used when the task instance carries none, as a skipped</span>
+        <span class="c1"># Airflow 3 runtime task instance doesn't before Airflow 3.4.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_end_date</span> <span class="o">=</span> <span class="n">end_date</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_start_date</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">start_date</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"start_date"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="c1"># Before Airflow 3.2.2 a runtime task instance resumed from deferral starts at the resume time, while the</span>
+        <span class="c1"># stored start date stays the original one. Leaving it out keeps a wrong duration out of the facet too.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_2_2_PLUS</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_resumed_from_deferral</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">start_date</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_resumed_from_deferral</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">ti_context</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"_ti_context_from_server"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ti_context</span><span class="p">,</span> <span class="s2">"next_method"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_end_date</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end_date</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"end_date"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">end_date</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_end_date</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_duration</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">start_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">end_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># The stored duration is what the UI shows, so it wins. A runtime task instance has none -- the API</span>
+        <span class="c1"># server computes it after the listener ran. Airflow 2 keeps the previous try's duration when it clears</span>
+        <span class="c1"># end_date for the next try, so the stored duration only counts alongside an end_date.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">duration</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"duration"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"end_date"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="n">duration</span>
+        <span class="k">if</span> <span class="n">start_date</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">end_date</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">end_date</span> <span class="o">-</span> <span class="n">start_date</span><span class="p">)</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>  <span class="c1"># naive and aware datetimes can't be subtracted</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_extend_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">map_index</span> <span class="o">=</span> <span class="n">get_task_instance_map_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+        <span class="n">start_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_start_date</span><span class="p">()</span>
+        <span class="n">end_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_end_date</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">field_value</span> <span class="ow">in</span> <span class="p">(</span>
+            <span class="p">(</span><span class="s2">"start_date"</span><span class="p">,</span> <span class="n">start_date</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">"end_date"</span><span class="p">,</span> <span class="n">end_date</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">"duration"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_duration</span><span class="p">(</span><span class="n">start_date</span><span class="p">,</span> <span class="n">end_date</span><span class="p">)),</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="n">field_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">field_value</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_position</span>
+        <span class="k">if</span> <span class="n">position</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># A stored task instance whose task isn't attached can't be placed without its region, and a facet</span>
+            <span class="c1"># must not fail the whole event, so then it describes the task instance without its position.</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">_get_task_instance_position</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">position</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">position</span> <span class="o">=</span> <span class="n">_add_runtime_loop_iteration</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+        <span class="n">map_index</span> <span class="o">=</span> <span class="n">position</span><span class="o">.</span><span class="n">map_index</span> <span class="k">if</span> <span class="n">position</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">map_index</span> <span class="o">=</span> <span class="n">map_index</span> <span class="k">if</span> <span class="n">map_index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">rendered_map_index</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"rendered_map_index"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">if</span> <span class="n">map_index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="s2">"map_index"</span><span class="p">,</span> <span class="s2">"rendered_map_index"</span><span class="p">))</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rendered_map_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_rendered_map_index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span> <span class="k">if</span> <span class="n">map_index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="s2">"map_index"</span><span class="p">,</span> <span class="s2">"rendered_map_index"</span><span class="p">))</span>
+        <span class="n">is_stored</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="n">TaskInstance</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_stored</span> <span class="ow">and</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+            <span class="c1"># The worker gets the bundle name of the Dag and the bundle version of the Dag run</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dag_bundle_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dag</span><span class="p">,</span> <span class="s2">"bundle_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dag_bundle_version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dag_run</span><span class="p">,</span> <span class="s2">"bundle_version"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">position</span> <span class="ow">and</span> <span class="n">position</span><span class="o">.</span><span class="n">expanded_ti_count</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">expanded_ti_count</span> <span class="o">=</span> <span class="n">position</span><span class="o">.</span><span class="n">expanded_ti_count</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"expanded_ti_count"</span><span class="p">)</span>
+        <span class="c1"># Before Airflow 3.4, a stored task instance failing with retries left already holds its next attempt's id</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">AIRFLOW_V_3_0_PLUS</span>
+            <span class="ow">and</span> <span class="p">(</span><span class="n">AIRFLOW_V_3_4_PLUS</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">is_stored</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="p">(</span><span class="n">ti_id</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ti_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"id"</span><span class="p">)</span>
+        <span class="n">loop</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">position</span> <span class="ow">and</span> <span class="n">position</span><span class="o">.</span><span class="n">in_loop</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="p">(</span><span class="s2">"index"</span><span class="p">,</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_index</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">"region_id"</span><span class="p">,</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_region_id</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">"trajectory"</span><span class="p">,</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_trajectory</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">"forked_from_region_id"</span><span class="p">,</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_forked_from_region_id</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">"resumes_from_index"</span><span class="p">,</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_resumes_from_index</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">loop</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">UUID</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
+        <span class="c1"># Only a loop gate's runtime task instance has one, once it has evaluated ``until``</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">decision</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"loop_decision"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">loop</span><span class="p">[</span><span class="s2">"decision"</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"stop"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">decision</span><span class="p">,</span> <span class="s2">"stop"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)}</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">reason</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">decision</span><span class="p">,</span> <span class="s2">"reason"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">loop</span><span class="p">[</span><span class="s2">"decision"</span><span class="p">][</span><span class="s2">"reason"</span><span class="p">]</span> <span class="o">=</span> <span class="n">reason</span>
+        <span class="k">if</span> <span class="n">loop</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">loop</span> <span class="o">=</span> <span class="n">loop</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">)</span>
+        <span class="c1"># A runtime task instance in no region carries the sentinel region id instead of None</span>
+        <span class="n">region_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"region_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">region_id</span><span class="p">,</span> <span class="n">UUID</span><span class="p">)</span> <span class="ow">and</span> <span class="n">region_id</span><span class="o">.</span><span class="n">int</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">region_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">region_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">region_index</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"region_index"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="s2">"region_id"</span><span class="p">,</span> <span class="s2">"region_index"</span><span class="p">))</span></div>
 
 
 
@@ -2068,6 +2269,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="s2">"priority_weight"</span><span class="p">,</span>
         <span class="s2">"queue"</span><span class="p">,</span>
         <span class="s2">"retries"</span><span class="p">,</span>
+        <span class="s2">"retry_delay"</span><span class="p">,</span>
         <span class="s2">"retry_exponential_backoff"</span><span class="p">,</span>
         <span class="s2">"run_as_user"</span><span class="p">,</span>
         <span class="s2">"sla"</span><span class="p">,</span>
@@ -2117,6 +2319,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="s2">"task_group"</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">task_group</span><span class="p">,</span> <span class="s2">"_group_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">else</span> <span class="kc">None</span>
         <span class="p">),</span>
+        <span class="c1"># task_group is the task's own group, without loop fields, and loop the loop around the task, so each is</span>
+        <span class="c1"># described once. For a loop "body", alone or in a task group "outer" (task_group's unique_group_id):</span>
+        <span class="c1">#   task "body.work":           task_group "body", the loop itself      loop "body"</span>
+        <span class="c1">#   task "body.inner.work":     task_group "body.inner"                 loop "body"</span>
+        <span class="c1">#   task "outer.body.work":     task_group "outer.body", the loop       loop "outer.body"</span>
+        <span class="s2">"loop"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">task</span><span class="p">:</span> <span class="n">get_task_loop_info</span><span class="p">(</span><span class="n">task</span><span class="p">),</span>
         <span class="s2">"inlets"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">task</span><span class="p">:</span> <span class="p">[</span><span class="n">AssetInfo</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">task</span><span class="o">.</span><span class="n">inlets</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">Asset</span><span class="p">)],</span>
         <span class="s2">"outlets"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">task</span><span class="p">:</span> <span class="p">[</span><span class="n">AssetInfo</span><span class="p">(</span><span class="n">o</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">task</span><span class="o">.</span><span class="n">outlets</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">Asset</span><span class="p">)],</span>
         <span class="s2">"operator_provider_version"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">task</span><span class="p">:</span> <span class="n">get_operator_provider_version</span><span class="p">(</span><span class="n">task</span><span class="p">),</span>
@@ -2126,27 +2334,25 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">runtime_assets</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Asset</span><span class="p">,</span> <span class="n">AssetAlias</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_assets</span> <span class="o">=</span> <span class="n">runtime_assets</span>  <span class="c1"># Will not be included in final dict, not in self._fields.</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-        <span class="c1"># ``inlets`` / ``outlets`` are a Python repr string that consumers cannot reliably parse</span>
-        <span class="c1"># (``extra`` can hold quotes, ``Decimal``, ``True``, ...). Expose them as real lists too.</span>
-        <span class="c1"># Set after ``super().__init__`` so ``_cast_basic_types`` does not turn them into strings.</span>
-        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"inlets"</span><span class="p">,</span> <span class="s2">"outlets"</span><span class="p">):</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">):</span>
-                <span class="bp">self</span><span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">field</span><span class="si">}</span><span class="s2">_list"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_convert_to_json_safe_list</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">),</span> <span class="n">field</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_extend_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_assets</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"outlets"</span><span class="p">):</span>  <span class="c1"># Should never happen, just in case</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_assets</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"outlets"</span><span class="p">):</span>  <span class="c1"># Should never happen, just in case</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">outlets</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"outlets"</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">asset</span><span class="p">,</span> <span class="n">alias</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_assets</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">asset</span><span class="p">,</span> <span class="n">alias</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_assets</span> <span class="ow">or</span> <span class="p">():</span>
             <span class="c1"># Append runtime-resolved outlets (alias resolutions + dynamic asset events).</span>
             <span class="c1"># Inlets are not touched - Airflow has no dynamic inlets.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">outlets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">AssetInfo</span><span class="p">(</span><span class="n">asset</span><span class="p">,</span> <span class="n">asset_type</span><span class="o">=</span><span class="s2">"asset_event"</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">alias</span> <span class="ow">is</span> <span class="kc">None</span>
                 <span class="k">else</span> <span class="n">AssetInfo</span><span class="p">(</span><span class="n">asset</span><span class="p">,</span> <span class="n">asset_type</span><span class="o">=</span><span class="s2">"asset_event_from_alias"</span><span class="p">,</span> <span class="n">source_alias</span><span class="o">=</span><span class="n">alias</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="p">)</span></div>
+            <span class="p">)</span>
+        <span class="c1"># ``inlets`` / ``outlets`` are a Python repr string that consumers cannot reliably parse</span>
+        <span class="c1"># (``extra`` can hold quotes, ``Decimal``, ``True``, ...). Expose them as real lists too.</span>
+        <span class="c1"># Set as items rather than fields so ``_cast_basic_types`` does not turn them into strings.</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"inlets"</span><span class="p">,</span> <span class="s2">"outlets"</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">):</span>
+                <span class="bp">self</span><span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">field</span><span class="si">}</span><span class="s2">_list"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_convert_to_json_safe</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">),</span> <span class="n">field</span><span class="p">)</span></div>
 
 
 
@@ -2165,6 +2371,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="s2">"_BaseOperator__instantiated"</span><span class="p">,</span>
         <span class="s2">"_BaseOperator__init_kwargs"</span><span class="p">,</span>  <span class="c1"># Causes recursion error on AF3, nothing useful there</span>
         <span class="s2">"_dag"</span><span class="p">,</span>
+        <span class="s2">"dag"</span><span class="p">,</span>
+        <span class="s2">"expand_input"</span><span class="p">,</span>
+        <span class="s2">"op_kwargs_expand_input"</span><span class="p">,</span>
         <span class="s2">"_hook"</span><span class="p">,</span>
         <span class="s2">"_log"</span><span class="p">,</span>
         <span class="s2">"_outlets"</span><span class="p">,</span>
@@ -2173,7 +2382,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="s2">"handler"</span><span class="p">,</span>
         <span class="s2">"params"</span><span class="p">,</span>
         <span class="s2">"python_callable"</span><span class="p">,</span>
-        <span class="s2">"retry_delay"</span><span class="p">,</span>
     <span class="p">]</span></div>
 </div>
 
@@ -2188,6 +2396,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskGroupInfo.renames">[docs]</a>
     <span class="n">renames</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">"_group_id"</span><span class="p">:</span> <span class="s2">"group_id"</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+<div class="viewcode-block" id="TaskGroupInfo.casts">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskGroupInfo.casts">[docs]</a>
+    <span class="n">casts</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># group_id is the group's own id, while the job facet and task.loop name groups by their unique id</span>
+        <span class="s2">"unique_group_id"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">tg</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tg</span><span class="p">,</span> <span class="s2">"group_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
     <span class="p">}</span></div>
 
 <div class="viewcode-block" id="TaskGroupInfo.includes">
@@ -2267,13 +2482,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">task</span><span class="p">:</span> <span class="n">BaseOperator</span><span class="p">,</span>
     <span class="n">task_uuid</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">include_full_task_info</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">ti_position</span><span class="p">:</span> <span class="n">TaskInstancePosition</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">end_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AirflowRunFacet</span><span class="p">]:</span>
     <span class="n">runtime_assets</span> <span class="o">=</span> <span class="n">get_runtime_outlet_assets</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">{</span>
         <span class="s2">"airflow"</span><span class="p">:</span> <span class="n">AirflowRunFacet</span><span class="p">(</span>
             <span class="n">dag</span><span class="o">=</span><span class="n">DagInfo</span><span class="p">(</span><span class="n">dag</span><span class="p">),</span>
             <span class="n">dagRun</span><span class="o">=</span><span class="n">DagRunInfo</span><span class="p">(</span><span class="n">dag_run</span><span class="p">),</span>
-            <span class="n">taskInstance</span><span class="o">=</span><span class="n">TaskInstanceInfo</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
+            <span class="n">taskInstance</span><span class="o">=</span><span class="n">TaskInstanceInfo</span><span class="p">(</span>
+                <span class="n">task_instance</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">ti_position</span><span class="p">,</span> <span class="n">dag</span><span class="o">=</span><span class="n">dag</span><span class="p">,</span> <span class="n">dag_run</span><span class="o">=</span><span class="n">dag_run</span><span class="p">,</span> <span class="n">end_date</span><span class="o">=</span><span class="n">end_date</span>
+            <span class="p">),</span>
             <span class="n">task</span><span class="o">=</span><span class="p">(</span>
                 <span class="n">TaskInfoComplete</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">runtime_assets</span><span class="o">=</span><span class="n">runtime_assets</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">include_full_task_info</span>
@@ -2325,6 +2544,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">"airflowState"</span><span class="p">:</span> <span class="n">AirflowStateRunFacet</span><span class="p">(</span>
                 <span class="n">dagRunState</span><span class="o">=</span><span class="n">dag_run_state</span><span class="p">,</span>
+                <span class="c1"># TODO: keyed by task_id only, so the mapped instances and loop iterations of one task collapse</span>
+                <span class="c1">#  into a single entry (the last one by region wins). Needs the map index and loop iteration here.</span>
                 <span class="n">tasksState</span><span class="o">=</span><span class="p">{</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">:</span> <span class="n">ti</span><span class="o">.</span><span class="n">state</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">tis</span><span class="p">},</span>
                 <span class="n">tasksDuration</span><span class="o">=</span><span class="p">{</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">:</span> <span class="n">get_task_duration</span><span class="p">(</span><span class="n">ti</span><span class="p">)</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">tis</span><span class="p">},</span>
             <span class="p">)</span>
@@ -2359,11 +2580,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">TaskInstancePosition</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Where a task instance runs: inside a loop body or not, and the map index users see.</span>
+<span class="sd">    Where a task instance runs: in a loop or not, the map index users see, and its loop iteration.</span>
 
-<span class="sd">    A plain mapped task keeps the region of its own expansion, so its dag, task, try, logical date and</span>
-<span class="sd">    map index stay unique; inside a loop they repeat on every pass, so only the execution UUID identifies</span>
-<span class="sd">    the run.</span>
+<span class="sd">    The loop fields are ``None`` outside a loop, and also when they can't be known. A runtime task instance</span>
+<span class="sd">    tells all of them, and ``expanded_ti_count`` for a mapped task, through its ``loop`` and</span>
+<span class="sd">    ``expanded_ti_count``, read by ``get_task_instance_position``. A stored one tells only what its task and</span>
+<span class="sd">    region rows do: the iteration of a task that isn't mapped, from its ``region_index``.</span>
+<span class="sd">    ``AirflowRunFacet.json`` describes what these fields mean in events.</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="TaskInstancePosition.in_loop">
@@ -2373,21 +2596,80 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="TaskInstancePosition.map_index">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.map_index">[docs]</a>
     <span class="n">map_index</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.loop_index">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.loop_index">[docs]</a>
+    <span class="n">loop_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.loop_region_id">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.loop_region_id">[docs]</a>
+    <span class="n">loop_region_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.loop_trajectory">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.loop_trajectory">[docs]</a>
+    <span class="n">loop_trajectory</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.loop_forked_from_region_id">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.loop_forked_from_region_id">[docs]</a>
+    <span class="n">loop_forked_from_region_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.loop_resumes_from_index">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.loop_resumes_from_index">[docs]</a>
+    <span class="n">loop_resumes_from_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="TaskInstancePosition.expanded_ti_count">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.TaskInstancePosition.expanded_ti_count">[docs]</a>
+    <span class="n">expanded_ti_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 </div>
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_is_task_in_loop</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_loop_task_group</span><span class="p">(</span><span class="n">task_group</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_4_PLUS</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># Loops only exist from Airflow 3.4 on</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.definitions._internal.loop</span><span class="w"> </span><span class="kn">import</span> <span class="n">LoopTaskGroup</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.taskgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedLoopTaskGroup</span>
+
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">task_group</span><span class="p">,</span> <span class="p">(</span><span class="n">LoopTaskGroup</span><span class="p">,</span> <span class="n">SerializedLoopTaskGroup</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_find_enclosing_loop</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Tell whether a task runs in a loop, and return that loop's group when it is known."""</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.definitions.taskgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskGroup</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.taskgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedLoopTaskGroup</span><span class="p">,</span> <span class="n">SerializedTaskGroup</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.serialization.definitions.taskgroup</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializedTaskGroup</span>
 
     <span class="n">group</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="s2">"task_group"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="p">(</span><span class="n">TaskGroup</span><span class="p">,</span> <span class="n">SerializedTaskGroup</span><span class="p">)):</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="p">(</span><span class="n">LoopTaskGroup</span><span class="p">,</span> <span class="n">SerializedLoopTaskGroup</span><span class="p">)):</span>
-            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">_is_loop_task_group</span><span class="p">(</span><span class="n">group</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">group</span>
         <span class="n">group</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">parent_group</span>
-    <span class="k">return</span> <span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="c1"># A group of an unknown type could be a loop. Assuming one only gives each iteration its own runId, while</span>
+    <span class="c1"># missing one would merge the runs of all its iterations, which share every coordinate but the UUID.</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+        <span class="s2">"OpenLineage can't tell whether task `</span><span class="si">%s</span><span class="s2">` runs in a loop, as its task group has an unknown type `</span><span class="si">%s</span><span class="s2">`; "</span>
+        <span class="s2">"assuming it does"</span><span class="p">,</span>
+        <span class="nb">getattr</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="s2">"task_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+        <span class="nb">type</span><span class="p">(</span><span class="n">group</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="get_task_loop_info">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_task_loop_info">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_task_loop_info</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Describe the loop around a task as ``task.loop``, or return None for a task outside a known loop."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_4_PLUS</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">loop_group</span> <span class="o">:=</span> <span class="n">_find_enclosing_loop</span><span class="p">(</span><span class="n">task</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="n">field</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_group</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"group_id"</span><span class="p">,</span> <span class="s2">"max_iterations"</span><span class="p">,</span> <span class="s2">"has_until"</span><span class="p">,</span> <span class="s2">"gate_task_id"</span><span class="p">,</span> <span class="s2">"terminal_task_id"</span><span class="p">)</span>
+    <span class="p">}</span></div>
+
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_task_instance_position</span><span class="p">(</span>
@@ -2403,9 +2685,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">TaskInstancePosition</span><span class="p">(</span><span class="n">in_loop</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">map_index</span><span class="o">=</span><span class="n">map_index</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">task</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"task"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
+    <span class="c1"># A worker parses a bundle without versions as it is when the attempt starts, which may no longer have the</span>
+    <span class="c1"># task in the loop of the Dag version the attempt pins, while Airflow places the attempt with that version</span>
+    <span class="n">in_loop</span> <span class="o">=</span> <span class="n">_find_enclosing_loop</span><span class="p">(</span><span class="n">task</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"loop"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">loop_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">is_stored</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">get_needs_expansion</span><span class="p">():</span>
+        <span class="c1"># The stored region_index means a map index only for a mapped task. A task that isn't mapped has none,</span>
+        <span class="c1"># and inside a loop its region_index is the iteration instead.</span>
+        <span class="k">if</span> <span class="n">in_loop</span><span class="p">:</span>
+            <span class="n">loop_index</span> <span class="o">=</span> <span class="n">map_index</span>
         <span class="n">map_index</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
-    <span class="k">return</span> <span class="n">TaskInstancePosition</span><span class="p">(</span><span class="n">in_loop</span><span class="o">=</span><span class="n">_is_task_in_loop</span><span class="p">(</span><span class="n">task</span><span class="p">),</span> <span class="n">map_index</span><span class="o">=</span><span class="n">map_index</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">TaskInstancePosition</span><span class="p">(</span><span class="n">in_loop</span><span class="o">=</span><span class="n">in_loop</span><span class="p">,</span> <span class="n">map_index</span><span class="o">=</span><span class="n">map_index</span><span class="p">,</span> <span class="n">loop_index</span><span class="o">=</span><span class="n">loop_index</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_require_task_instance_position</span><span class="p">(</span>
@@ -2419,6 +2709,45 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">position</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_add_runtime_loop_iteration</span><span class="p">(</span>
+    <span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="n">RuntimeTaskInstance</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="n">TaskInstancePosition</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskInstancePosition</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">TaskInstance</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">position</span>
+    <span class="c1"># Only runtime task instances of Airflow 3.4+ expose these</span>
+    <span class="n">position</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">evolve</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="n">expanded_ti_count</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"expanded_ti_count"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">position</span><span class="o">.</span><span class="n">in_loop</span> <span class="ow">or</span> <span class="n">position</span><span class="o">.</span><span class="n">loop_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">position</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">loop</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"loop"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">position</span>
+    <span class="k">return</span> <span class="n">attrs</span><span class="o">.</span><span class="n">evolve</span><span class="p">(</span>
+        <span class="n">position</span><span class="p">,</span>
+        <span class="n">loop_index</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+        <span class="n">loop_region_id</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">region_id</span><span class="p">,</span>
+        <span class="n">loop_trajectory</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">trajectory</span><span class="p">,</span>
+        <span class="n">loop_forked_from_region_id</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">forked_from_region_id</span><span class="p">,</span>
+        <span class="n">loop_resumes_from_index</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">resumes_from_index</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="get_task_instance_position">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_task_instance_position">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="n">RuntimeTaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskInstancePosition</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Place a task instance with its loop iteration, once per event, to pass to ``get_airflow_run_facet``."""</span>
+    <span class="k">return</span> <span class="n">_add_runtime_loop_iteration</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">_require_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">))</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_holds_another_dag_version</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Tell whether a stored task instance in a region holds its task from another Dag version than its own."""</span>
+    <span class="n">region_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"region_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">region_id</span><span class="p">,</span> <span class="n">UUID</span><span class="p">)</span> <span class="ow">or</span> <span class="n">region_id</span><span class="o">.</span><span class="n">int</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">dag</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"task"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">"dag"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">held_dag_version_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dag</span><span class="p">,</span> <span class="s2">"dag_version_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">held_dag_version_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">held_dag_version_id</span> <span class="o">!=</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">dag_version_id</span>
+
+
 <div class="viewcode-block" id="get_orm_task_instance_positions">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_orm_task_instance_positions">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_orm_task_instance_positions</span><span class="p">(</span>
@@ -2427,13 +2756,20 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Place stored task instances, reading the regions of those without their task in one query.</span>
 
+<span class="sd">    With a session, an instance whose task comes from another Dag version than its own, as the scheduler holds</span>
+<span class="sd">    the latest one for a Dag edited since, is placed from its region too.</span>
+
 <span class="sd">    Server side only: workers never hold a session, and an instance that needs its region read without one</span>
 <span class="sd">    raises instead of opening a connection.</span>
 <span class="sd">    """</span>
     <span class="n">positions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">UUID</span><span class="p">,</span> <span class="n">TaskInstancePosition</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="n">unplaced</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TaskInstance</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">task_instance</span> <span class="ow">in</span> <span class="n">task_instances</span><span class="p">:</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">position</span> <span class="o">:=</span> <span class="n">_get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Another version may have moved the task in or out of a loop, while its region rows can't have changed</span>
+        <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">_holds_another_dag_version</span><span class="p">(</span><span class="n">task_instance</span><span class="p">):</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">_get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">position</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">unplaced</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">positions</span><span class="p">[</span><span class="n">task_instance</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">=</span> <span class="n">position</span>
@@ -2466,15 +2802,6 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
-<div class="viewcode-block" id="get_regional_task_instance_run_id">
-<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_regional_task_instance_run_id">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_regional_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="n">RuntimeTaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">if</span> <span class="n">_require_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span><span class="o">.</span><span class="n">in_loop</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">task_instance</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-    <span class="k">return</span> <span class="kc">None</span></div>
-
-
-
 <div class="viewcode-block" id="build_task_instance_ol_run_id">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.build_task_instance_ol_run_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">build_task_instance_ol_run_id</span><span class="p">(</span>
@@ -2502,6 +2829,34 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">instant</span><span class="o">=</span><span class="n">logical_date</span><span class="p">,</span>
             <span class="n">data</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">conf</span><span class="o">.</span><span class="n">namespace</span><span class="p">()</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">dag_id</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">try_number</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">map_index</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
         <span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_task_instance_run_id">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/utils/index.html#airflow.providers.openlineage.utils.utils.get_task_instance_run_id">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_task_instance_run_id</span><span class="p">(</span>
+    <span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span> <span class="o">|</span> <span class="n">RuntimeTaskInstance</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">logical_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+    <span class="n">position</span><span class="p">:</span> <span class="n">TaskInstancePosition</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the OpenLineage ``runId`` of a task instance's attempt, which all its events must share.</span>
+
+<span class="sd">    In a loop the iterations share every coordinate but the attempt UUID, so that is the ``runId``. Otherwise</span>
+<span class="sd">    it is built from the coordinates.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">position</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="n">_require_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">position</span><span class="o">.</span><span class="n">in_loop</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">task_instance</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">build_task_instance_ol_run_id</span><span class="p">(</span>
+        <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
+        <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
+        <span class="n">logical_date</span><span class="o">=</span><span class="n">logical_date</span><span class="p">,</span>
+        <span class="n">map_index</span><span class="o">=</span><span class="n">position</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -2917,9 +3272,21 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">tasks</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">single_task</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">dag</span><span class="o">.</span><span class="n">tasks</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">task_id</span><span class="p">):</span>
         <span class="n">task_edges</span><span class="p">,</span> <span class="n">group_edges</span> <span class="o">=</span> <span class="n">edge_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">single_task</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="p">({},</span> <span class="p">{}))</span>
+        <span class="n">task_loop</span> <span class="o">=</span> <span class="n">get_task_loop_info</span><span class="p">(</span><span class="n">single_task</span><span class="p">)</span>
+        <span class="n">get_needs_expansion</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">single_task</span><span class="p">,</span> <span class="s2">"get_needs_expansion"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">is_mapped</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">get_needs_expansion</span><span class="p">())</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">get_needs_expansion</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">trigger_rule</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">single_task</span><span class="p">,</span> <span class="s2">"trigger_rule"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">tasks</span><span class="p">[</span><span class="n">single_task</span><span class="o">.</span><span class="n">task_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">"operator"</span><span class="p">:</span> <span class="n">get_fully_qualified_class_name</span><span class="p">(</span><span class="n">single_task</span><span class="p">),</span>
             <span class="s2">"task_group"</span><span class="p">:</span> <span class="n">single_task</span><span class="o">.</span><span class="n">task_group</span><span class="o">.</span><span class="n">group_id</span> <span class="k">if</span> <span class="n">single_task</span><span class="o">.</span><span class="n">task_group</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="c1"># The loop around the task, which is not task_group for a task in a task group inside the loop</span>
+            <span class="s2">"loop_group"</span><span class="p">:</span> <span class="n">task_loop</span><span class="p">[</span><span class="s2">"group_id"</span><span class="p">]</span> <span class="k">if</span> <span class="n">task_loop</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="c1"># Expanded by itself or by a mapped task group around it</span>
+            <span class="s2">"is_mapped"</span><span class="p">:</span> <span class="n">is_mapped</span><span class="p">,</span>
+            <span class="s2">"parse_time_mapped_count"</span><span class="p">:</span> <span class="n">_get_parse_time_mapped_count</span><span class="p">(</span><span class="n">single_task</span><span class="p">)</span> <span class="k">if</span> <span class="n">is_mapped</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">"trigger_rule"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">trigger_rule</span><span class="p">,</span> <span class="s2">"value"</span><span class="p">,</span> <span class="n">trigger_rule</span><span class="p">),</span>
+            <span class="s2">"depends_on_past"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">single_task</span><span class="p">,</span> <span class="s2">"depends_on_past"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="s2">"retries"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">single_task</span><span class="p">,</span> <span class="s2">"retries"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
             <span class="s2">"emits_ol_events"</span><span class="p">:</span> <span class="n">_emits_ol_events</span><span class="p">(</span><span class="n">single_task</span><span class="p">),</span>
             <span class="s2">"ui_color"</span><span class="p">:</span> <span class="n">single_task</span><span class="o">.</span><span class="n">ui_color</span><span class="p">,</span>
             <span class="s2">"ui_fgcolor"</span><span class="p">:</span> <span class="n">single_task</span><span class="o">.</span><span class="n">ui_fgcolor</span><span class="p">,</span>
@@ -2937,15 +3304,44 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">tg_id</span><span class="p">,</span> <span class="n">tg</span> <span class="ow">in</span> <span class="n">dag</span><span class="o">.</span><span class="n">task_group_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="n">task_edges</span><span class="p">,</span> <span class="n">group_edges</span> <span class="o">=</span> <span class="n">edge_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tg_id</span><span class="p">,</span> <span class="p">({},</span> <span class="p">{}))</span>
+        <span class="n">is_mapped</span> <span class="o">=</span> <span class="n">_is_mapped_task_group</span><span class="p">(</span><span class="n">tg</span><span class="p">)</span>
+        <span class="n">is_loop</span> <span class="o">=</span> <span class="n">_is_loop_task_group</span><span class="p">(</span><span class="n">tg</span><span class="p">)</span>
         <span class="n">result</span><span class="p">[</span><span class="n">tg_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">"parent_group"</span><span class="p">:</span> <span class="n">tg</span><span class="o">.</span><span class="n">parent_group</span><span class="o">.</span><span class="n">group_id</span> <span class="k">if</span> <span class="n">tg</span><span class="o">.</span><span class="n">parent_group</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="c1"># Independent, so a group could be both</span>
+            <span class="s2">"is_mapped"</span><span class="p">:</span> <span class="n">is_mapped</span><span class="p">,</span>
+            <span class="s2">"is_loop"</span><span class="p">:</span> <span class="n">is_loop</span><span class="p">,</span>
+            <span class="s2">"parse_time_mapped_count"</span><span class="p">:</span> <span class="n">_get_parse_time_mapped_count</span><span class="p">(</span><span class="n">tg</span><span class="p">)</span> <span class="k">if</span> <span class="n">is_mapped</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
             <span class="s2">"ui_color"</span><span class="p">:</span> <span class="n">tg</span><span class="o">.</span><span class="n">ui_color</span><span class="p">,</span>
             <span class="s2">"ui_fgcolor"</span><span class="p">:</span> <span class="n">tg</span><span class="o">.</span><span class="n">ui_fgcolor</span><span class="p">,</span>
             <span class="s2">"ui_label"</span><span class="p">:</span> <span class="n">tg</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
             <span class="s2">"downstream_task_edges"</span><span class="p">:</span> <span class="n">task_edges</span><span class="p">,</span>
             <span class="s2">"downstream_group_edges"</span><span class="p">:</span> <span class="n">group_edges</span><span class="p">,</span>
+            <span class="o">**</span><span class="p">{</span>
+                <span class="n">field</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tg</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"gate_task_id"</span><span class="p">,</span> <span class="s2">"has_until"</span><span class="p">,</span> <span class="s2">"max_iterations"</span><span class="p">,</span> <span class="s2">"terminal_task_id"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">is_loop</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tg</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+            <span class="p">},</span>
         <span class="p">}</span>
     <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_mapped_task_group</span><span class="p">(</span><span class="n">task_group</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">is_mapped</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_group</span><span class="p">,</span> <span class="s2">"is_mapped"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">is_mapped</span><span class="p">)</span>
+    <span class="c1"># Only the scheduler's serialized task groups tell it themselves</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">task_group</span><span class="p">,</span> <span class="n">MappedTaskGroup</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_parse_time_mapped_count</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return how many instances a mapped task or task group expands to, when it's known before the Dag runs."""</span>
+    <span class="c1"># The scheduler's serialized Dag and Airflow 2's count, while a Task SDK Dag doesn't</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">get_count</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">"get_parse_time_mapped_ti_count"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">get_count</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>  <span class="c1"># NotFullyPopulated, as the size depends on the results of upstream tasks</span>
+        <span class="k">return</span> <span class="kc">None</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_emits_ol_events</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">AnyOperator</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -3090,7 +3486,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                                 <span class="p">),</span>
                             <span class="p">)</span>
                     <span class="k">return</span> <span class="n">item</span>
-                <span class="k">if</span> <span class="n">is_json_serializable</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">):</span>
+                <span class="c1"># Dicts go to the base masker, which walks their items; the attributes of a dict</span>
+                <span class="c1"># subclass (e.g. InfoJsonEncodable) aren't what gets emitted.</span>
+                <span class="k">if</span> <span class="n">is_json_serializable</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
                     <span class="k">for</span> <span class="n">dict_key</span><span class="p">,</span> <span class="n">subval</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                         <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">subval</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"Proxy"</span><span class="p">:</span>
                             <span class="k">return</span> <span class="s2">"&lt;&lt;non-redactable: Proxy&gt;&gt;"</span>
@@ -3113,16 +3511,31 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_convert_to_json_safe_list</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_json_native_form</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="c1"># Attrs objects become dicts so the redactor can still mask fields by their names, e.g. ``password``.</span>
+    <span class="c1"># Other objects are not cast with ``str()``, as their ``repr`` may show such fields unmasked.</span>
+    <span class="k">if</span> <span class="n">attrs</span><span class="o">.</span><span class="n">has</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">attrs</span><span class="o">.</span><span class="n">asdict</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">recurse</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">value</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">set</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">,</span> <span class="n">Decimal</span><span class="p">,</span> <span class="n">UUID</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;&lt;non-serializable: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">}</span><span class="s2">&gt;&gt;"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_convert_to_json_safe</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Return ``value`` with only JSON-native types.</span>
 
-<span class="sd">    Non-serializable values are cast with ``str()``; dict keys JSON can't encode (e.g. tuples) are dropped.</span>
+<span class="sd">    Non-serializable values are converted with ``_get_json_native_form``; dict keys JSON can't encode</span>
+<span class="sd">    (e.g. tuples) are dropped.</span>
 <span class="sd">    """</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">skipkeys</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">_get_json_native_form</span><span class="p">,</span> <span class="n">skipkeys</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
     <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Unable to serialize task `</span><span class="si">%s</span><span class="s2">` to a JSON list: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Unable to convert `</span><span class="si">%s</span><span class="s2">` to JSON-native types: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
 

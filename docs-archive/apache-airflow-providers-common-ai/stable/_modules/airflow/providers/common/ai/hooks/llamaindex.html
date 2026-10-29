@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -708,8 +708,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span>
     <span class="n">BaseHook</span><span class="p">,</span>
@@ -766,7 +768,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        still fails on the model name, not on connectivity.</span>
 <span class="sd">        ``get_embedding_model()`` raises immediately at construction;</span>
 <span class="sd">        ``get_llm()`` defers the error until the first call that reads</span>
-<span class="sd">        ``.metadata`` (``.chat()`` / ``.complete()``).</span>
+<span class="sd">        ``.metadata`` (``.chat()`` / ``.complete()``); ``test_connection()``</span>
+<span class="sd">        reads it, so it reports such a model name as a failure.</span>
 
 <span class="sd">    Connection fields:</span>
 
@@ -786,10 +789,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        embedding provider. Falls back to ``llm_conn_id`` when not set.</span>
 <span class="sd">    :param embed_model: Embedding model name (e.g.</span>
 <span class="sd">        ``"text-embedding-3-small"``). Overrides ``extra["embed_model"]``</span>
-<span class="sd">        on the connection.</span>
+<span class="sd">        on the connection. Passing it positionally (1.0.0 order: ``embed_model, llm_model``) is deprecated.</span>
 <span class="sd">    :param llm_model: LLM model name (e.g. ``"gpt-5"``). Overrides</span>
 <span class="sd">        ``extra["llm_model"]`` on the connection. Required when calling</span>
-<span class="sd">        :meth:`get_llm`.</span>
+<span class="sd">        :meth:`get_llm`. Passing it positionally (1.0.0 order: ``embed_model, llm_model``) is deprecated.</span>
 <span class="sd">    :param embedding_kwargs: Additional keyword arguments to pass to the embedding</span>
 <span class="sd">        model constructor without filtering. Connection ``api_key`` and ``api_base``</span>
 <span class="sd">        values take precedence at the top level, but nested options supported by the</span>
@@ -818,12 +821,32 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">llm_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">embed_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">embed_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">llm_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">*</span><span class="p">,</span>
+        <span class="n">embed_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">embedding_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># ``*args`` only exists to keep the 1.0.0 positional order working: ``embed_model``, ``llm_model``.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.__init__() takes from 1 to 5 positional arguments "</span>
+                <span class="sa">f</span><span class="s2">"but </span><span class="si">{</span><span class="mi">3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> were given"</span>
+            <span class="p">)</span>
+        <span class="n">legacy_values</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">((</span><span class="s2">"embed_model"</span><span class="p">,</span> <span class="s2">"llm_model"</span><span class="p">),</span> <span class="n">args</span><span class="p">))</span>
+        <span class="n">keyword_values</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"embed_model"</span><span class="p">:</span> <span class="n">embed_model</span><span class="p">,</span> <span class="s2">"llm_model"</span><span class="p">:</span> <span class="n">llm_model</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">legacy_values</span><span class="p">:</span>
+            <span class="c1"># A keyword of None counts as not provided, so ``name=None`` plus a positional keeps the positional.</span>
+            <span class="k">if</span> <span class="n">keyword_values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">.__init__() got multiple values for argument '</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Parameter `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">` passed positionally is deprecated. Use `</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">=...` instead; "</span>
+                <span class="sa">f</span><span class="s2">"positional support will be removed in a future release."</span><span class="p">,</span>
+                <span class="n">category</span><span class="o">=</span><span class="n">AirflowProviderDeprecationWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">embed_model</span> <span class="o">=</span> <span class="n">legacy_values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"embed_model"</span><span class="p">,</span> <span class="n">embed_model</span><span class="p">)</span>
+        <span class="n">llm_model</span> <span class="o">=</span> <span class="n">legacy_values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"llm_model"</span><span class="p">,</span> <span class="n">llm_model</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="c1"># Resolve at runtime so a future per-vendor subclass with its own</span>
         <span class="c1"># ``default_conn_name`` is honoured.</span>
@@ -962,15 +985,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/llamaindex/index.html#airflow.providers.common.ai.hooks.llamaindex.LlamaIndexHook.test_connection">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">test_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Test connection by resolving the LLM.</span>
+<span class="sd">        Test connection by resolving the LLM and reading its metadata.</span>
 
-<span class="sd">        Validates that the model identifier is valid and the provider can be</span>
-<span class="sd">        instantiated with the supplied credentials. Does NOT make an LLM API</span>
-<span class="sd">        call -- that would be expensive and fail for reasons unrelated to</span>
-<span class="sd">        connectivity (quotas, billing, rate limits).</span>
+<span class="sd">        Reading ``.metadata`` makes LlamaIndex validate the model name against its</span>
+<span class="sd">        OpenAI-only allowlist, so an Ollama or vLLM model name fails here instead of at the</span>
+<span class="sd">        first ``.chat()`` call. Does NOT make an LLM API call -- that would be expensive and</span>
+<span class="sd">        fail for reasons unrelated to connectivity (quotas, billing, rate limits), so a</span>
+<span class="sd">        revoked API key or an unreachable **host** still passes.</span>
 <span class="sd">        """</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">get_llm</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_llm</span><span class="p">()</span><span class="o">.</span><span class="n">metadata</span>
             <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"Model resolved successfully."</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span></div>

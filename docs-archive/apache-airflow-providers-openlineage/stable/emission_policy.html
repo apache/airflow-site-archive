@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="Supported classes" href="supported_classes.html" />
@@ -723,14 +723,18 @@ and the rule is skipped with a WARNING. The same applies to unknown keys inside 
 <li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> — applies to task and/or DAG-level events for the named DAG (use <code class="docutils literal notranslate"><span class="pre">emit_task_events</span></code>
 / <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code> in <code class="docutils literal notranslate"><span class="pre">controls</span></code> to target one type selectively).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">task_id</span></code> — only valid alongside <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>; targets a specific task.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hook</span></code>: fully-qualified class name (<code class="docutils literal notranslate"><span class="pre">module.ClassName</span></code>) of the object that reported a
+hook-collected dataset, usually a hook such as
+<code class="docutils literal notranslate"><span class="pre">airflow.providers.amazon.aws.hooks.s3.S3Hook</span></code>. It can be added to any of the other scopes
+and narrows the rule to the datasets that hook reports. See <a class="reference internal" href="#emission-policy-datasets-openlineage"><span class="std std-ref">Excluding datasets (exclude_datasets)</span></a>.</p></li>
 <li><p><em>(empty ``scope: {}``)</em> — global default; applies to every task and DAG event.</p></li>
 </ul>
-<p><code class="docutils literal notranslate"><span class="pre">scope</span></code> must be one of: global (empty), operator-only, dag-only, or dag+task. <code class="docutils literal notranslate"><span class="pre">task_id</span></code>
-without <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, or <code class="docutils literal notranslate"><span class="pre">operator</span></code> combined with <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> / <code class="docutils literal notranslate"><span class="pre">task_id</span></code>, is rejected with
-a WARNING.</p>
+<p><code class="docutils literal notranslate"><span class="pre">scope</span></code> must be one of: global (empty), operator-only, dag-only, or dag+task, each optionally
+with <code class="docutils literal notranslate"><span class="pre">hook</span></code>. <code class="docutils literal notranslate"><span class="pre">task_id</span></code> without <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, or <code class="docutils literal notranslate"><span class="pre">operator</span></code> combined with <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> /
+<code class="docutils literal notranslate"><span class="pre">task_id</span></code>, is rejected with a WARNING.</p>
 <p><strong>``match_mode``</strong> (top-level): <code class="docutils literal notranslate"><span class="pre">&quot;exact&quot;</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">&quot;regex&quot;</span></code>. When <code class="docutils literal notranslate"><span class="pre">&quot;regex&quot;</span></code>, every
-value inside <code class="docutils literal notranslate"><span class="pre">scope</span></code> (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">operator</span></code>) is treated as a <code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code>
-pattern.</p>
+value inside <code class="docutils literal notranslate"><span class="pre">scope</span></code> (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">operator</span></code>, <code class="docutils literal notranslate"><span class="pre">hook</span></code>) is treated as a
+<code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code> pattern.</p>
 <p><strong>Control flag keys</strong> (all optional inside <code class="docutils literal notranslate"><span class="pre">controls</span></code>; the dict must be non-empty):</p>
 <table class="docutils align-default">
 <colgroup>
@@ -782,6 +786,69 @@ pipeline (including hook lineage) is skipped.</p></td>
 <code class="docutils literal notranslate"><span class="pre">false</span></code>, only a curated subset of task attributes is sent. When <code class="docutils literal notranslate"><span class="pre">true</span></code>, all
 serializable task parameters are included, which may significantly increase event size.
 Task events only.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+<td><p>List of regex patterns; datasets whose <code class="docutils literal notranslate"><span class="pre">&lt;namespace&gt;/&lt;name&gt;</span></code> matches any of them are
+dropped. Task events only. See <a class="reference internal" href="#emission-policy-datasets-openlineage"><span class="std std-ref">Excluding datasets (exclude_datasets)</span></a>.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Valid scope and control combinations.</strong> A rule that uses a control its scope does not accept
+is skipped with a WARNING that names the offending keys.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 10.0%" />
+<col style="width: 14.0%" />
+<col style="width: 10.0%" />
+<col style="width: 18.0%" />
+<col style="width: 18.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Control</p></th>
+<th class="head"><p>Global (<code class="docutils literal notranslate"><span class="pre">{}</span></code>)</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">operator</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code></p></th>
+<th class="head"><p>Any of these + <code class="docutils literal notranslate"><span class="pre">hook</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">emit</span></code>, <code class="docutils literal notranslate"><span class="pre">emit_task_events</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">extract_operator_metadata</span></code>, <code class="docutils literal notranslate"><span class="pre">include_source_code</span></code>, <code class="docutils literal notranslate"><span class="pre">include_full_task_info</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes, keeps or drops the hook’s datasets; not with <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes; not with <code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code></p></td>
 </tr>
 </tbody>
 </table>
@@ -849,9 +916,91 @@ with a more-specific task-scoped rule and extracts normally.</p></li>
 <li><p>Source code is disabled globally for all operators (<code class="docutils literal notranslate"><span class="pre">PythonOperator</span></code> was already covered above,
 but the global rule applies to <code class="docutils literal notranslate"><span class="pre">BashOperator</span></code> and any other operator with source code).</p></li>
 </ul>
+<section id="excluding-datasets-exclude-datasets">
+<span id="emission-policy-datasets-openlineage"></span><h3>Excluding datasets (<code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code>)<a class="headerlink" href="#excluding-datasets-exclude-datasets" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> drops individual datasets while keeping the rest of a task’s lineage, for
+example the per-chunk objects of a multipart upload that hook lineage reports one by one.</p>
+<ul class="simple">
+<li><p>Patterns are always matched with <code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code>, independent of <code class="docutils literal notranslate"><span class="pre">match_mode</span></code>, against
+<code class="docutils literal notranslate"><span class="pre">&lt;namespace&gt;/&lt;name&gt;</span></code> of the OpenLineage dataset: <code class="docutils literal notranslate"><span class="pre">s3://my-bucket/staging/part_1</span></code> for a
+dataset with namespace <code class="docutils literal notranslate"><span class="pre">s3://my-bucket</span></code> and name <code class="docutils literal notranslate"><span class="pre">staging/part_1</span></code>. Names that already start
+with <code class="docutils literal notranslate"><span class="pre">/</span></code>, such as file paths, get no extra <code class="docutils literal notranslate"><span class="pre">/</span></code>: <code class="docutils literal notranslate"><span class="pre">file://host1/staging/part_1</span></code> for
+namespace <code class="docutils literal notranslate"><span class="pre">file://host1</span></code> and name <code class="docutils literal notranslate"><span class="pre">/staging/part_1</span></code>, and <code class="docutils literal notranslate"><span class="pre">file/tmp/part_1</span></code> for a local
+file with namespace <code class="docutils literal notranslate"><span class="pre">file</span></code>. Airflow assets are
+matched after translation to OpenLineage, so assets that cannot be translated are never
+reported, whatever the patterns.</p></li>
+<li><p>They apply to every source of task lineage: extractor results, hook-collected assets,
+manually declared <code class="docutils literal notranslate"><span class="pre">inlets</span></code> / <code class="docutils literal notranslate"><span class="pre">outlets</span></code>, runtime outlet events, the per-query events emitted
+from SQL hook lineage, and the <code class="docutils literal notranslate"><span class="pre">emit_dataset_lineage</span></code> / <code class="docutils literal notranslate"><span class="pre">emit_query_lineage</span></code> APIs.</p></li>
+<li><p>Only datasets are dropped, never events. A SQL hook lineage query event, or an
+<code class="docutils literal notranslate"><span class="pre">emit_query_lineage</span></code> event, is still emitted when every dataset of the query is excluded,
+because it also carries the query text and id. <code class="docutils literal notranslate"><span class="pre">emit_dataset_lineage</span></code> skips its event in
+that case, since the event exists only to carry the datasets.</p></li>
+<li><p>Excluding datasets never changes which source is used. If an extractor returns datasets that
+are all excluded, hook lineage is not consulted as a fallback; if hook lineage collected assets
+that are all excluded, manually declared <code class="docutils literal notranslate"><span class="pre">inlets</span></code> / <code class="docutils literal notranslate"><span class="pre">outlets</span></code> are not used either. To
+report your own assets instead of the ones a hook collects, for example one asset for an upload
+prefix instead of one per uploaded part, set <code class="docutils literal notranslate"><span class="pre">hook_lineage:</span> <span class="pre">false</span></code> for the task and declare the
+asset in <code class="docutils literal notranslate"><span class="pre">outlets</span></code>.</p></li>
+<li><p>A rule whose <code class="docutils literal notranslate"><span class="pre">scope</span></code> has a <code class="docutils literal notranslate"><span class="pre">hook</span></code> key only applies to datasets reported by that hook, and
+only to hook lineage and SQL hook lineage (the other sources have no reporting hook). Such a
+rule may only carry <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> or <code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code>; with a <code class="docutils literal notranslate"><span class="pre">hook</span></code> scope,
+<code class="docutils literal notranslate"><span class="pre">hook_lineage:</span> <span class="pre">false</span></code> drops every dataset the hook reports and <code class="docutils literal notranslate"><span class="pre">hook_lineage:</span> <span class="pre">true</span></code> keeps
+them all. A hook-scoped <code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code> does not affect whether hook lineage is collected.</p></li>
+</ul>
+<p>The list is resolved per dataset, and the most specific matching rule that sets it <strong>replaces</strong>
+broader ones instead of merging with them, so a narrower rule can shorten a broader exclusion or
+clear it with <code class="docutils literal notranslate"><span class="pre">[]</span></code>. For a dataset reported by a hook, each tier is preceded by its
+<code class="docutils literal notranslate"><span class="pre">hook</span></code> variant:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">operator</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">operator</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hook</span></code></p></li>
+<li><p>Global (empty <code class="docutils literal notranslate"><span class="pre">scope</span></code>)</p></li>
+</ol>
+<p>Every replacement is logged at INFO level, naming the winning rule and the broader rules it
+replaced. <code class="docutils literal notranslate"><span class="pre">locked</span></code> keeps its usual meaning: a locked rule blocks authoring overrides of
+<code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> for the datasets it applies to, but a more specific conf rule still replaces
+its list.</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[openlineage]</span>
+<span class="na">emission_policy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">[</span>
+<span class="w">  </span><span class="na">{"scope": {"hook"</span><span class="o">:</span><span class="w"> </span><span class="s">".*\\.S3Hook"</span><span class="na">}, "match_mode"</span><span class="o">:</span><span class="w"> </span><span class="s">"regex"</span><span class="na">, "controls"</span><span class="o">:</span><span class="w"> </span><span class="s">{"exclude_datasets": ["s3://.*/_temporary/.*"]}},</span>
+<span class="w">  </span><span class="na">{"scope": {"dag_id"</span><span class="o">:</span><span class="w"> </span><span class="s">"chunked_dag"</span><span class="na">, "task_id"</span><span class="o">:</span><span class="w"> </span><span class="s">"upload"</span><span class="na">, "hook"</span><span class="o">:</span><span class="w"> </span><span class="s">"airflow.providers.amazon.aws.hooks.s3.S3Hook"</span><span class="na">}, "controls"</span><span class="o">:</span><span class="w"> </span><span class="s">{"exclude_datasets": ["s3://my-bucket/staging/part_.*"]}},</span>
+<span class="w">  </span><span class="na">{"scope": {"dag_id"</span><span class="o">:</span><span class="w"> </span><span class="s">"noisy_dag"</span><span class="na">, "hook"</span><span class="o">:</span><span class="w"> </span><span class="s">"airflow.providers.google.cloud.hooks.gcs.GCSHook"</span><span class="na">}, "controls"</span><span class="o">:</span><span class="w"> </span><span class="s">{"hook_lineage": false}}</span>
+<span class="na">]</span>
+</pre></div>
+</div>
+<p>In the example above:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_temporary</span></code> objects reported by <code class="docutils literal notranslate"><span class="pre">S3Hook</span></code> are dropped in every Dag.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">upload</span></code> in <code class="docutils literal notranslate"><span class="pre">chunked_dag</span></code> drops the staging parts its <code class="docutils literal notranslate"><span class="pre">S3Hook</span></code> writes. Its list replaces
+the first rule’s, so <code class="docutils literal notranslate"><span class="pre">_temporary</span></code> objects are kept for that task.</p></li>
+<li><p>Every dataset <code class="docutils literal notranslate"><span class="pre">GCSHook</span></code> reports in <code class="docutils literal notranslate"><span class="pre">noisy_dag</span></code> is dropped; other hooks in that Dag are
+unaffected.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><strong>Exclusion happens after the collector cap.</strong> Hook-collected assets are filtered when
+OpenLineage reads the hook lineage collector, after
+<a class="reference external" href="/docs/apache-airflow/stable/configurations-ref.html#config-lineage-max-assets-per-collector" title="(in apache-airflow v3.4.0)"><span class="xref std std-ref">[lineage] max_assets_per_collector</span></a> has
+limited what the collector kept. Excluding assets reduces what gets reported, but it does not
+make room for assets the cap already discarded. The same applies to SQL hook lineage queries
+and <a class="reference external" href="/docs/apache-airflow/stable/configurations-ref.html#config-lineage-max-extras-per-collector" title="(in apache-airflow v3.4.0)"><span class="xref std std-ref">[lineage] max_extras_per_collector</span></a>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Only the event <code class="docutils literal notranslate"><span class="pre">inputs</span></code> / <code class="docutils literal notranslate"><span class="pre">outputs</span></code> lists are filtered. Facets can still refer to an
+excluded dataset: <code class="docutils literal notranslate"><span class="pre">columnLineage</span></code> on the remaining datasets, and the task’s <code class="docutils literal notranslate"><span class="pre">inlets</span></code>,
+<code class="docutils literal notranslate"><span class="pre">outlets</span></code> and runtime outlet assets in the <code class="docutils literal notranslate"><span class="pre">airflow</span></code> run facet.</p>
+</div>
 <p><strong>Audit logging</strong>: whenever a control flag is non-default (suppressed or enabled), an INFO-level log
 is emitted identifying the field, the event context, and the exact rule that caused the change.
 This provides a clear audit trail for operational troubleshooting.</p>
+</section>
 </section>
 <section id="per-dag-per-task-authoring-overrides-extend-global-openlineage-emission-policy">
 <span id="emission-policy-authoring-openlineage"></span><h2>Per-Dag / per-task authoring overrides (<code class="docutils literal notranslate"><span class="pre">extend_global_openlineage_emission_policy</span></code>)<a class="headerlink" href="#per-dag-per-task-authoring-overrides-extend-global-openlineage-emission-policy" title="Link to this heading">¶</a></h2>
@@ -875,6 +1024,9 @@ wins <strong>unless</strong> the matching conf rule is marked with <code class="
 
 <span class="c1"># Suppress DAG-run events but keep task events</span>
 <span class="n">extend_global_openlineage_emission_policy</span><span class="p">(</span><span class="n">dag</span><span class="p">,</span> <span class="n">emit_dag_events</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Drop the staging objects a task writes, keep the rest of its lineage</span>
+<span class="n">extend_global_openlineage_emission_policy</span><span class="p">(</span><span class="n">extract</span><span class="p">,</span> <span class="n">exclude_datasets</span><span class="o">=</span><span class="p">[</span><span class="s2">"s3://my-bucket/staging/.*"</span><span class="p">])</span>
 </pre></div>
 </div>
 <p>Key semantics:</p>
@@ -893,6 +1045,9 @@ another (more specific) conf rule wins the value resolution.</p></li>
 tasks present on the Dag at the moment the call is made. Tasks defined later (e.g. inside
 <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">DAG(...)</span> <span class="pre">as</span> <span class="pre">dag:</span></code> before the operators are declared) will not inherit them. Call
 <code class="docutils literal notranslate"><span class="pre">extend_global_openlineage_emission_policy(dag,</span> <span class="pre">...)</span></code> <em>after</em> defining the tasks, or set flags per task.</p></li>
+<li><p><strong>``exclude_datasets`` has no hook dimension</strong>: an authored list applies to every dataset of
+the task and replaces the conf lists, including hook-scoped ones, except where a locked rule
+applies.</p></li>
 <li><p><strong>No unset API</strong>: pass an explicit boolean to override; passing <code class="docutils literal notranslate"><span class="pre">None</span></code> means “not provided”
 and leaves any previously-stored value intact.</p></li>
 <li><p><strong>Legacy options cannot be locked</strong>. <code class="docutils literal notranslate"><span class="pre">&quot;locked&quot;:</span> <span class="pre">true</span></code> is an <code class="docutils literal notranslate"><span class="pre">emission_policy</span></code> feature.
@@ -1084,7 +1239,10 @@ follows it in the same operator tier — last-wins, so the operator is re-enable
 <li><a class="reference internal" href="#">Controlling what OpenLineage emits</a><ul>
 <li><a class="reference internal" href="#kill-switch-disabled-turn-openlineage-off-entirely">Kill switch: <code class="docutils literal notranslate"><span class="pre">disabled</span></code> (turn OpenLineage off entirely)</a></li>
 <li><a class="reference internal" href="#two-layers-of-control">Two layers of control</a></li>
-<li><a class="reference internal" href="#unified-emission-policy-configuration">Unified <code class="docutils literal notranslate"><span class="pre">emission_policy</span></code> configuration</a></li>
+<li><a class="reference internal" href="#unified-emission-policy-configuration">Unified <code class="docutils literal notranslate"><span class="pre">emission_policy</span></code> configuration</a><ul>
+<li><a class="reference internal" href="#excluding-datasets-exclude-datasets">Excluding datasets (<code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code>)</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#per-dag-per-task-authoring-overrides-extend-global-openlineage-emission-policy">Per-Dag / per-task authoring overrides (<code class="docutils literal notranslate"><span class="pre">extend_global_openlineage_emission_policy</span></code>)</a></li>
 <li><a class="reference internal" href="#legacy-configuration-options-deprecated">Legacy configuration options (deprecated)</a></li>
 </ul>

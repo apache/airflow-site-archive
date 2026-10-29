@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -714,8 +714,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">get_dag_run_dag_and_task_from_ti</span><span class="p">,</span>
     <span class="n">get_job_name</span><span class="p">,</span>
     <span class="n">get_orm_task_instance_positions</span><span class="p">,</span>
-    <span class="n">get_regional_task_instance_run_id</span><span class="p">,</span>
     <span class="n">get_task_documentation</span><span class="p">,</span>
+    <span class="n">get_task_instance_position</span><span class="p">,</span>
+    <span class="n">get_task_instance_run_id</span><span class="p">,</span>
     <span class="n">get_task_parent_run_facet</span><span class="p">,</span>
     <span class="n">get_user_provided_run_facets</span><span class="p">,</span>
     <span class="n">is_dag_run_asset_triggered</span><span class="p">,</span>
@@ -824,6 +825,25 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    """</span>
     <span class="n">event</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">_get_process_adapter</span><span class="p">(),</span> <span class="n">adapter_method_name</span><span class="p">)(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
     <span class="n">Stats</span><span class="o">.</span><span class="n">gauge</span><span class="p">(</span><span class="n">stats_key</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">Serde</span><span class="o">.</span><span class="n">to_json</span><span class="p">(</span><span class="n">event</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_task_end_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">RuntimeTaskInstance</span> <span class="o">|</span> <span class="n">TaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the end date for a terminal event of a task instance that finished in the current process.</span>
+
+<span class="sd">    Airflow 2 and the Airflow 3 task runner set ``end_date`` before they notify listeners, and that value is the</span>
+<span class="sd">    stored one, so the event time matches it. In the cases below the time of the notification is used instead,</span>
+<span class="sd">    so the event time is later than the stored ``end_date`` by however long the task's state change callbacks</span>
+<span class="sd">    took:</span>
+
+<span class="sd">    - Airflow 3.0.0 to 3.0.4, whose task runner never sets ``end_date`` on the task instance.</span>
+<span class="sd">    - Before Airflow 3.4.0, a task that raised ``AirflowSkipException``, or a ``TriggerDagRunOperator`` task</span>
+<span class="sd">      skipped or failed because the Dag run it triggers already exists.</span>
+<span class="sd">    """</span>
+    <span class="n">end_date</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="s2">"end_date"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end_date</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">end_date</span>
+    <span class="k">return</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
 
 
 <div class="viewcode-block" id="OpenLineageListener">
@@ -941,15 +961,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">clear_number</span><span class="o">=</span><span class="n">clear_number</span><span class="p">,</span>
             <span class="p">)</span>
 
-            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_regional_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">task_instance</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-                <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
-                <span class="n">map_index</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
-            <span class="p">)</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">)</span>
             <span class="n">event_type</span> <span class="o">=</span> <span class="n">RunState</span><span class="o">.</span><span class="n">RUNNING</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="n">operator_name</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
@@ -1019,6 +1032,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">task_uuid</span><span class="p">,</span>
                         <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">controls</span><span class="o">.</span><span class="n">include_full_task_info</span><span class="p">,</span>
+                        <span class="n">ti_position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="o">**</span><span class="n">debug_facet</span><span class="p">,</span>
                 <span class="p">},</span>
@@ -1081,7 +1095,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">_on_task_instance_success</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">dagrun</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_on_task_instance_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_instance</span><span class="p">:</span> <span class="n">RuntimeTaskInstance</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">dagrun</span><span class="p">,</span> <span class="n">task</span><span class="p">):</span>
-        <span class="n">end_date</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">end_date</span> <span class="o">=</span> <span class="n">_get_task_end_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
 
         <span class="n">controls</span> <span class="o">=</span> <span class="n">resolve_task_emission_policy</span><span class="p">(</span>
             <span class="n">operator</span><span class="o">=</span><span class="n">task</span><span class="p">,</span>
@@ -1108,15 +1122,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">clear_number</span><span class="o">=</span><span class="n">dagrun</span><span class="o">.</span><span class="n">clear_number</span><span class="p">,</span>
             <span class="p">)</span>
 
-            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_regional_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">task_instance</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-                <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
-                <span class="n">map_index</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
-            <span class="p">)</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">)</span>
             <span class="n">event_type</span> <span class="o">=</span> <span class="n">RunState</span><span class="o">.</span><span class="n">COMPLETE</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="n">operator_name</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
@@ -1185,6 +1192,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">task_uuid</span><span class="p">,</span>
                         <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">controls</span><span class="o">.</span><span class="n">include_full_task_info</span><span class="p">,</span>
+                        <span class="n">ti_position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
+                        <span class="n">end_date</span><span class="o">=</span><span class="n">end_date</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="o">**</span><span class="n">get_airflow_debug_facet</span><span class="p">(),</span>
                 <span class="p">},</span>
@@ -1262,7 +1271,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">task</span><span class="p">,</span>
         <span class="n">error</span><span class="p">:</span> <span class="kc">None</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="ne">BaseException</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">end_date</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">end_date</span> <span class="o">=</span> <span class="n">_get_task_end_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
 
         <span class="n">controls</span> <span class="o">=</span> <span class="n">resolve_task_emission_policy</span><span class="p">(</span>
             <span class="n">operator</span><span class="o">=</span><span class="n">task</span><span class="p">,</span>
@@ -1289,15 +1298,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">clear_number</span><span class="o">=</span><span class="n">dagrun</span><span class="o">.</span><span class="n">clear_number</span><span class="p">,</span>
             <span class="p">)</span>
 
-            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_regional_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">task_instance</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-                <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
-                <span class="n">map_index</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
-            <span class="p">)</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">)</span>
             <span class="n">event_type</span> <span class="o">=</span> <span class="n">RunState</span><span class="o">.</span><span class="n">FAIL</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="n">operator_name</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
@@ -1366,6 +1368,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">task_uuid</span><span class="p">,</span>
                         <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">controls</span><span class="o">.</span><span class="n">include_full_task_info</span><span class="p">,</span>
+                        <span class="n">ti_position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
+                        <span class="n">end_date</span><span class="o">=</span><span class="n">end_date</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="o">**</span><span class="n">get_airflow_debug_facet</span><span class="p">(),</span>
                 <span class="p">},</span>
@@ -1419,7 +1423,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">dagrun</span><span class="p">,</span>
         <span class="n">task</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">end_date</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">end_date</span> <span class="o">=</span> <span class="n">_get_task_end_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
 
         <span class="n">controls</span> <span class="o">=</span> <span class="n">resolve_task_emission_policy</span><span class="p">(</span>
             <span class="n">operator</span><span class="o">=</span><span class="n">task</span><span class="p">,</span>
@@ -1446,15 +1450,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">clear_number</span><span class="o">=</span><span class="n">dagrun</span><span class="o">.</span><span class="n">clear_number</span><span class="p">,</span>
             <span class="p">)</span>
 
-            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_regional_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">task_instance</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-                <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-                <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
-                <span class="n">map_index</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
-            <span class="p">)</span>
+            <span class="n">position</span> <span class="o">=</span> <span class="n">get_task_instance_position</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span>
+            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">)</span>
             <span class="n">event_type</span> <span class="o">=</span> <span class="n">RunState</span><span class="o">.</span><span class="n">COMPLETE</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
             <span class="n">operator_name</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
@@ -1522,6 +1519,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">task_uuid</span><span class="p">,</span>
                         <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">controls</span><span class="o">.</span><span class="n">include_full_task_info</span><span class="p">,</span>
+                        <span class="n">ti_position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
+                        <span class="n">end_date</span><span class="o">=</span><span class="n">end_date</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="o">**</span><span class="n">get_airflow_debug_facet</span><span class="p">(),</span>
                 <span class="p">},</span>
@@ -1600,16 +1599,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="c1"># the equivalent note in `on_dag_run_running` (listener.py ~868).</span>
             <span class="n">date</span> <span class="o">=</span> <span class="n">dagrun</span><span class="o">.</span><span class="n">logical_date</span> <span class="ow">or</span> <span class="n">dagrun</span><span class="o">.</span><span class="n">run_after</span>
             <span class="n">position</span> <span class="o">=</span> <span class="n">get_orm_task_instance_positions</span><span class="p">([</span><span class="n">ti</span><span class="p">],</span> <span class="n">session</span><span class="o">=</span><span class="n">object_session</span><span class="p">(</span><span class="n">ti</span><span class="p">))[</span><span class="n">ti</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">position</span><span class="o">.</span><span class="n">in_loop</span><span class="p">:</span>
-                <span class="n">task_uuid</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">task_uuid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-                    <span class="n">dag_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-                    <span class="n">task_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-                    <span class="n">try_number</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-                    <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
-                    <span class="n">map_index</span><span class="o">=</span><span class="n">position</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
-                <span class="p">)</span>
+            <span class="n">task_uuid</span> <span class="o">=</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">)</span>
             <span class="n">parent_run_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">build_dag_run_id</span><span class="p">(</span>
                 <span class="n">dag_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
                 <span class="n">logical_date</span><span class="o">=</span><span class="n">date</span><span class="p">,</span>
@@ -1646,6 +1636,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                         <span class="n">task</span><span class="p">,</span>
                         <span class="n">task_uuid</span><span class="p">,</span>
                         <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">include_full_task_info</span><span class="p">,</span>
+                        <span class="n">ti_position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
                     <span class="p">)</span>
 
             <span class="n">adapter_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>

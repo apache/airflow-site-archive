@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -700,16 +700,20 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">  to the named DAG.  Use ``emit_task_events`` / ``emit_dag_events`` to target one</span>
 <span class="sd">  event type selectively.</span>
 <span class="sd">- ``task_id`` — only valid alongside ``dag_id``; targets a specific task.</span>
+<span class="sd">- ``hook``: fully-qualified class name of the object that reported a hook-collected</span>
+<span class="sd">  dataset (usually a hook).  Can be added to any of the scopes above, and narrows the</span>
+<span class="sd">  rule to datasets reported by that hook.  Only ``exclude_datasets`` and ``hook_lineage``</span>
+<span class="sd">  are valid controls for a hook-scoped rule.</span>
 <span class="sd">- *(empty ``scope: {}``)* — global default override; applies to every task and DAG event.</span>
 
 <span class="sd">``operator`` cannot be combined with ``dag_id`` or ``task_id`` (scope is one of:</span>
-<span class="sd">global, operator-only, dag-only, dag+task).  ``task_id`` without ``dag_id`` and</span>
-<span class="sd">``operator`` combined with ``emit_dag_events`` (or ``task_id`` combined with</span>
-<span class="sd">``emit_dag_events``) are also rejected with a WARNING.</span>
+<span class="sd">global, operator-only, dag-only, dag+task, each optionally with ``hook``).  ``task_id``</span>
+<span class="sd">without ``dag_id`` and ``operator`` combined with ``emit_dag_events`` (or ``task_id``</span>
+<span class="sd">combined with ``emit_dag_events``) are also rejected with a WARNING.</span>
 
 <span class="sd">``match_mode`` lives at the top level: ``"exact"`` (default) or ``"regex"``.</span>
 <span class="sd">When set to ``"regex"``, every value inside ``scope`` (``dag_id``, ``task_id``,</span>
-<span class="sd">``operator``) is treated as a ``re.fullmatch`` pattern.</span>
+<span class="sd">``operator``, ``hook``) is treated as a ``re.fullmatch`` pattern.</span>
 
 <span class="sd">Control flag keys (all optional inside ``controls``; the dict must be non-empty):</span>
 
@@ -730,10 +734,21 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">- ``hook_lineage`` — whether to use ``HookLineageCollector`` as a fallback when the</span>
 <span class="sd">  extractor finds no inputs/outputs.  **Has no effect when ``extract_operator_metadata``</span>
 <span class="sd">  is ``false``** — the entire extraction pipeline (including hook lineage) is skipped.</span>
-<span class="sd">  Only meaningful for task events.  Default: ``true``.</span>
+<span class="sd">  Only meaningful for task events.  Default: ``true``.  In a hook-scoped rule it instead</span>
+<span class="sd">  keeps (``true``) or drops (``false``) every dataset reported by the matching hook, and it</span>
+<span class="sd">  cannot be combined with ``exclude_datasets`` in the same rule.</span>
 <span class="sd">- ``include_full_task_info`` — whether to include the full serialized operator state</span>
 <span class="sd">  in the ``AirflowRunFacet``.  When ``false`` (default), only a curated subset of</span>
 <span class="sd">  task attributes is sent.  Only meaningful for task events.  Default: ``false``.</span>
+<span class="sd">- ``exclude_datasets``: list of ``re.fullmatch`` patterns (independent of ``match_mode``)</span>
+<span class="sd">  matched against ``"&lt;namespace&gt;/&lt;name&gt;"`` of each OpenLineage dataset (without a doubled ``/``</span>
+<span class="sd">  when the name starts with one); matching datasets</span>
+<span class="sd">  are dropped from task events and from the SQL hook lineage events of the task.  Applies</span>
+<span class="sd">  to extractor, hook-collected and manually declared lineage.  Default: ``[]``.</span>
+
+<span class="sd">Unlike the boolean controls, ``exclude_datasets`` is resolved per dataset, and the most</span>
+<span class="sd">specific matching rule's list **replaces** broader lists instead of merging with them, so a</span>
+<span class="sd">narrower rule can shorten or clear (``[]``) a broader exclusion.</span>
 
 <span class="sd">``locked: true`` is an admin floor lock that prevents per-Dag / per-task authoring</span>
 <span class="sd">overrides from changing the field(s) carried by this rule's ``controls`` dict.</span>
@@ -762,6 +777,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="sd">For ``emit`` at the task level: ``emit_task_events`` beats ``emit`` within the same</span>
 <span class="sd">rule.</span>
+
+<span class="sd">For ``exclude_datasets`` on a dataset reported by a hook, each tier above is preceded by</span>
+<span class="sd">its hook-scoped variant: ``dag_id`` + ``task_id`` + ``hook``, ``dag_id`` + ``task_id``,</span>
+<span class="sd">``dag_id`` + ``hook``, ``dag_id``, ``operator`` + ``hook``, ``operator``, ``hook``,</span>
+<span class="sd">global.  Datasets from other sources only see the tiers without ``hook``.</span>
 
 <span class="sd">Priority for **DAG run events**:</span>
 
@@ -799,19 +819,37 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Sequence</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">replace</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span> <span class="k">as</span> <span class="n">dataclass_field</span><span class="p">,</span> <span class="n">replace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">TypeVar</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Param</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span> <span class="k">as</span> <span class="n">_ol_conf</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">openlineage.client.event_v2</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.utils.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyOperator</span>
+
+<div class="viewcode-block" id="DatasetT">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetT">[docs]</a>
+    <span class="n">DatasetT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"DatasetT"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Dataset</span><span class="p">)</span></div>
+
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.log">[docs]</a>
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="V">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.V">[docs]</a>
+<span class="n">V</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"V"</span><span class="p">)</span></div>
+
+
+<span class="c1"># A validated ``controls`` value: bool for the flags, list of patterns for ``exclude_datasets``.</span>
+<div class="viewcode-block" id="ControlValue">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.ControlValue">[docs]</a>
+<span class="n">ControlValue</span> <span class="o">=</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></div>
 
 
 <span class="c1"># Control flag names — the keys that may appear inside a rule's ``controls`` dict.</span>
@@ -843,6 +881,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO">[docs]</a>
 <span class="n">INCLUDE_FULL_TASK_INFO</span> <span class="o">=</span> <span class="s2">"include_full_task_info"</span></div>
 
+<div class="viewcode-block" id="EXCLUDE_DATASETS">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS">[docs]</a>
+<span class="n">EXCLUDE_DATASETS</span> <span class="o">=</span> <span class="s2">"exclude_datasets"</span></div>
+
 
 <span class="c1"># Scope keys — the keys that may appear inside a rule's ``scope`` dict.</span>
 <div class="viewcode-block" id="SCOPE_DAG_ID">
@@ -856,6 +898,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="SCOPE_OPERATOR">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR">[docs]</a>
 <span class="n">SCOPE_OPERATOR</span> <span class="o">=</span> <span class="s2">"operator"</span></div>
+
+<div class="viewcode-block" id="SCOPE_HOOK">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK">[docs]</a>
+<span class="n">SCOPE_HOOK</span> <span class="o">=</span> <span class="s2">"hook"</span></div>
 
 
 <span class="c1"># Top-level rule keys.</span>
@@ -887,7 +933,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="c1"># Schema enforcement: only these keys may appear at each level.  Unknown keys cause</span>
 <span class="c1"># the rule to be skipped with a WARNING (catches typos like {"scope": {"dgg_id": "x"}}).</span>
 <span class="n">_ALLOWED_TOP_LEVEL_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">RULE_SCOPE</span><span class="p">,</span> <span class="n">RULE_MATCH_MODE</span><span class="p">,</span> <span class="n">RULE_CONTROLS</span><span class="p">,</span> <span class="n">RULE_LOCKED</span><span class="p">})</span>
-<span class="n">_ALLOWED_SCOPE_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">SCOPE_DAG_ID</span><span class="p">,</span> <span class="n">SCOPE_TASK_ID</span><span class="p">,</span> <span class="n">SCOPE_OPERATOR</span><span class="p">})</span>
+<span class="n">_ALLOWED_SCOPE_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">SCOPE_DAG_ID</span><span class="p">,</span> <span class="n">SCOPE_TASK_ID</span><span class="p">,</span> <span class="n">SCOPE_OPERATOR</span><span class="p">,</span> <span class="n">SCOPE_HOOK</span><span class="p">})</span>
 <span class="n">_ALLOWED_CONTROL_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
     <span class="p">{</span>
         <span class="n">EMIT</span><span class="p">,</span>
@@ -897,8 +943,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">INCLUDE_SOURCE_CODE</span><span class="p">,</span>
         <span class="n">HOOK_LINEAGE</span><span class="p">,</span>
         <span class="n">INCLUDE_FULL_TASK_INFO</span><span class="p">,</span>
+        <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
     <span class="p">}</span>
 <span class="p">)</span>
+<span class="c1"># The hook is only known per dataset, so a hook-scoped rule may only carry controls that</span>
+<span class="c1"># act on individual datasets.</span>
+<span class="n">_HOOK_SCOPE_CONTROL_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">EXCLUDE_DATASETS</span><span class="p">,</span> <span class="n">HOOK_LINEAGE</span><span class="p">})</span>
 
 <span class="c1"># Fields scanned for ``locked: true`` on task-event resolution.</span>
 <span class="c1"># ``emit`` is intentionally absent: emit-locking is driven by either ``emit`` or</span>
@@ -922,6 +972,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">INCLUDE_SOURCE_CODE</span><span class="p">,</span>
         <span class="n">HOOK_LINEAGE</span><span class="p">,</span>
         <span class="n">INCLUDE_FULL_TASK_INFO</span><span class="p">,</span>
+        <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
     <span class="p">}</span>
 <span class="p">)</span>
 <span class="n">_DAG_FLAG_KEYS</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">EMIT</span><span class="p">,</span> <span class="n">EMIT_DAG_EVENTS</span><span class="p">})</span>
@@ -952,6 +1003,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="EmissionPolicy.include_full_task_info">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.include_full_task_info">[docs]</a>
     <span class="n">include_full_task_info</span><span class="p">:</span> <span class="nb">bool</span></div>
+
+    <span class="c1"># Rules hold dicts, so hashing the filter would fail; equal policies still hash equally without it.</span>
+<div class="viewcode-block" id="EmissionPolicy.dataset_filter">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.dataset_filter">[docs]</a>
+    <span class="n">dataset_filter</span><span class="p">:</span> <span class="n">DatasetFilter</span> <span class="o">=</span> <span class="n">dataclass_field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">DatasetFilter</span><span class="p">(),</span> <span class="nb">hash</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -988,7 +1044,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="Rule.controls">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.Rule.controls">[docs]</a>
-    <span class="n">controls</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span></div>
+    <span class="n">controls</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ControlValue</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="Rule.match_mode">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.Rule.match_mode">[docs]</a>
@@ -1018,6 +1074,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.Rule.has_op">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">has_op</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">SCOPE_OPERATOR</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="Rule.has_hook">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.Rule.has_hook">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">SCOPE_HOOK</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope</span></div>
 </div>
 
 
@@ -1029,7 +1092,163 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">pattern</span> <span class="o">==</span> <span class="n">value</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_read_param</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]:</span>
+<div class="viewcode-block" id="get_hook_class_name">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.get_hook_class_name">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_hook_class_name</span><span class="p">(</span><span class="n">hook</span><span class="p">:</span> <span class="nb">object</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the fully-qualified class name that the ``hook`` scope key matches, if any."""</span>
+    <span class="k">if</span> <span class="n">hook</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">hook_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">hook_type</span><span class="o">.</span><span class="vm">__module__</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">hook_type</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_dataset_identity</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the ``"&lt;namespace&gt;/&lt;name&gt;"`` string that ``exclude_datasets`` patterns match."""</span>
+    <span class="c1"># File and other path-based datasets have names starting with "/"; joining them with another</span>
+    <span class="c1"># "/" would make ``file://host/path`` match as ``file://host//path``.</span>
+    <span class="n">separator</span> <span class="o">=</span> <span class="s2">""</span> <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"/"</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dataset</span><span class="o">.</span><span class="n">namespace</span><span class="si">}{</span><span class="n">separator</span><span class="si">}{</span><span class="n">dataset</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_rule_exclude_patterns</span><span class="p">(</span><span class="n">rule</span><span class="p">:</span> <span class="n">Rule</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the ``exclude_datasets`` patterns *rule* sets, or ``None`` if it sets none."""</span>
+    <span class="n">patterns</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EXCLUDE_DATASETS</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">patterns</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">patterns</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">has_hook</span> <span class="ow">and</span> <span class="n">HOOK_LINEAGE</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">()</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="p">[</span><span class="n">HOOK_LINEAGE</span><span class="p">]</span> <span class="k">else</span> <span class="p">(</span><span class="s2">".*"</span><span class="p">,)</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="DatasetFilter">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">DatasetFilter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    ``exclude_datasets`` resolution for the datasets of one task.</span>
+
+<span class="sd">    Hook-scoped rules can only be matched once the reporting hook is known, so the winning</span>
+<span class="sd">    patterns are resolved lazily per hook (``None`` for datasets not reported by a hook)</span>
+<span class="sd">    and cached.  *tiers* holds only rules that set patterns, most specific first:</span>
+<span class="sd">    dag+task+hook, dag+task, dag+hook, dag, operator+hook, operator, hook, global.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="DatasetFilter.tiers">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.tiers">[docs]</a>
+    <span class="n">tiers</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Rule</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span></div>
+
+<div class="viewcode-block" id="DatasetFilter.authoring_patterns">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.authoring_patterns">[docs]</a>
+    <span class="n">authoring_patterns</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="DatasetFilter.context">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.context">[docs]</a>
+    <span class="n">context</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">dataclass_field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+    <span class="n">_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">re</span><span class="o">.</span><span class="n">Pattern</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">dataclass_field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">init</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_resolved</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">re</span><span class="o">.</span><span class="n">Pattern</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">...</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">hook</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">:</span>
+            <span class="n">patterns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_patterns</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">hook</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">patterns</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">patterns</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="p">[</span><span class="n">hook</span><span class="p">]</span>
+
+<div class="viewcode-block" id="DatasetFilter.get_patterns">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.get_patterns">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_patterns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return the exclusion patterns that apply to datasets reported by *hook*."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_resolved</span><span class="p">(</span><span class="n">hook</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="DatasetFilter.is_excluded">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.is_excluded">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_excluded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return ``True`` if *dataset*, reported by *hook* (if any), matches an exclusion pattern."""</span>
+        <span class="n">compiled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_resolved</span><span class="p">(</span><span class="n">hook</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">compiled</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">identity</span> <span class="o">=</span> <span class="n">_get_dataset_identity</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">identity</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">compiled</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"OpenLineage emission policy: excluding dataset </span><span class="si">%r</span><span class="s2"> for </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="DatasetFilter.exclude">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.exclude">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">exclude</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">datasets</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">DatasetT</span><span class="p">],</span> <span class="n">hook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">DatasetT</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return *datasets* without the ones excluded for *hook*."""</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">datasets</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_excluded</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">hook</span><span class="p">)]</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_patterns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tiers</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">authoring_patterns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">()</span>
+        <span class="n">tiers</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">[</span>
+                <span class="n">rule</span>
+                <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tier</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">has_hook</span>
+                <span class="ow">or</span> <span class="p">(</span><span class="n">hook</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">_matches</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">scope</span><span class="p">[</span><span class="n">SCOPE_HOOK</span><span class="p">],</span> <span class="n">hook</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">match_mode</span><span class="p">))</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">tier</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tiers</span>
+        <span class="p">]</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="k">if</span> <span class="n">hook</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"datasets reported by '</span><span class="si">{</span><span class="n">hook</span><span class="si">}</span><span class="s2">' in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="si">}</span><span class="s2">"</span>
+        <span class="n">no_patterns</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="n">patterns</span><span class="p">,</span> <span class="n">winning_rule</span> <span class="o">=</span> <span class="n">_walk_tiers</span><span class="p">(</span><span class="n">tiers</span><span class="p">,</span> <span class="n">_get_rule_exclude_patterns</span><span class="p">,</span> <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span> <span class="n">no_patterns</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">winning_rule</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">winning_tier</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">tier</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tiers</span><span class="p">)</span> <span class="k">if</span> <span class="n">winning_rule</span> <span class="ow">in</span> <span class="n">tier</span><span class="p">)</span>
+            <span class="n">replaced</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">tier</span> <span class="ow">in</span> <span class="n">tiers</span><span class="p">[</span><span class="n">winning_tier</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tier</span><span class="p">]</span>
+            <span class="n">_audit_log_conf_patterns</span><span class="p">(</span><span class="n">patterns</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">winning_rule</span><span class="p">,</span> <span class="n">replaced</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">authoring_patterns</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">authoring_patterns</span> <span class="o">==</span> <span class="n">patterns</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">patterns</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">locked</span> <span class="k">for</span> <span class="n">tier</span> <span class="ow">in</span> <span class="n">tiers</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tier</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"OpenLineage emission_policy: extend_global_openlineage_emission_policy call for '</span><span class="si">%s</span><span class="s2">' on </span><span class="si">%s</span><span class="s2">"</span>
+                <span class="s2">" has no effect; locked by conf rule at value </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
+                <span class="n">context</span><span class="p">,</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">patterns</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">patterns</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"OpenLineage emission policy: '</span><span class="si">%s</span><span class="s2">' set to </span><span class="si">%r</span><span class="s2"> for </span><span class="si">%s</span><span class="s2"> "</span>
+            <span class="s2">"by manual `extend_global_openlineage_emission_policy` call."</span><span class="p">,</span>
+            <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
+            <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">authoring_patterns</span><span class="p">),</span>
+            <span class="n">context</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">authoring_patterns</span></div>
+
+
+
+<div class="viewcode-block" id="find_invalid_pattern">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/emission_policy/index.html#airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">find_invalid_pattern</span><span class="p">(</span><span class="n">field_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return an error message if *value* is not a list of valid regex patterns, else ``None``.</span>
+
+<span class="sd">    Shared by the conf parser (which skips the offending rule) and the authoring API (which</span>
+<span class="sd">    raises), so every pattern that reaches dataset matching has compiled at least once.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">' must be a list of strings, got </span><span class="si">{</span><span class="n">value</span><span class="si">!r}</span><span class="s2">"</span>
+    <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">' must contain only strings, got </span><span class="si">{</span><span class="n">pattern</span><span class="si">!r}</span><span class="s2">"</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">re</span><span class="o">.</span><span class="n">error</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">field_name</span><span class="si">}</span><span class="s2">' pattern </span><span class="si">{</span><span class="n">pattern</span><span class="si">!r}</span><span class="s2"> is not a valid regex (</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">)"</span>
+    <span class="k">return</span> <span class="kc">None</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_param</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ControlValue</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Read the flags dict stored at *param_name* on *obj*, or ``{}`` if absent."""</span>
     <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">"params"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">param_name</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">val</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1039,7 +1258,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">val</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_merge_param</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_flags</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_merge_param</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">param_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">new_flags</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ControlValue</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Merge *new_flags* into the ``param_name`` param on *obj*, creating it if absent.</span>
 
@@ -1073,6 +1292,29 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">context</span><span class="p">,</span>
         <span class="n">source</span><span class="p">,</span>
     <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_audit_log_conf_patterns</span><span class="p">(</span>
+    <span class="n">patterns</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">context</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="n">Rule</span><span class="p">,</span> <span class="n">replaced</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Rule</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Log the winning ``exclude_datasets`` list, and the broader rules it replaced, if any."""</span>
+    <span class="k">if</span> <span class="n">replaced</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"OpenLineage emission policy: '</span><span class="si">%s</span><span class="s2">' set to </span><span class="si">%r</span><span class="s2"> for </span><span class="si">%s</span><span class="s2"> by </span><span class="si">%r</span><span class="s2">, replacing broader rule(s) </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
+            <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">patterns</span><span class="p">),</span>
+            <span class="n">context</span><span class="p">,</span>
+            <span class="n">source</span><span class="p">,</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">replaced</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"OpenLineage emission policy: '</span><span class="si">%s</span><span class="s2">' set to </span><span class="si">%r</span><span class="s2"> for </span><span class="si">%s</span><span class="s2"> by </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
+            <span class="n">EXCLUDE_DATASETS</span><span class="p">,</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">patterns</span><span class="p">),</span>
+            <span class="n">context</span><span class="p">,</span>
+            <span class="n">source</span><span class="p">,</span>
+        <span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_audit_log_authoring_updates</span><span class="p">(</span>
@@ -1187,7 +1429,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">controls</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="n">EXCLUDE_DATASETS</span><span class="p">:</span>
+            <span class="n">invalid</span> <span class="o">=</span> <span class="n">find_invalid_pattern</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">invalid</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"OpenLineage emission_policy rule controls.</span><span class="si">%s</span><span class="s2">; ignoring: </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span> <span class="n">invalid</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
             <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">"OpenLineage emission_policy rule 'controls.</span><span class="si">%s</span><span class="s2">' must be bool, got </span><span class="si">%r</span><span class="s2">; ignoring: </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
                 <span class="n">k</span><span class="p">,</span>
@@ -1210,6 +1457,24 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">rule</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">SCOPE_HOOK</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
+        <span class="n">unsupported</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">controls</span><span class="p">)</span> <span class="o">-</span> <span class="n">_HOOK_SCOPE_CONTROL_KEYS</span>
+        <span class="k">if</span> <span class="n">unsupported</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"OpenLineage emission_policy rule has scope 'hook' with controls </span><span class="si">%s</span><span class="s2">, but hook-scoped rules "</span>
+                <span class="s2">"only support </span><span class="si">%s</span><span class="s2">; ignoring: </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
+                <span class="nb">sorted</span><span class="p">(</span><span class="n">unsupported</span><span class="p">),</span>
+                <span class="nb">sorted</span><span class="p">(</span><span class="n">_HOOK_SCOPE_CONTROL_KEYS</span><span class="p">),</span>
+                <span class="n">rule</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">EXCLUDE_DATASETS</span> <span class="ow">in</span> <span class="n">controls</span> <span class="ow">and</span> <span class="n">HOOK_LINEAGE</span> <span class="ow">in</span> <span class="n">controls</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"OpenLineage emission_policy rule has scope 'hook' with both 'exclude_datasets' and "</span>
+                <span class="s2">"'hook_lineage', which both set the datasets dropped for that hook; ignoring: </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">rule</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
 
     <span class="n">match_mode</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RULE_MATCH_MODE</span><span class="p">,</span> <span class="s2">"exact"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">match_mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"exact"</span><span class="p">,</span> <span class="s2">"regex"</span><span class="p">):</span>
@@ -1220,7 +1485,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">match_mode</span> <span class="o">==</span> <span class="s2">"regex"</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">SCOPE_DAG_ID</span><span class="p">,</span> <span class="n">SCOPE_TASK_ID</span><span class="p">,</span> <span class="n">SCOPE_OPERATOR</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="n">SCOPE_DAG_ID</span><span class="p">,</span> <span class="n">SCOPE_TASK_ID</span><span class="p">,</span> <span class="n">SCOPE_OPERATOR</span><span class="p">,</span> <span class="n">SCOPE_HOOK</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">scope</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
@@ -1270,9 +1535,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">fqcn</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">dag_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">hook_scoped</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Classify pre-validated rules into the four priority tiers for task resolution.</span>
+
+<span class="sd">    Only rules whose scope has a ``hook`` key (``hook_scoped=True``) or has none</span>
+<span class="sd">    (``hook_scoped=False``) are considered; the ``hook`` key itself is left for</span>
+<span class="sd">    :class:`DatasetFilter` to match per dataset.</span>
 
 <span class="sd">    Returns ``(task_rules, dag_rules, operator_rules, global_rules)``.</span>
 <span class="sd">    """</span>
@@ -1282,6 +1553,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">global_rules</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 
     <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">has_hook</span> <span class="o">!=</span> <span class="n">hook_scoped</span><span class="p">:</span>
+            <span class="k">continue</span>
         <span class="n">scope</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">scope</span>
         <span class="n">match_mode</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">match_mode</span>
 
@@ -1329,24 +1602,24 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_walk_tiers</span><span class="p">(</span>
-    <span class="n">tiers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">]],</span>
-    <span class="n">extract_value</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]],</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
+    <span class="n">tiers</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Rule</span><span class="p">]],</span>
+    <span class="n">extract_value</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Rule</span><span class="p">],</span> <span class="n">V</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span>
     <span class="n">field_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">default</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Rule</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+    <span class="n">default</span><span class="p">:</span> <span class="n">V</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">V</span><span class="p">,</span> <span class="n">Rule</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Walk priority tiers from most-specific to least-specific, last-wins within each tier.</span>
 
-<span class="sd">    *extract_value* maps a rule's ``controls`` dict to ``bool | None``; ``None`` means</span>
+<span class="sd">    *extract_value* maps a rule to its value for the field; ``None`` means</span>
 <span class="sd">    "this rule does not cover this field".  A contradiction WARNING is emitted when two</span>
 <span class="sd">    rules in the same tier produce different non-``None`` values.  Returns</span>
 <span class="sd">    ``(default, None)`` when no rule in any tier matches.</span>
 <span class="sd">    """</span>
     <span class="k">for</span> <span class="n">tier_rules</span> <span class="ow">in</span> <span class="n">tiers</span><span class="p">:</span>
-        <span class="n">value</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">value</span><span class="p">:</span> <span class="n">V</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">winning_rule</span><span class="p">:</span> <span class="n">Rule</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tier_rules</span><span class="p">:</span>
-            <span class="n">new_v</span> <span class="o">=</span> <span class="n">extract_value</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="p">)</span>
+            <span class="n">new_v</span> <span class="o">=</span> <span class="n">extract_value</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">new_v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">winning_rule</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">!=</span> <span class="n">new_v</span><span class="p">:</span>
                     <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
@@ -1370,7 +1643,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">tiers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Rule</span><span class="p">]],</span> <span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">bool</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Rule</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Walk tiers for a single boolean *field* in ``controls``."""</span>
-    <span class="k">return</span> <span class="n">_walk_tiers</span><span class="p">(</span><span class="n">tiers</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">),</span> <span class="n">field</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract</span><span class="p">(</span><span class="n">rule</span><span class="p">:</span> <span class="n">Rule</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">_walk_tiers</span><span class="p">(</span><span class="n">tiers</span><span class="p">,</span> <span class="n">_extract</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_emit_with_source</span><span class="p">(</span>
@@ -1387,10 +1665,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    """</span>
     <span class="n">specific_key</span> <span class="o">=</span> <span class="n">EMIT_TASK_EVENTS</span> <span class="k">if</span> <span class="n">scope</span> <span class="o">==</span> <span class="s2">"task"</span> <span class="k">else</span> <span class="n">EMIT_DAG_EVENTS</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_extract</span><span class="p">(</span><span class="n">c</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">specific_key</span> <span class="ow">in</span> <span class="n">c</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">c</span><span class="p">[</span><span class="n">specific_key</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EMIT</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract</span><span class="p">(</span><span class="n">rule</span><span class="p">:</span> <span class="n">Rule</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">specific_key</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">controls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EMIT</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
 
     <span class="k">return</span> <span class="n">_walk_tiers</span><span class="p">(</span><span class="n">tiers</span><span class="p">,</span> <span class="n">_extract</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"emit (</span><span class="si">{</span><span class="n">scope</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
 
@@ -1614,7 +1891,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">config</span>
 
     <span class="n">_audit_log_authoring_updates</span><span class="p">(</span><span class="n">changed</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">changed</span><span class="p">)</span>
+    <span class="c1"># ``changed`` only holds the boolean fields, never ``dataset_filter``.</span>
+    <span class="k">return</span> <span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">changed</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_extend_policy_with_task_authoring</span><span class="p">(</span>
@@ -1636,14 +1914,26 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">flags</span> <span class="o">=</span> <span class="n">_read_param</span><span class="p">(</span><span class="n">operator</span><span class="p">,</span> <span class="n">OL_EMISSION_POLICY_PARAM</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">flags</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">config</span>
-    <span class="k">return</span> <span class="n">_apply_authoring_overrides</span><span class="p">(</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">_apply_authoring_overrides</span><span class="p">(</span>
         <span class="n">config</span><span class="p">,</span>
         <span class="n">locked_fields</span><span class="p">,</span>
-        <span class="n">flags</span><span class="p">,</span>
+        <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">flags</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)},</span>
         <span class="n">EMIT_TASK_EVENTS</span><span class="p">,</span>
         <span class="n">context</span><span class="p">,</span>
         <span class="n">extra_fields</span><span class="o">=</span><span class="p">(</span><span class="n">EXTRACT_OPERATOR_METADATA</span><span class="p">,</span> <span class="n">INCLUDE_SOURCE_CODE</span><span class="p">,</span> <span class="n">HOOK_LINEAGE</span><span class="p">,</span> <span class="n">INCLUDE_FULL_TASK_INFO</span><span class="p">),</span>
     <span class="p">)</span>
+    <span class="c1"># Locks on exclude_datasets depend on the hook reporting each dataset, so the filter</span>
+    <span class="c1"># checks them when it resolves patterns.</span>
+    <span class="n">patterns</span> <span class="o">=</span> <span class="n">flags</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EXCLUDE_DATASETS</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">patterns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">config</span>
+    <span class="c1"># Params written without the authoring API skip its validation, and a bad pattern would</span>
+    <span class="c1"># otherwise raise during extraction and drop the task event.</span>
+    <span class="n">invalid</span> <span class="o">=</span> <span class="n">find_invalid_pattern</span><span class="p">(</span><span class="n">EXCLUDE_DATASETS</span><span class="p">,</span> <span class="n">patterns</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">invalid</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">patterns</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"OpenLineage emission_policy: ignoring authored </span><span class="si">%s</span><span class="s2"> for </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">invalid</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config</span>
+    <span class="k">return</span> <span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">dataset_filter</span><span class="o">=</span><span class="n">replace</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dataset_filter</span><span class="p">,</span> <span class="n">authoring_patterns</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">patterns</span><span class="p">)))</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_extend_policy_with_dag_authoring</span><span class="p">(</span>
@@ -1661,7 +1951,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">flags</span> <span class="o">=</span> <span class="n">_read_param</span><span class="p">(</span><span class="n">dag</span><span class="p">,</span> <span class="n">OL_EMISSION_POLICY_PARAM</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">flags</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">config</span>
-    <span class="k">return</span> <span class="n">_apply_authoring_overrides</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">locked_fields</span><span class="p">,</span> <span class="n">flags</span><span class="p">,</span> <span class="n">EMIT_DAG_EVENTS</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_apply_authoring_overrides</span><span class="p">(</span>
+        <span class="n">config</span><span class="p">,</span>
+        <span class="n">locked_fields</span><span class="p">,</span>
+        <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">flags</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)},</span>
+        <span class="n">EMIT_DAG_EVENTS</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">,</span>
+    <span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_task_policy_from_conf_only</span><span class="p">(</span>
@@ -1708,6 +2004,15 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
     <span class="n">locked_fields</span> <span class="o">=</span> <span class="n">_compute_locked_task_fields</span><span class="p">(</span><span class="n">task_rules</span><span class="p">,</span> <span class="n">dag_rules</span><span class="p">,</span> <span class="n">operator_rules</span><span class="p">,</span> <span class="n">global_rules</span><span class="p">)</span>
 
+    <span class="n">hook_tiers</span> <span class="o">=</span> <span class="n">_classify_task_rules</span><span class="p">(</span><span class="n">rules</span><span class="p">,</span> <span class="n">fqcn</span><span class="p">,</span> <span class="n">dag_id</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">hook_scoped</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">dataset_filter_tiers</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="nb">tuple</span><span class="p">(</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tier</span> <span class="k">if</span> <span class="n">_get_rule_exclude_patterns</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">hook_tiers</span><span class="p">,</span> <span class="n">tiers</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">tier</span> <span class="ow">in</span> <span class="n">pair</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">dataset_filter_tiers</span><span class="p">):</span>
+        <span class="n">dataset_filter_tiers</span> <span class="o">=</span> <span class="p">()</span>
+
     <span class="k">return</span> <span class="p">(</span>
         <span class="n">EmissionPolicy</span><span class="p">(</span>
             <span class="n">emit</span><span class="o">=</span><span class="n">emit</span><span class="p">,</span>
@@ -1715,6 +2020,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">include_source_code</span><span class="o">=</span><span class="n">include_source_code</span><span class="p">,</span>
             <span class="n">hook_lineage</span><span class="o">=</span><span class="n">hook_lineage</span><span class="p">,</span>
             <span class="n">include_full_task_info</span><span class="o">=</span><span class="n">include_full_task_info</span><span class="p">,</span>
+            <span class="n">dataset_filter</span><span class="o">=</span><span class="n">DatasetFilter</span><span class="p">(</span><span class="n">tiers</span><span class="o">=</span><span class="n">dataset_filter_tiers</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">),</span>
         <span class="p">),</span>
         <span class="n">locked_fields</span><span class="p">,</span>
     <span class="p">)</span>

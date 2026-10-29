@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -697,8 +697,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">_get_logical_date</span><span class="p">,</span>
     <span class="n">lineage_job_name</span><span class="p">,</span>
     <span class="n">lineage_job_namespace</span><span class="p">,</span>
+    <span class="n">lineage_job_type</span><span class="p">,</span>
     <span class="n">lineage_root_job_name</span><span class="p">,</span>
     <span class="n">lineage_root_job_namespace</span><span class="p">,</span>
+    <span class="n">lineage_root_job_type</span><span class="p">,</span>
     <span class="n">lineage_root_run_id</span><span class="p">,</span>
     <span class="n">lineage_run_id</span><span class="p">,</span>
 <span class="p">)</span>
@@ -706,7 +708,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">SQLParser</span><span class="p">,</span>
     <span class="n">from_table_meta</span><span class="p">,</span>
     <span class="n">get_openlineage_facets_with_sql</span><span class="p">,</span>
+    <span class="n">get_sql_parser_for_hook</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.utils.emission_policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetFilter</span><span class="p">,</span> <span class="n">get_hook_class_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.utils.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">_get_parent_run_facet</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -761,7 +765,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="emit_lineage_from_sql_extras">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/utils/sql_hook_lineage/index.html#airflow.providers.openlineage.utils.sql_hook_lineage.emit_lineage_from_sql_extras">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">emit_lineage_from_sql_extras</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">sql_extras</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">is_successful</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">emit_lineage_from_sql_extras</span><span class="p">(</span>
+    <span class="n">task_instance</span><span class="p">,</span>
+    <span class="n">sql_extras</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="n">is_successful</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">dataset_filter</span><span class="p">:</span> <span class="n">DatasetFilter</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Process ``sql_job`` extras and emit per-query OpenLineage events.</span>
 
@@ -769,8 +778,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="sd">    * Parse SQL via :func:`get_openlineage_facets_with_sql` to obtain inputs,</span>
 <span class="sd">      outputs and facets (schema enrichment, column lineage, etc.).</span>
+<span class="sd">    * Drop the inputs/outputs that *dataset_filter* excludes for the reporting hook.</span>
 <span class="sd">    * Emit a separate START + COMPLETE/FAIL event pair (child job of the task).</span>
 <span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">dataset_filter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">dataset_filter</span> <span class="o">=</span> <span class="n">DatasetFilter</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">sql_extras</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
 
@@ -796,11 +808,20 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="nd">@cache</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_database_info</span><span class="p">(</span><span class="n">hook_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
         <span class="n">hook</span><span class="p">,</span> <span class="n">conn_id</span> <span class="o">=</span> <span class="n">_hook_info</span><span class="p">[</span><span class="n">hook_id</span><span class="p">]</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_openlineage_database_info</span><span class="p">(</span><span class="n">_get_connection</span><span class="p">(</span><span class="n">hook_id</span><span class="p">))</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Failed to get OpenLineage database info for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="n">get_database_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s2">"get_openlineage_database_info"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">get_database_info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">get_database_info</span><span class="p">(</span><span class="n">_get_connection</span><span class="p">(</span><span class="n">hook_id</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to get OpenLineage database info for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"OpenLineage failure details:"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@cache</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_sql_parser</span><span class="p">(</span><span class="n">hook_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SQLParser</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">hook</span><span class="p">,</span> <span class="n">conn_id</span> <span class="o">=</span> <span class="n">_hook_info</span><span class="p">[</span><span class="n">hook_id</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">get_sql_parser_for_hook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="n">_get_connection</span><span class="p">(</span><span class="n">hook_id</span><span class="p">),</span> <span class="n">conn_id</span><span class="p">)</span>
 
     <span class="nd">@cache</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_namespace</span><span class="p">(</span><span class="n">hook_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
@@ -825,7 +846,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="c1"># Parse SQL to obtain lineage (inputs, outputs, facets)</span>
         <span class="n">query_lineage</span><span class="p">:</span> <span class="n">OperatorLineage</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">database_info</span> <span class="o">=</span> <span class="n">_get_database_info</span><span class="p">(</span><span class="n">hook_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">conn_id</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">sql_text</span> <span class="ow">and</span> <span class="n">conn_id</span> <span class="ow">and</span> <span class="n">database_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">sql_parser</span> <span class="o">=</span> <span class="n">_get_sql_parser</span><span class="p">(</span><span class="n">hook_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">conn_id</span> <span class="ow">and</span> <span class="n">database_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">sql_text</span> <span class="ow">and</span> <span class="n">conn_id</span> <span class="ow">and</span> <span class="n">database_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">sql_parser</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">query_lineage</span> <span class="o">=</span> <span class="n">get_openlineage_facets_with_sql</span><span class="p">(</span>
                     <span class="n">hook</span><span class="o">=</span><span class="n">hook</span><span class="p">,</span>
@@ -835,9 +857,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                     <span class="n">use_connection</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="c1"># Temporary solution before we figure out timeouts for queries</span>
                     <span class="n">connection</span><span class="o">=</span><span class="n">_get_connection</span><span class="p">(</span><span class="n">hook_id</span><span class="p">),</span>
                     <span class="n">database_info</span><span class="o">=</span><span class="n">database_info</span><span class="p">,</span>
+                    <span class="n">sql_parser</span><span class="o">=</span><span class="n">sql_parser</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Failed to parse SQL for query </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">query_count</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to parse SQL for query </span><span class="si">%s</span><span class="s2"> on </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">query_count</span><span class="p">,</span> <span class="n">conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"OpenLineage failure details:"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
         <span class="c1"># If parsing SQL failed, just attach SQL text as a facet</span>
         <span class="k">if</span> <span class="n">query_lineage</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -857,13 +881,14 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="p">),</span>
             <span class="p">)</span>
 
+        <span class="n">hook_class_name</span> <span class="o">=</span> <span class="n">get_hook_class_name</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
         <span class="n">events</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
             <span class="n">_create_ol_event_pair</span><span class="p">(</span>
                 <span class="n">task_instance</span><span class="o">=</span><span class="n">task_instance</span><span class="p">,</span>
                 <span class="n">job_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">.hll_query.</span><span class="si">{</span><span class="n">query_count</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                 <span class="n">is_successful</span><span class="o">=</span><span class="n">is_successful</span><span class="p">,</span>
-                <span class="n">inputs</span><span class="o">=</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span>
-                <span class="n">outputs</span><span class="o">=</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">outputs</span><span class="p">,</span>
+                <span class="n">inputs</span><span class="o">=</span><span class="n">dataset_filter</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="n">hook_class_name</span><span class="p">),</span>
+                <span class="n">outputs</span><span class="o">=</span><span class="n">dataset_filter</span><span class="o">.</span><span class="n">exclude</span><span class="p">(</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">outputs</span><span class="p">,</span> <span class="n">hook_class_name</span><span class="p">),</span>
                 <span class="n">run_facets</span><span class="o">=</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">run_facets</span><span class="p">,</span>
                 <span class="n">job_facets</span><span class="o">=</span><span class="n">query_lineage</span><span class="o">.</span><span class="n">job_facets</span><span class="p">,</span>
             <span class="p">)</span>
@@ -924,6 +949,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">root_parent_run_id</span><span class="o">=</span><span class="n">lineage_root_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
         <span class="n">root_parent_job_name</span><span class="o">=</span><span class="n">lineage_root_job_name</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
         <span class="n">root_parent_job_namespace</span><span class="o">=</span><span class="n">lineage_root_job_namespace</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
+        <span class="n">parent_job_type</span><span class="o">=</span><span class="n">lineage_job_type</span><span class="p">(),</span>
+        <span class="n">root_parent_job_type</span><span class="o">=</span><span class="n">lineage_root_job_type</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
     <span class="p">)</span>
     <span class="n">job_type_facet</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">"jobType"</span><span class="p">:</span> <span class="n">job_type_job</span><span class="o">.</span><span class="n">JobTypeJobFacet</span><span class="p">(</span>

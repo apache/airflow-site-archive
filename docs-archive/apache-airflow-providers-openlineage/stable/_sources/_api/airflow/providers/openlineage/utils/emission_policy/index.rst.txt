@@ -28,16 +28,20 @@ airflow.providers.openlineage.utils.emission_policy
      to the named DAG.  Use ``emit_task_events`` / ``emit_dag_events`` to target one
      event type selectively.
    - ``task_id`` — only valid alongside ``dag_id``; targets a specific task.
+   - ``hook``: fully-qualified class name of the object that reported a hook-collected
+     dataset (usually a hook).  Can be added to any of the scopes above, and narrows the
+     rule to datasets reported by that hook.  Only ``exclude_datasets`` and ``hook_lineage``
+     are valid controls for a hook-scoped rule.
    - *(empty ``scope: {}``)* — global default override; applies to every task and DAG event.
 
    ``operator`` cannot be combined with ``dag_id`` or ``task_id`` (scope is one of:
-   global, operator-only, dag-only, dag+task).  ``task_id`` without ``dag_id`` and
-   ``operator`` combined with ``emit_dag_events`` (or ``task_id`` combined with
-   ``emit_dag_events``) are also rejected with a WARNING.
+   global, operator-only, dag-only, dag+task, each optionally with ``hook``).  ``task_id``
+   without ``dag_id`` and ``operator`` combined with ``emit_dag_events`` (or ``task_id``
+   combined with ``emit_dag_events``) are also rejected with a WARNING.
 
    ``match_mode`` lives at the top level: ``"exact"`` (default) or ``"regex"``.
    When set to ``"regex"``, every value inside ``scope`` (``dag_id``, ``task_id``,
-   ``operator``) is treated as a ``re.fullmatch`` pattern.
+   ``operator``, ``hook``) is treated as a ``re.fullmatch`` pattern.
 
    Control flag keys (all optional inside ``controls``; the dict must be non-empty):
 
@@ -58,10 +62,21 @@ airflow.providers.openlineage.utils.emission_policy
    - ``hook_lineage`` — whether to use ``HookLineageCollector`` as a fallback when the
      extractor finds no inputs/outputs.  **Has no effect when ``extract_operator_metadata``
      is ``false``** — the entire extraction pipeline (including hook lineage) is skipped.
-     Only meaningful for task events.  Default: ``true``.
+     Only meaningful for task events.  Default: ``true``.  In a hook-scoped rule it instead
+     keeps (``true``) or drops (``false``) every dataset reported by the matching hook, and it
+     cannot be combined with ``exclude_datasets`` in the same rule.
    - ``include_full_task_info`` — whether to include the full serialized operator state
      in the ``AirflowRunFacet``.  When ``false`` (default), only a curated subset of
      task attributes is sent.  Only meaningful for task events.  Default: ``false``.
+   - ``exclude_datasets``: list of ``re.fullmatch`` patterns (independent of ``match_mode``)
+     matched against ``"<namespace>/<name>"`` of each OpenLineage dataset (without a doubled ``/``
+     when the name starts with one); matching datasets
+     are dropped from task events and from the SQL hook lineage events of the task.  Applies
+     to extractor, hook-collected and manually declared lineage.  Default: ``[]``.
+
+   Unlike the boolean controls, ``exclude_datasets`` is resolved per dataset, and the most
+   specific matching rule's list **replaces** broader lists instead of merging with them, so a
+   narrower rule can shorten or clear (``[]``) a broader exclusion.
 
    ``locked: true`` is an admin floor lock that prevents per-Dag / per-task authoring
    overrides from changing the field(s) carried by this rule's ``controls`` dict.
@@ -90,6 +105,11 @@ airflow.providers.openlineage.utils.emission_policy
 
    For ``emit`` at the task level: ``emit_task_events`` beats ``emit`` within the same
    rule.
+
+   For ``exclude_datasets`` on a dataset reported by a hook, each tier above is preceded by
+   its hook-scoped variant: ``dag_id`` + ``task_id`` + ``hook``, ``dag_id`` + ``task_id``,
+   ``dag_id`` + ``hook``, ``dag_id``, ``operator`` + ``hook``, ``operator``, ``hook``,
+   global.  Datasets from other sources only see the tiers without ``hook``.
 
    Priority for **DAG run events**:
 
@@ -127,7 +147,10 @@ Attributes
 
 .. autoapisummary::
 
+   airflow.providers.openlineage.utils.emission_policy.DatasetT
    airflow.providers.openlineage.utils.emission_policy.log
+   airflow.providers.openlineage.utils.emission_policy.V
+   airflow.providers.openlineage.utils.emission_policy.ControlValue
    airflow.providers.openlineage.utils.emission_policy.EMIT
    airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS
    airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS
@@ -135,9 +158,11 @@ Attributes
    airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE
    airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE
    airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO
+   airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS
    airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID
    airflow.providers.openlineage.utils.emission_policy.SCOPE_TASK_ID
    airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR
+   airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK
    airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE
    airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS
    airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE
@@ -152,6 +177,7 @@ Classes
 
    airflow.providers.openlineage.utils.emission_policy.EmissionPolicy
    airflow.providers.openlineage.utils.emission_policy.Rule
+   airflow.providers.openlineage.utils.emission_policy.DatasetFilter
 
 
 Functions
@@ -159,6 +185,8 @@ Functions
 
 .. autoapisummary::
 
+   airflow.providers.openlineage.utils.emission_policy.get_hook_class_name
+   airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern
    airflow.providers.openlineage.utils.emission_policy.resolve_task_emission_policy
    airflow.providers.openlineage.utils.emission_policy.resolve_dag_emission_policy
 
@@ -166,7 +194,13 @@ Functions
 Module Contents
 ---------------
 
+.. py:data:: DatasetT
+
 .. py:data:: log
+
+.. py:data:: V
+
+.. py:data:: ControlValue
 
 .. py:data:: EMIT
    :value: 'emit'
@@ -196,6 +230,10 @@ Module Contents
    :value: 'include_full_task_info'
 
 
+.. py:data:: EXCLUDE_DATASETS
+   :value: 'exclude_datasets'
+
+
 .. py:data:: SCOPE_DAG_ID
    :value: 'dag_id'
 
@@ -206,6 +244,10 @@ Module Contents
 
 .. py:data:: SCOPE_OPERATOR
    :value: 'operator'
+
+
+.. py:data:: SCOPE_HOOK
+   :value: 'hook'
 
 
 .. py:data:: RULE_SCOPE
@@ -253,6 +295,10 @@ Module Contents
       :type:  bool
 
 
+   .. py:attribute:: dataset_filter
+      :type:  DatasetFilter
+
+
    .. py:method:: defaults()
       :classmethod:
 
@@ -275,7 +321,7 @@ Module Contents
 
 
    .. py:attribute:: controls
-      :type:  dict[str, bool]
+      :type:  dict[str, ControlValue]
 
 
    .. py:attribute:: match_mode
@@ -303,6 +349,70 @@ Module Contents
    .. py:property:: has_op
       :type: bool
 
+
+
+   .. py:property:: has_hook
+      :type: bool
+
+
+
+.. py:function:: get_hook_class_name(hook)
+
+   Return the fully-qualified class name that the ``hook`` scope key matches, if any.
+
+
+.. py:class:: DatasetFilter
+
+   ``exclude_datasets`` resolution for the datasets of one task.
+
+   Hook-scoped rules can only be matched once the reporting hook is known, so the winning
+   patterns are resolved lazily per hook (``None`` for datasets not reported by a hook)
+   and cached.  *tiers* holds only rules that set patterns, most specific first:
+   dag+task+hook, dag+task, dag+hook, dag, operator+hook, operator, hook, global.
+
+
+   .. py:attribute:: tiers
+      :type:  tuple[tuple[Rule, ...], ...]
+      :value: ()
+
+
+
+   .. py:attribute:: authoring_patterns
+      :type:  tuple[str, ...] | None
+      :value: None
+
+
+
+   .. py:attribute:: context
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: get_patterns(hook = None)
+
+      Return the exclusion patterns that apply to datasets reported by *hook*.
+
+
+
+   .. py:method:: is_excluded(dataset, hook = None)
+
+      Return ``True`` if *dataset*, reported by *hook* (if any), matches an exclusion pattern.
+
+
+
+   .. py:method:: exclude(datasets, hook = None)
+
+      Return *datasets* without the ones excluded for *hook*.
+
+
+
+.. py:function:: find_invalid_pattern(field_name, value)
+
+   Return an error message if *value* is not a list of valid regex patterns, else ``None``.
+
+   Shared by the conf parser (which skips the offending rule) and the authoring API (which
+   raises), so every pattern that reaches dataset matching has compiled at least once.
 
 
 .. py:function:: resolve_task_emission_policy(operator, dag_id, task_id)

@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="Multi-turn sessions and message history" href="message_history.html" />
@@ -716,7 +716,7 @@ to return structured data, and the model instance is pushed to XCom unchanged
 so downstream tasks can type-hint the class directly
 (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">downstream(result:</span> <span class="pre">MyModel)</span></code>) and use attribute access (<code class="docutils literal notranslate"><span class="pre">result.field</span></code>).</p>
 <p>The declared <code class="docutils literal notranslate"><span class="pre">output_type</span></code> (and any <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> reachable from
-<code class="docutils literal notranslate"><span class="pre">Union</span></code>/<code class="docutils literal notranslate"><span class="pre">Optional</span></code>/<code class="docutils literal notranslate"><span class="pre">list</span></code> shapes) is registered for XCom deserialization by
+<code class="docutils literal notranslate"><span class="pre">Union</span></code>/<code class="docutils literal notranslate"><span class="pre">Optional</span></code>/<code class="docutils literal notranslate"><span class="pre">list[...]</span></code> types) is registered for XCom deserialization by
 the worker when it loads the Dag, before any task runs – so no edit to
 <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code> is needed. The Pydantic class must be
 defined at <strong>module scope</strong> and bound to an attribute matching its <code class="docutils literal notranslate"><span class="pre">__name__</span></code>;
@@ -758,6 +758,49 @@ warning at worker startup and the value fails to deserialize at the consumer.</p
 loaded Dag’s tasks at startup and registers each declared class, so it also works
 for mapped producers (<code class="docutils literal notranslate"><span class="pre">.expand(...)</span></code>) and for workers that load Dags from a
 cache that bypasses operator construction.</p>
+<p>The worker finds no class to register when <code class="docutils literal notranslate"><span class="pre">output_type</span></code> is a list of output
+types such as <code class="docutils literal notranslate"><span class="pre">[Summary,</span> <span class="pre">int]</span></code>, an output marker such as
+<code class="docutils literal notranslate"><span class="pre">ToolOutput(Summary)</span></code>, an output function, a <code class="docutils literal notranslate"><span class="pre">TypeAliasType</span></code> or a
+<code class="docutils literal notranslate"><span class="pre">NewType</span></code>. For these output types, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> push
+each model in the output as a JSON-compatible dict, including models inside a
+list, tuple or dict. A model is pushed as a dict even if its class is listed in
+<code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code>, or if another task in the same Dag
+declares the class as its <code class="docutils literal notranslate"><span class="pre">output_type</span></code>. A downstream task therefore reads
+<code class="docutils literal notranslate"><span class="pre">result[&quot;field&quot;]</span></code>, not <code class="docutils literal notranslate"><span class="pre">result.field</span></code>.</p>
+<p>In a JSON-compatible dict, values such as <code class="docutils literal notranslate"><span class="pre">datetime</span></code>, <code class="docutils literal notranslate"><span class="pre">date</span></code>, <code class="docutils literal notranslate"><span class="pre">UUID</span></code> and
+<code class="docutils literal notranslate"><span class="pre">Decimal</span></code> arrive as strings, tuples and sets arrive as lists, and <code class="docutils literal notranslate"><span class="pre">Enum</span></code>
+members arrive as their values.</p>
+<p>A model at the top level is still dumped with plain <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> when
+<code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> is set or on Airflow versions before 3.3. Either
+condition is enough. A plain <code class="docutils literal notranslate"><span class="pre">Enum</span></code> member (one that does not also subclass
+<code class="docutils literal notranslate"><span class="pre">str</span></code> or <code class="docutils literal notranslate"><span class="pre">int</span></code>), an <code class="docutils literal notranslate"><span class="pre">HttpUrl</span></code> or a <code class="docutils literal notranslate"><span class="pre">Path</span></code> in that model then stays a
+Python object. The default XCom backend cannot serialize these objects, so the
+XCom push fails with <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>. Before Airflow 3.3 the worker registers no
+model class. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> therefore push a model
+inside a list, tuple or dict as a JSON-compatible dict for every
+<code class="docutils literal notranslate"><span class="pre">output_type</span></code>, not only for the output types listed above.</p>
+<p>Upgrading from common.ai 1.0.0 to 1.1.0 can change the type that a downstream
+task receives:</p>
+<ul class="simple">
+<li><p>On Airflow 3.3 and later, common.ai 1.0.0 pushed each model in the
+output as a model instance when <code class="docutils literal notranslate"><span class="pre">output_type</span></code> was one of the output types
+listed above. It dumped a top-level model with plain <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> only
+when <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> was set or in HITL review. A downstream task
+loaded the instance when the class was listed in
+<code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code> or when another task in the same
+Dag declared the class as its <code class="docutils literal notranslate"><span class="pre">output_type</span></code>. That downstream task now gets
+a dict, and <code class="docutils literal notranslate"><span class="pre">result.field</span></code> raises <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p></li>
+<li><p>In HITL review on Airflow 3.3 and later without <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code>,
+common.ai 1.0.0 dumped a top-level model of these output types with
+plain <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> after the reviewer approved the model. Values such as
+<code class="docutils literal notranslate"><span class="pre">datetime</span></code>, <code class="docutils literal notranslate"><span class="pre">date</span></code>, <code class="docutils literal notranslate"><span class="pre">timedelta</span></code>, <code class="docutils literal notranslate"><span class="pre">UUID</span></code> and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> in that model
+now arrive as strings, for example <code class="docutils literal notranslate"><span class="pre">&quot;PT1M30S&quot;</span></code> for a <code class="docutils literal notranslate"><span class="pre">timedelta</span></code>. Tuples
+and sets in that model now arrive as lists.</p></li>
+<li><p>Before Airflow 3.3, common.ai 1.0.0 pushed a model inside a list,
+tuple or dict as a model instance, for every <code class="docutils literal notranslate"><span class="pre">output_type</span></code>. A downstream
+task that loaded the instance because the class was listed in
+<code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code> now gets a dict.</p></li>
+</ul>
 <p>The Airflow UI’s XCom viewer renders Pydantic instances via the
 <code class="docutils literal notranslate"><span class="pre">stringify</span></code> path, which produces a representation like
 <code class="docutils literal notranslate"><span class="pre">my_module.MyModel&#64;version=1(field=value,...)</span></code> without consulting the

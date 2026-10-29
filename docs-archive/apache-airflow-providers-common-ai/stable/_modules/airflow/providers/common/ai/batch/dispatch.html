@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -751,8 +751,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="s2">"anthropic"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"airflow.providers.common.ai.batch.anthropic"</span><span class="p">,</span> <span class="s2">"AnthropicBatchAdapter"</span><span class="p">),</span>
 <span class="p">}</span>
 
+<span class="c1">#: model_id prefix -&gt; the adapter that serves it under another name. ``openai-chat`` is</span>
+<span class="c1">#: pydantic-ai's Chat Completions prefix, and Chat Completions is what the ``openai`` adapter submits.</span>
+<span class="n">_ADAPTER_ALIASES</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"openai-chat"</span><span class="p">:</span> <span class="s2">"openai"</span><span class="p">}</span>
+
 <span class="c1">#: Adapter classes registered at runtime through :func:`register_adapter`.</span>
 <span class="n">_REGISTERED_ADAPTERS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">[</span><span class="n">BatchAdapter</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<div class="viewcode-block" id="adapter_name_for_prefix">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/batch/dispatch/index.html#airflow.providers.common.ai.batch.dispatch.adapter_name_for_prefix">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">adapter_name_for_prefix</span><span class="p">(</span><span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the name of the adapter that serves a ``model_id`` prefix (``openai-chat`` -&gt; ``openai``)."""</span>
+    <span class="k">return</span> <span class="n">_ADAPTER_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">prefix</span><span class="p">)</span></div>
+
 
 
 <div class="viewcode-block" id="register_adapter">
@@ -813,7 +825,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">raise</span> <span class="n">UnsupportedBatchProviderError</span><span class="p">(</span>
             <span class="s2">"model_id must be written as '&lt;provider&gt;:&lt;model&gt;' (e.g. 'openai:gpt-5') to "</span>
             <span class="sa">f</span><span class="s2">"select a batch adapter; got </span><span class="si">{</span><span class="n">model_id</span><span class="si">!r}</span><span class="s2">. Set it on the operator or in the "</span>
-            <span class="s2">"connection's Model field."</span>
+            <span class="s2">"connection's Model field, or set the connection's Default Model Provider."</span>
         <span class="p">)</span>
     <span class="n">prefix</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">bare</span> <span class="o">=</span> <span class="n">model_id</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">bare</span><span class="p">:</span>
@@ -836,7 +848,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        accept this connection type (e.g. ``pydanticai_azure`` today).</span>
 <span class="sd">    """</span>
     <span class="n">prefix</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">split_model_id</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>
-    <span class="n">adapter_cls</span> <span class="o">=</span> <span class="n">import_adapter_class</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
+    <span class="n">adapter_cls</span> <span class="o">=</span> <span class="n">import_adapter_class</span><span class="p">(</span><span class="n">adapter_name_for_prefix</span><span class="p">(</span><span class="n">prefix</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">conn_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">adapter_cls</span><span class="o">.</span><span class="n">conn_types</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">BatchProviderNotYetSupportedError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"The </span><span class="si">{</span><span class="n">prefix</span><span class="si">!r}</span><span class="s2"> batch adapter does not support connection type </span><span class="si">{</span><span class="n">conn_type</span><span class="si">!r}</span><span class="s2">; it "</span>

@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="OpenLineage Spark Integration" href="spark.html" />
@@ -917,6 +917,7 @@ the complete job hierarchy and information about the root of the job hierarchy.<
 <div><ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_job_namespace()</span></code> - Returns OpenLineage namespace for a given task_instance</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_job_name(task_instance)</span></code> - Returns OpenLineage job name for a given task_instance</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lineage_job_type()</span></code> - Returns OpenLineage job type facet fields (<code class="docutils literal notranslate"><span class="pre">processingType</span></code>, <code class="docutils literal notranslate"><span class="pre">integration</span></code>, <code class="docutils literal notranslate"><span class="pre">jobType</span></code>) of an Airflow task</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_run_id(task_instance)</span></code> - Returns the generated OpenLineage run id for a given task_instance</p></li>
 </ul>
 </div></blockquote>
@@ -958,6 +959,9 @@ to external systems, downstream DAGs, or other processing frameworks:</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_root_job_namespace(task_instance)</span></code> - Returns OpenLineage namespace of root job of a given task_instance</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_root_job_name(task_instance)</span></code> - Returns OpenLineage job name of root job of a given task_instance</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">lineage_root_run_id(task_instance)</span></code> - Returns OpenLineage run ID of root run of a given task_instance</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lineage_root_job_type(task_instance)</span></code> - Returns OpenLineage job type facet fields (<code class="docutils literal notranslate"><span class="pre">processingType</span></code>, <code class="docutils literal notranslate"><span class="pre">integration</span></code>,
+<code class="docutils literal notranslate"><span class="pre">jobType</span></code>) of root job of a given task_instance, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the root comes from the DagRun conf and its job type
+is missing or invalid</p></li>
 </ul>
 </div></blockquote>
 <p>forward the Airflow task’s root information into the child job and should be used as <strong>root</strong> information when configuring child jobs.
@@ -974,6 +978,30 @@ This allows the child job to maintain the complete job hierarchy, especially in 
 <span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="job-type-macros">
+<h3>Job type macros<a class="headerlink" href="#job-type-macros" title="Link to this heading">¶</a></h3>
+<p>Unlike the other <code class="docutils literal notranslate"><span class="pre">lineage_*</span></code> macros, <code class="docutils literal notranslate"><span class="pre">lineage_job_type()</span></code> and <code class="docutils literal notranslate"><span class="pre">lineage_root_job_type(task_instance)</span></code> return a
+dictionary (<code class="docutils literal notranslate"><span class="pre">lineage_root_job_type</span></code> may also return <code class="docutils literal notranslate"><span class="pre">None</span></code>) instead of a string. Rendered in a template as is,
+the dictionary becomes its Python representation (with single quotes, and <code class="docutils literal notranslate"><span class="pre">None</span></code> for an unknown type), which is not
+valid JSON. When the value is passed as a string, for example in a Spark conf or an HTTP payload, serialize it with
+the <code class="docutils literal notranslate"><span class="pre">tojson</span></code> filter:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PythonOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"trigger_external_job"</span><span class="p">,</span>
+    <span class="n">python_callable</span><span class="o">=</span><span class="n">call_external_api</span><span class="p">,</span>
+    <span class="n">op_kwargs</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">"parent_job_type"</span><span class="p">:</span> <span class="s2">"{{ macros.OpenLineageProviderPlugin.lineage_job_type() | tojson }}"</span><span class="p">,</span>
+        <span class="s2">"root_job_type"</span><span class="p">:</span> <span class="s2">"{{ macros.OpenLineageProviderPlugin.lineage_root_job_type(task_instance) | tojson }}"</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Alternatively, set <code class="docutils literal notranslate"><span class="pre">render_template_as_native_obj=True</span></code> on the Dag to get the dictionaries as they are, or call
+the macros directly from Python.</p>
+<p>When a Dag run is triggered with job types in its <code class="docutils literal notranslate"><span class="pre">openlineage</span></code> conf (<code class="docutils literal notranslate"><span class="pre">parentJobType</span></code> and <code class="docutils literal notranslate"><span class="pre">rootParentJobType</span></code>,
+as injected by <code class="docutils literal notranslate"><span class="pre">TriggerDagRunOperator</span></code>), they are added as the <code class="docutils literal notranslate"><span class="pre">jobType</span></code> facet of the parent and root jobs in
+the <code class="docutils literal notranslate"><span class="pre">ParentRunFacet</span></code>. Only complete job type information is supported - a value missing any of <code class="docutils literal notranslate"><span class="pre">processingType</span></code>,
+<code class="docutils literal notranslate"><span class="pre">integration</span></code> or <code class="docutils literal notranslate"><span class="pre">jobType</span></code> is ignored.</p>
 </section>
 <section id="joined-identifiers">
 <h3>Joined identifiers<a class="headerlink" href="#joined-identifiers" title="Link to this heading">¶</a></h3>
@@ -1120,6 +1148,7 @@ in a single operator configuration. This example shows how to use both parent an
 <li><a class="reference internal" href="#preserving-job-hierarchy-with-macros">Preserving Job Hierarchy with Macros</a><ul>
 <li><a class="reference internal" href="#lineage-job-run-macros">Lineage job &amp; run macros</a></li>
 <li><a class="reference internal" href="#lineage-root-macros">Lineage root macros</a></li>
+<li><a class="reference internal" href="#job-type-macros">Job type macros</a></li>
 <li><a class="reference internal" href="#joined-identifiers">Joined identifiers</a></li>
 <li><a class="reference internal" href="#example">Example</a></li>
 </ul>

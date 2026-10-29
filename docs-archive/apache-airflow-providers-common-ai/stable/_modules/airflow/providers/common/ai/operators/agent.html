@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -939,6 +939,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_dump_unregistered_models</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">registered</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">type</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return *value* with each model whose class is not in *registered* dumped to a JSON-compatible dict."""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">in</span> <span class="n">registered</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">value</span>
+        <span class="c1"># A python-mode model_dump() leaves values such as plain Enum members, HttpUrl and Path in the</span>
+        <span class="c1"># dict, and the default XCom serializer raises TypeError for those values.</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">)</span>
+    <span class="c1"># The default XCom serializer already pushes a subclass of list, tuple or dict, such as a NamedTuple</span>
+    <span class="c1"># or an OrderedDict, as the plain type. Building the plain type here does not change what a</span>
+    <span class="c1"># downstream task receives.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_dump_unregistered_models</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">registered</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">_dump_unregistered_models</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">registered</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">_dump_unregistered_models</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">registered</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+
 <span class="c1"># CancellableAgentRunMixin must precede BaseOperator so its on_kill overrides BaseOperator's</span>
 <span class="c1"># no-op. The other mixins only add methods, so they can trail BaseOperator. See the MRO guard</span>
 <span class="c1"># test in tests/unit/common/ai/mixins/test_cancellable_run.py.</span>
@@ -1006,9 +1026,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        ``agent_params`` still works, but stores each capability's repr</span>
 <span class="sd">        in the serialized Dag, and cannot be combined with this argument (the</span>
 <span class="sd">        task fails when it runs).</span>
-<span class="sd">    :param enable_tool_logging: When ``True`` (default), wraps the agent's</span>
-<span class="sd">        assembled function toolset in a ``LoggingToolset`` that logs tool calls</span>
-<span class="sd">        with timing at INFO level and arguments at DEBUG level. This includes</span>
+<span class="sd">    :param enable_tool_logging: When ``True`` (default), the operator appends a</span>
+<span class="sd">        ``ToolLoggingCapability``, whose ``get_wrapper_toolset`` wraps the agent's</span>
+<span class="sd">        assembled function toolset so that tool calls are logged</span>
+<span class="sd">        with timing at INFO level and arguments at DEBUG level. If ``capabilities``</span>
+<span class="sd">        already holds a ``ToolLoggingCapability``, the operator adds none and that</span>
+<span class="sd">        one's ``logger`` is used. Logging includes</span>
 <span class="sd">        tools supplied through ``toolsets=``, ``agent_params["tools"]``, and</span>
 <span class="sd">        capabilities, but not output tools, provider-native tools that run</span>
 <span class="sd">        server-side, or tools another capability adds through its own wrapper</span>
@@ -1889,22 +1912,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="c1"># The reviewer can approve, reject, or ask for a new answer, but cannot edit the answer text.</span>
             <span class="c1"># So the approved answer is the last answer the agent returned, and there is no need to parse</span>
             <span class="c1"># it back from that text.</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_under_review</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_model_output</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">output</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">iter_pydantic_models</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">)</span>
-            <span class="p">):</span>
-                <span class="c1"># A downstream task can load a model from XCom only if the worker registered the model's</span>
-                <span class="c1"># class. The worker registers the classes that iter_pydantic_models finds in output_type.</span>
-                <span class="c1"># iter_pydantic_models finds no class in a list of output types, an output marker, an output</span>
-                <span class="c1"># function, a TypeAliasType or a NewType, so the operator pushes the model as a dict. When</span>
-                <span class="c1"># iter_pydantic_models could not be imported, _serialize_model_output is always True, so the</span>
-                <span class="c1"># condition above never reaches the iter_pydantic_models call.</span>
-                <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_convert_output_for_xcom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_output_under_review</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_clear_usage_budget</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">output</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_model_output</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_convert_output_for_xcom</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
 
         <span class="c1"># Clean up the durable journal only after the run and every post-run step</span>
         <span class="c1"># that can still fail (the run-metadata and message-history XCom pushes</span>
@@ -1915,6 +1927,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">_durable_journal</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_clear_usage_budget</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">output</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_convert_output_for_xcom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the XCom value, with dicts in place of models that a downstream task could not load."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">output</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_model_output</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_CORE_WALKER</span><span class="p">:</span>
+            <span class="c1"># iter_pydantic_models could not be imported, so the worker registers no class.</span>
+            <span class="c1"># _serialize_model_output is always True when that import fails, so a model at the top level was</span>
+            <span class="c1"># already dumped above. The class of a model inside a list, tuple or dict is not registered</span>
+            <span class="c1"># either, so this call passes an empty set of registered classes to dump that model too.</span>
+            <span class="k">return</span> <span class="n">_dump_unregistered_models</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
+        <span class="c1"># A downstream task can load a model from XCom only if the worker registered the model's class.</span>
+        <span class="c1"># The worker registers the classes that iter_pydantic_models finds in output_type.</span>
+        <span class="c1"># iter_pydantic_models finds no class in a list of output types, an output marker, an output</span>
+        <span class="c1"># function, a TypeAliasType or a NewType. For these output types the operator pushes each model</span>
+        <span class="c1"># as a dict, including models inside a list, tuple or dict.</span>
+        <span class="k">return</span> <span class="n">_dump_unregistered_models</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">set</span><span class="p">(</span><span class="n">iter_pydantic_models</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">)))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_pause_for_tool_approval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">attempt_usage</span><span class="p">:</span> <span class="n">RunUsage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>

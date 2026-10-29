@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -729,6 +729,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">LLMBatchStaleStateError</span><span class="p">,</span>
     <span class="n">LLMBatchTimeoutError</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="p">,</span>
+    <span class="n">PydanticAIHook</span><span class="p">,</span>
+    <span class="n">_has_recognized_provider_prefix</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.triggers.llm_batch</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMBatchTrigger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span><span class="p">,</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">ObjectStoragePath</span><span class="p">,</span> <span class="n">conf</span>
 
@@ -780,7 +785,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        ``pydanticai`` connection today.</span>
 <span class="sd">    :param model_id: Model identifier as ``"&lt;provider&gt;:&lt;model&gt;"`` (e.g.</span>
 <span class="sd">        ``"openai:gpt-5"``). Falls back to the connection's Model field, as</span>
-<span class="sd">        ``LLMOperator`` does.</span>
+<span class="sd">        ``LLMOperator`` does. A bare name takes the connection's Default</span>
+<span class="sd">        Provider, and ``openai-chat:`` selects the OpenAI adapter.</span>
 <span class="sd">    :param system_prompt: System-level instructions applied to every request</span>
 <span class="sd">        that does not set its own ``system_prompt`` override.</span>
 <span class="sd">    :param output_type: Expected output type. Default ``str``. Set to a</span>
@@ -991,9 +997,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_model_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""``model_id`` on the operator wins; otherwise the connection's Model field, as ``LLMOperator`` does."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_id</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_id</span>
-        <span class="k">return</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"model"</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qualify_model_id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_id</span> <span class="ow">or</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"model"</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span> <span class="n">conn</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_qualify_model_id</span><span class="p">(</span><span class="n">model_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Prefix a bare model name with the connection's Default Model Provider, as ``PydanticAIHook`` does.</span>
+
+<span class="sd">        Only the generic ``pydanticai`` type reads ``extra["model_provider"]``, and a name whose</span>
+<span class="sd">        segment before the first ``:`` is already a pydantic-ai provider is left as is, so the</span>
+<span class="sd">        same connection and name select the same platform on ``@task.llm`` and here.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">model_id</span> <span class="ow">or</span> <span class="n">conn</span><span class="o">.</span><span class="n">conn_type</span> <span class="o">!=</span> <span class="n">PydanticAIHook</span><span class="o">.</span><span class="n">conn_type</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">model_id</span>
+        <span class="n">default_provider</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">MODEL_PROVIDER_EXTRA_KEY</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">default_provider</span> <span class="ow">or</span> <span class="n">_has_recognized_provider_prefix</span><span class="p">(</span><span class="n">model_id</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">model_id</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">default_provider</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">model_id</span><span class="si">}</span><span class="s2">"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Connection</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">BaseHook</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">)</span>
@@ -1027,6 +1047,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">output_schema</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">json_schema</span> <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">is_structured</span> <span class="k">else</span> <span class="s2">"str"</span>
 
         <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">request</span> <span class="ow">in</span> <span class="n">requests</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"model"</span><span class="p">):</span>
+                <span class="n">request</span><span class="p">[</span><span class="s2">"model"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qualify_model_id</span><span class="p">(</span><span class="n">request</span><span class="p">[</span><span class="s2">"model"</span><span class="p">],</span> <span class="n">conn</span><span class="p">)</span>
         <span class="n">model_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_model_id</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
         <span class="n">adapter_name</span><span class="p">,</span> <span class="n">adapter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_adapter</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
         <span class="n">_</span><span class="p">,</span> <span class="n">bare_model</span> <span class="o">=</span> <span class="n">dispatch</span><span class="o">.</span><span class="n">split_model_id</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>

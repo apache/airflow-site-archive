@@ -44,6 +44,7 @@ Functions
    airflow.providers.openlineage.utils.utils.get_dag_run_dag_and_task_from_ti
    airflow.providers.openlineage.utils.utils.build_task_event_run_facets
    airflow.providers.openlineage.utils.utils.build_task_event_job_facets
+   airflow.providers.openlineage.utils.utils.get_airflow_job_type
    airflow.providers.openlineage.utils.utils.get_task_parent_run_facet
    airflow.providers.openlineage.utils.utils.get_root_information_from_dagrun_conf
    airflow.providers.openlineage.utils.utils.get_parent_information_from_dagrun_conf
@@ -66,9 +67,11 @@ Functions
    airflow.providers.openlineage.utils.utils.get_airflow_job_facet
    airflow.providers.openlineage.utils.utils.get_airflow_state_run_facet
    airflow.providers.openlineage.utils.utils.is_dag_run_asset_triggered
+   airflow.providers.openlineage.utils.utils.get_task_loop_info
+   airflow.providers.openlineage.utils.utils.get_task_instance_position
    airflow.providers.openlineage.utils.utils.get_orm_task_instance_positions
-   airflow.providers.openlineage.utils.utils.get_regional_task_instance_run_id
    airflow.providers.openlineage.utils.utils.build_task_instance_ol_run_id
+   airflow.providers.openlineage.utils.utils.get_task_instance_run_id
    airflow.providers.openlineage.utils.utils.is_valid_uuid
    airflow.providers.openlineage.utils.utils.build_dag_run_ol_run_id
    airflow.providers.openlineage.utils.utils.get_dag_job_dependency_facet
@@ -134,6 +137,11 @@ Module Contents
 .. py:function:: build_task_event_job_facets(*, task, dag, additional_job_facets = None)
 
    Build the task-event job-facet dict.
+
+
+.. py:function:: get_airflow_job_type(job_type)
+
+   Return the job type facet fields of an Airflow Dag or task.
 
 
 .. py:function:: get_task_parent_run_facet(parent_run_id, parent_job_name, parent_job_namespace = conf.namespace(), root_parent_run_id = None, root_parent_job_name = None, root_parent_job_namespace = None, dr_conf = None)
@@ -328,7 +336,7 @@ Module Contents
 
 
 
-.. py:class:: TaskInstanceInfo(obj)
+.. py:class:: TaskInstanceInfo(obj, position = None, dag = None, dag_run = None, end_date = None)
 
    Bases: :py:obj:`InfoJsonEncodable`
 
@@ -337,11 +345,19 @@ Module Contents
 
 
    .. py:attribute:: includes
-      :value: ['duration', 'log_url', 'pool', 'queued_dttm', 'try_number']
+      :value: ['log_url', 'max_tries', 'pool', 'queued_dttm', 'state', 'try_number']
 
 
 
    .. py:attribute:: casts
+
+
+   .. py:method:: get_rendered_map_index(ti)
+      :staticmethod:
+
+
+      Return the label a mapped task rendered with ``map_index_template``, as the worker sends it.
+
 
 
 .. py:class:: AssetInfo(obj, asset_type = 'asset', source_alias = None)
@@ -421,7 +437,7 @@ Module Contents
 
 
    .. py:attribute:: excludes
-      :value: ['_BaseOperator__instantiated', '_BaseOperator__init_kwargs', '_dag', '_hook', '_log',...
+      :value: ['_BaseOperator__instantiated', '_BaseOperator__init_kwargs', '_dag', 'dag', 'expand_input',...
 
 
 
@@ -436,6 +452,9 @@ Module Contents
    .. py:attribute:: renames
 
 
+   .. py:attribute:: casts
+
+
    .. py:attribute:: includes
       :value: ['downstream_group_ids', 'downstream_task_ids', 'prefix_group_id', 'tooltip',...
 
@@ -447,7 +466,7 @@ Module Contents
 
 .. py:function:: get_airflow_debug_facet()
 
-.. py:function:: get_airflow_run_facet(dag_run, dag, task_instance, task, task_uuid, include_full_task_info = False)
+.. py:function:: get_airflow_run_facet(dag_run, dag, task_instance, task, task_uuid, include_full_task_info = False, ti_position = None, end_date = None)
 
 .. py:function:: get_airflow_job_facet(dag_run)
 
@@ -460,11 +479,13 @@ Module Contents
 
 .. py:class:: TaskInstancePosition
 
-   Where a task instance runs: inside a loop body or not, and the map index users see.
+   Where a task instance runs: in a loop or not, the map index users see, and its loop iteration.
 
-   A plain mapped task keeps the region of its own expansion, so its dag, task, try, logical date and
-   map index stay unique; inside a loop they repeat on every pass, so only the execution UUID identifies
-   the run.
+   The loop fields are ``None`` outside a loop, and also when they can't be known. A runtime task instance
+   tells all of them, and ``expanded_ti_count`` for a mapped task, through its ``loop`` and
+   ``expanded_ti_count``, read by ``get_task_instance_position``. A stored one tells only what its task and
+   region rows do: the iteration of a task that isn't mapped, from its ``region_index``.
+   ``AirflowRunFacet.json`` describes what these fields mean in events.
 
 
    .. py:attribute:: in_loop
@@ -475,15 +496,62 @@ Module Contents
       :type:  int
 
 
+   .. py:attribute:: loop_index
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: loop_region_id
+      :type:  uuid.UUID | None
+      :value: None
+
+
+
+   .. py:attribute:: loop_trajectory
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: loop_forked_from_region_id
+      :type:  uuid.UUID | None
+      :value: None
+
+
+
+   .. py:attribute:: loop_resumes_from_index
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: expanded_ti_count
+      :type:  int | None
+      :value: None
+
+
+
+.. py:function:: get_task_loop_info(task)
+
+   Describe the loop around a task as ``task.loop``, or return None for a task outside a known loop.
+
+
+.. py:function:: get_task_instance_position(task_instance)
+
+   Place a task instance with its loop iteration, once per event, to pass to ``get_airflow_run_facet``.
+
+
 .. py:function:: get_orm_task_instance_positions(task_instances, *, session)
 
    Place stored task instances, reading the regions of those without their task in one query.
 
+   With a session, an instance whose task comes from another Dag version than its own, as the scheduler holds
+   the latest one for a Dag edited since, is placed from its region too.
+
    Server side only: workers never hold a session, and an instance that needs its region read without one
    raises instead of opening a connection.
 
-
-.. py:function:: get_regional_task_instance_run_id(task_instance)
 
 .. py:function:: build_task_instance_ol_run_id(dag_id, task_id, try_number, logical_date, map_index)
 
@@ -498,6 +566,14 @@ Module Contents
 
    Returns:
        A deterministic OpenLineage run ID for the task instance.
+
+
+.. py:function:: get_task_instance_run_id(task_instance, *, logical_date, position = None)
+
+   Return the OpenLineage ``runId`` of a task instance's attempt, which all its events must share.
+
+   In a loop the iterations share every coordinate but the attempt UUID, so that is the ``runId``. Otherwise
+   it is built from the coordinates.
 
 
 .. py:function:: is_valid_uuid(uuid_string)

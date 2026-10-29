@@ -4,22 +4,11 @@ airflow.providers.microsoft.azure.operators.msgraph
 .. py:module:: airflow.providers.microsoft.azure.operators.msgraph
 
 
-Attributes
-----------
-
-.. autoapisummary::
-
-   airflow.providers.microsoft.azure.operators.msgraph.CURSOR_KEY
-   airflow.providers.microsoft.azure.operators.msgraph.PAGE_KEY_PREFIX
-   airflow.providers.microsoft.azure.operators.msgraph.COMPLETED_KEY
-
-
 Classes
 -------
 
 .. autoapisummary::
 
-   airflow.providers.microsoft.azure.operators.msgraph.PaginationCursor
    airflow.providers.microsoft.azure.operators.msgraph.MSGraphAsyncOperator
 
 
@@ -34,38 +23,6 @@ Functions
 
 Module Contents
 ---------------
-
-.. py:data:: CURSOR_KEY
-   :value: 'msgraph_cursor'
-
-
-.. py:data:: PAGE_KEY_PREFIX
-   :value: 'msgraph_page_'
-
-
-.. py:data:: COMPLETED_KEY
-   :value: 'msgraph_completed'
-
-
-.. py:class:: PaginationCursor
-
-   Bases: :py:obj:`TypedDict`
-
-
-   Where a durable MSGraphAsyncOperator continues: the next link and the number of pages kept.
-
-
-   .. py:attribute:: url
-      :type:  str
-
-
-   .. py:attribute:: query_parameters
-      :type:  dict[str, Any] | None
-
-
-   .. py:attribute:: pages
-      :type:  int
-
 
 .. py:function:: default_event_handler(event = None, **context)
 
@@ -109,9 +66,10 @@ Module Contents
        crash, resumes instead of starting over (default is False). Every processed page is kept with the
        link to the next one, so the retry continues at the page it stopped at. The result of a request
        that is not a GET is kept too, so the retry returns it instead of sending the request again. A
-       crash between a response and its write to the store still repeats that one request. Pages are
-       stored as they are, so pages larger than the store's ``max_value_storage_bytes`` need a state
-       store backend that offloads large values. Needs Airflow 3.3 or later.
+       crash between a response and its write to the store still repeats that one request. The pages
+       are removed from the store once the result is returned. Pages are stored as they are, so pages
+       larger than the store's ``max_value_storage_bytes`` need a state store backend that offloads
+       large values. Needs Airflow 3.3 or later.
 
 
    .. py:attribute:: template_fields
@@ -243,6 +201,11 @@ Module Contents
    .. py:method:: pull_pages(task_state_store)
 
       Return the results of the pages processed so far, kept in the task state store.
+
+      A page is kept wrapped in a dict, so a page whose result is ``None`` is told apart from a page
+      that is gone, for instance because it expired under ``[state_store] default_retention_days``.
+      A missing page removes the pages and the cursor, so the next try starts again from the first page
+      instead of returning results with a hole in them.
 
 
 

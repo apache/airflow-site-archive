@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="Troubleshooting" href="troubleshooting.html" />
@@ -734,9 +734,9 @@ environment variables. If core tracing is not enabled in the worker process,
 no GenAI spans are emitted.</p></li>
 <li><p><strong>Correlation.</strong> The worker opens a task span before the operator runs, so the
 agent’s spans nest under it and share its <code class="docutils literal notranslate"><span class="pre">trace_id</span></code>.
-<a class="reference internal" href="_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a> and
-<a class="reference internal" href="_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator" title="airflow.providers.common.ai.operators.llm.LLMOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMOperator</span></code></a> (and their
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> decorator forms) additionally stamp the
+<a class="reference internal" href="_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a>,
+<a class="reference internal" href="_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator" title="airflow.providers.common.ai.operators.llm.LLMOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMOperator</span></code></a> and its SQL / branch /
+file-analysis / schema-compare subclasses (and their decorator forms) additionally stamp the
 task-instance identity on every GenAI span they emit: the five keys core
 tracing already puts on the task span (<code class="docutils literal notranslate"><span class="pre">airflow.dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.task_id</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.dag_run.run_id</span></code>,
 <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.try_number</span></code>, <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.map_index</span></code>) plus
@@ -748,8 +748,8 @@ An automatic retry reuses the task instance’s persisted trace context, so all
 attempts share one trace and appear as repeated task-run spans on it,
 distinguished by <code class="docutils literal notranslate"><span class="pre">try</span> <span class="pre">number</span></code>. Only a manual clear or rerun regenerates the
 context and starts a new trace.</p></li>
-<li><p><strong>Run join key.</strong> For an <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> or <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> run (and their
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> decorator equivalents), the task-instance id
+<li><p><strong>Run join key.</strong> For an <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> run or a run of <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> or one of
+its subclasses (and their decorator equivalents), the task-instance id
 (unique per attempt, since Airflow regenerates it on each retry) is passed to
 pydantic-ai as the run’s <code class="docutils literal notranslate"><span class="pre">run_id</span></code>. It surfaces on the run’s GenAI spans as
 <code class="docutils literal notranslate"><span class="pre">gen_ai.agent.call.id</span></code>, and the operator also exposes it, alongside the run’s
@@ -777,29 +777,24 @@ namespaced key <code class="docutils literal notranslate"><span class="pre">__AI
 <code class="docutils literal notranslate"><span class="pre">usage</span></code> above, so a downstream task, a Jinja template, or a REST client can read which
 model responded without parsing the decision record or a span
 (<code class="docutils literal notranslate"><span class="pre">ti.xcom_pull(task_ids=&quot;my_agent&quot;,</span> <span class="pre">key=&quot;__AIRFLOW__COMMON_AI_MODEL_NAME__&quot;)</span></code>).
-Only <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> /
-<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> push it today; like <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and
-<code class="docutils literal notranslate"><span class="pre">usage</span></code>, with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code> it is the initial run’s model, not a
-human-feedback regeneration’s, since <code class="docutils literal notranslate"><span class="pre">regenerate_with_feedback</span></code> doesn’t re-push it.
-<code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>’s subclasses that override <code class="docutils literal notranslate"><span class="pre">execute()</span></code> instead of calling
-<code class="docutils literal notranslate"><span class="pre">super().execute()</span></code> – <code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMSQLQueryOperator</span></code>,
-<code class="docutils literal notranslate"><span class="pre">LLMSchemaCompareOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code> – don’t publish it yet;
-this is upcoming work.</p></li>
-<li><p><strong>Scope.</strong> The <code class="docutils literal notranslate"><span class="pre">run_id</span></code> / <code class="docutils literal notranslate"><span class="pre">usage</span></code> XComs, the model name, and the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code>
-identity attributes come from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> /
-<code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code>, apart from a Strands, ADK or OpenAI Agents SDK agent run inside
-<code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code> (see below). The other LLM operators still emit GenAI spans
-correlated to the task span by nesting, but without the identity attributes, the run
-join key, the model name, or a <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom.</p></li>
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> and its subclasses (and their decorator forms)
+push it; like <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">usage</span></code>, with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code> it is the initial
+run’s model, not a human-feedback regeneration’s, since <code class="docutils literal notranslate"><span class="pre">regenerate_with_feedback</span></code>
+doesn’t re-push it.</p></li>
+<li><p><strong>Scope.</strong> The <code class="docutils literal notranslate"><span class="pre">run_id</span></code> / <code class="docutils literal notranslate"><span class="pre">usage</span></code> XComs and the model name come from
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> and its subclasses (and their decorator forms).
+Those operators also stamp the <code class="docutils literal notranslate"><span class="pre">airflow.*</span></code> identity attributes on their spans, and so
+does a Strands, ADK or OpenAI Agents SDK agent run inside <code class="docutils literal notranslate"><span class="pre">agent_framework_tracing</span></code>
+(see below).</p></li>
 <li><p id="howto-observability-model-tab"><strong>Model tab.</strong> Separately from tracing, the provider adds an “AI Model” tab to the
 task-instance page showing the resolved model name and the <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom above as a
 readable table, including an estimated cost. It needs Airflow &gt;= 3.4, since it relies on
 the <code class="docutils literal notranslate"><span class="pre">applies_to</span></code> operator scoping core added in that version to show up only for
-<code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> / <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> runs (and their <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>
-decorator forms) – the match is on the exact operator name, so a subclass of either does
-not get the tab automatically. Like the span-level cost above, the tab’s number is a
-best-effort <code class="docutils literal notranslate"><span class="pre">genai-prices</span></code> estimate, not provider-reported billing. With a custom XCom
-backend that offloads large values to external storage (e.g. <code class="docutils literal notranslate"><span class="pre">common.io</span></code> with
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> runs and runs of <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> and its SQL / branch / file-analysis /
+schema-compare subclasses (and their decorator forms) – the match is on the exact
+operator name, so a subclass of your own does not get the tab automatically. Like the
+span-level cost above, the tab’s number is a best-effort <code class="docutils literal notranslate"><span class="pre">genai-prices</span></code> estimate, not
+provider-reported billing. With a custom XCom backend that offloads large values to external storage (e.g. <code class="docutils literal notranslate"><span class="pre">common.io</span></code> with
 <code class="docutils literal notranslate"><span class="pre">xcom_objectstorage_threshold</span></code> set low), the tab reads the stored reference rather than
 the real value, since the public XCom endpoint it calls never runs the backend’s
 <code class="docutils literal notranslate"><span class="pre">deserialize_value</span></code>: the model name badge would show the reference string (e.g. an
@@ -952,8 +947,8 @@ carries three tags:</p>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">framework</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pydantic_ai</span></code> for <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and your own Pydantic AI agents;
-<code class="docutils literal notranslate"><span class="pre">strands</span></code>, <code class="docutils literal notranslate"><span class="pre">adk</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain</span></code>, <code class="docutils literal notranslate"><span class="pre">anthropic</span></code> or <code class="docutils literal notranslate"><span class="pre">openai_agents</span></code> for a call
-through that framework’s adapter;
+<code class="docutils literal notranslate"><span class="pre">strands</span></code>, <code class="docutils literal notranslate"><span class="pre">adk</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain</span></code>, <code class="docutils literal notranslate"><span class="pre">anthropic</span></code>, <code class="docutils literal notranslate"><span class="pre">openai_agents</span></code> or <code class="docutils literal notranslate"><span class="pre">claude_agent_sdk</span></code>
+for a call through that framework’s adapter;
 <code class="docutils literal notranslate"><span class="pre">none</span></code> for a call to a toolset’s <code class="docutils literal notranslate"><span class="pre">airflow_tools()</span></code> made without an adapter.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">outcome</span></code></p></td>

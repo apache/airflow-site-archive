@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="Releasing security patches" href="security.html" />
@@ -692,9 +692,88 @@ window.PAGEFIND_PATH = './_pagefind/pagefind.js';
 <h1 data-pagefind-weight="9.0">Changelog<a class="headerlink" href="#changelog" title="Link to this heading">¶</a></h1>
 <section id="id1">
 <h2>1.1.0<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
-<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-10-21</span></code></p><section id="features">
+<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-10-21</span></code></p><div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><strong>Significant change: AgentOperator output serialization</strong></p>
+<p>The worker cannot register a model class for XCom deserialization when <code class="docutils literal notranslate"><span class="pre">output_type</span></code> is a
+list of output types such as <code class="docutils literal notranslate"><span class="pre">[Summary,</span> <span class="pre">int]</span></code>, an output marker such as
+<code class="docutils literal notranslate"><span class="pre">ToolOutput(Summary)</span></code>, an output function, a <code class="docutils literal notranslate"><span class="pre">TypeAliasType</span></code> or a <code class="docutils literal notranslate"><span class="pre">NewType</span></code>. For these
+output types, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> now push each model in the output as a
+JSON-compatible dict (<code class="docutils literal notranslate"><span class="pre">model_dump(mode=&quot;json&quot;)</span></code>), including models inside a list, tuple or
+dict. On Airflow &lt; 3.3, the worker registers no model class at all, so a model inside a list,
+tuple or dict is now pushed as a JSON-compatible dict for every <code class="docutils literal notranslate"><span class="pre">output_type</span></code>. A top-level
+model is still dumped with plain <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> when <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> is set or on
+Airflow &lt; 3.3.</p>
+<p>The new behaviour changes the type that a downstream task receives after an upgrade.
+Version 1.0.0 pushed these models as model instances. It dumped a top-level model with
+plain <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> only in HITL review, with <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> or on
+Airflow &lt; 3.3. A downstream task loaded a model instance when the model’s class was listed in
+<code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code>, or on Airflow &gt;= 3.3 when another task in the
+same Dag declared the class as its <code class="docutils literal notranslate"><span class="pre">output_type</span></code>. That downstream task now gets a dict and
+must read <code class="docutils literal notranslate"><span class="pre">result[&quot;field&quot;]</span></code> instead of <code class="docutils literal notranslate"><span class="pre">result.field</span></code>. In HITL review on Airflow &gt;= 3.3
+without <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code>, values such as <code class="docutils literal notranslate"><span class="pre">datetime</span></code>, <code class="docutils literal notranslate"><span class="pre">date</span></code>, <code class="docutils literal notranslate"><span class="pre">timedelta</span></code>,
+<code class="docutils literal notranslate"><span class="pre">UUID</span></code> and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> in a top-level model now arrive as strings, for example
+<code class="docutils literal notranslate"><span class="pre">&quot;PT1M30S&quot;</span></code> for a <code class="docutils literal notranslate"><span class="pre">timedelta</span></code>. Tuples and sets in that model now arrive as lists. See
+<a class="reference internal" href="structured_output.html"><span class="doc">Structured output and XCom</span></a>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The following changes affect code written against 1.0.0:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">PydanticAIHook</span></code>: when a connection supplies credentials (password or host) and the provider class
+rejects the resulting keyword arguments (<code class="docutils literal notranslate"><span class="pre">TypeError</span></code>), the hook now raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. In 1.0.0
+it logged a warning and fell back to environment-variable authentication, which could authenticate
+as a different identity than the connection. Fix the connection fields for that provider, or remove
+the credentials from the connection if environment-variable authentication is what you want.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MCPHook.get_conn()</span></code> when optional MCP dependencies are missing, and
+<code class="docutils literal notranslate"><span class="pre">airflow.providers.common.ai.policies.retry</span></code> when imported without the Airflow <code class="docutils literal notranslate"><span class="pre">RetryPolicy</span></code>
+support (Airflow older than 3.3) now raise <code class="docutils literal notranslate"><span class="pre">AirflowOptionalProviderFeatureException</span></code> instead of
+<code class="docutils literal notranslate"><span class="pre">ImportError</span></code>. It is not an <code class="docutils literal notranslate"><span class="pre">ImportError</span></code> subclass (it derives from <code class="docutils literal notranslate"><span class="pre">AirflowException</span></code>), so a
+Dag that guards the import with <code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">ImportError:</span></code> as in the 1.0.0 example Dag now fails to
+parse on those versions. Catch both, importing the exception from
+<code class="docutils literal notranslate"><span class="pre">airflow.providers.common.compat.sdk</span></code> (works on Airflow 2.11 and 3.x):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.policies.retry</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRetryPolicy</span>
+<span class="k">except</span> <span class="p">(</span><span class="ne">ImportError</span><span class="p">,</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">):</span>
+    <span class="n">LLMRetryPolicy</span> <span class="o">=</span> <span class="kc">None</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">LlamaIndexHook</span></code> and <code class="docutils literal notranslate"><span class="pre">LangChainHook</span></code> (both experimental, see <a class="reference internal" href="stability.html"><span class="doc">Stable and experimental features</span></a>):
+passing <code class="docutils literal notranslate"><span class="pre">embed_model</span></code> and <code class="docutils literal notranslate"><span class="pre">llm_model</span></code> positionally is deprecated. In 1.0.0 they were the third and
+fourth positional parameters (after <code class="docutils literal notranslate"><span class="pre">llm_conn_id</span></code> and <code class="docutils literal notranslate"><span class="pre">embed_conn_id</span></code>), and the two hooks listed
+them in opposite order (<code class="docutils literal notranslate"><span class="pre">embed_model</span></code> then <code class="docutils literal notranslate"><span class="pre">llm_model</span></code> for <code class="docutils literal notranslate"><span class="pre">LlamaIndexHook</span></code>, <code class="docutils literal notranslate"><span class="pre">llm_model</span></code> then
+<code class="docutils literal notranslate"><span class="pre">embed_model</span></code> for <code class="docutils literal notranslate"><span class="pre">LangChainHook</span></code>). Positional calls still work and emit an
+<code class="docutils literal notranslate"><span class="pre">AirflowProviderDeprecationWarning</span></code>, but support will be removed in a future release. Pass them by
+keyword, e.g. <code class="docutils literal notranslate"><span class="pre">LlamaIndexHook(llm_model=&quot;gpt-5&quot;)</span></code>, which also avoids the meanings swapping between
+the two hooks.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The experimental <code class="docutils literal notranslate"><span class="pre">LoggingToolset</span></code> is removed from the public API. Importing it from either
+<code class="docutils literal notranslate"><span class="pre">airflow.providers.common.ai.toolsets.LoggingToolset</span></code> (exported from the package since
+1.0.0, see #74449 under 1.0.0 Features below) or
+<code class="docutils literal notranslate"><span class="pre">airflow.providers.common.ai.toolsets.logging.LoggingToolset</span></code> (public since 0.1.0) now
+raises <code class="docutils literal notranslate"><span class="pre">ImportError</span></code>. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code>
+still logs tool calls through <code class="docutils literal notranslate"><span class="pre">enable_tool_logging</span></code>. To log tool calls of an agent you
+build yourself, pass <code class="docutils literal notranslate"><span class="pre">capabilities=[ToolLoggingCapability()]</span></code> to the pydantic-ai <code class="docutils literal notranslate"><span class="pre">Agent</span></code>
+(import it from <code class="docutils literal notranslate"><span class="pre">airflow.providers.common.ai.toolsets.logging</span></code>); its <code class="docutils literal notranslate"><span class="pre">logger</span></code> argument
+sets the logger. See <a class="reference internal" href="stability.html"><span class="doc">Stable and experimental features</span></a>.</p>
+</div>
+<section id="features">
 <h3>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h3>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Publish</span> <span class="pre">usage,</span> <span class="pre">run</span> <span class="pre">id</span> <span class="pre">and</span> <span class="pre">model</span> <span class="pre">name</span> <span class="pre">from</span> <span class="pre">LLMOperator's</span> <span class="pre">subclasses</span> <span class="pre">(#75208)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Let</span> <span class="pre">a</span> <span class="pre">generic</span> <span class="pre">pydanticai</span> <span class="pre">connection</span> <span class="pre">set</span> <span class="pre">a</span> <span class="pre">default</span> <span class="pre">model</span> <span class="pre">provider</span> <span class="pre">(#75909)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">async</span> <span class="pre">aget_conn</span> <span class="pre">and</span> <span class="pre">acreate_agent</span> <span class="pre">to</span> <span class="pre">PydanticAIHook</span> <span class="pre">(#74150)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Use</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">toolsets</span> <span class="pre">with</span> <span class="pre">the</span> <span class="pre">Claude</span> <span class="pre">Agent</span> <span class="pre">SDK</span> <span class="pre">through</span> <span class="pre">AirflowTools</span> <span class="pre">(#74026)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">multimodal</span> <span class="pre">prompts</span> <span class="pre">with</span> <span class="pre">require_approval</span> <span class="pre">in</span> <span class="pre">LLM</span> <span class="pre">operators</span> <span class="pre">(#74388)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">emit_message_history</span> <span class="pre">to</span> <span class="pre">record</span> <span class="pre">an</span> <span class="pre">agent</span> <span class="pre">transcript</span> <span class="pre">without</span> <span class="pre">seeding</span> <span class="pre">it</span> <span class="pre">(#74811)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Push</span> <span class="pre">LLMOperator's</span> <span class="pre">token</span> <span class="pre">usage</span> <span class="pre">and</span> <span class="pre">cost</span> <span class="pre">to</span> <span class="pre">XCom</span> <span class="pre">(#74355)</span></code></p></li>
 </ul>
@@ -702,6 +781,10 @@ window.PAGEFIND_PATH = './_pagefind/pagefind.js';
 <section id="bug-fixes">
 <h3>Bug Fixes<a class="headerlink" href="#bug-fixes" title="Link to this heading">¶</a></h3>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Report</span> <span class="pre">invalid</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">hook</span> <span class="pre">configuration</span> <span class="pre">instead</span> <span class="pre">of</span> <span class="pre">silently</span> <span class="pre">changing</span> <span class="pre">authentication</span> <span class="pre">(#74451)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Load</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">plugin</span> <span class="pre">tabs</span> <span class="pre">when</span> <span class="pre">the</span> <span class="pre">browser</span> <span class="pre">reaches</span> <span class="pre">Airflow</span> <span class="pre">on</span> <span class="pre">another</span> <span class="pre">origin</span> <span class="pre">(#75522)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">Common</span> <span class="pre">AI's</span> <span class="pre">AI</span> <span class="pre">Model</span> <span class="pre">tab</span> <span class="pre">for</span> <span class="pre">tasks</span> <span class="pre">inside</span> <span class="pre">a</span> <span class="pre">task</span> <span class="pre">loop</span> <span class="pre">(#75518)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Serialize</span> <span class="pre">unregistered</span> <span class="pre">AgentOperator</span> <span class="pre">output</span> <span class="pre">models</span> <span class="pre">as</span> <span class="pre">JSON-compatible</span> <span class="pre">dictionaries</span> <span class="pre">(#74729)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Use</span> <span class="pre">common.compat</span> <span class="pre">mask_secret</span> <span class="pre">in</span> <span class="pre">MCPHook</span> <span class="pre">(#75064)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Preserve</span> <span class="pre">SQL</span> <span class="pre">table</span> <span class="pre">allowlist</span> <span class="pre">validation</span> <span class="pre">with</span> <span class="pre">newer</span> <span class="pre">sqlglot</span> <span class="pre">and</span> <span class="pre">add</span> <span class="pre">OpenAI</span> <span class="pre">Decisions</span> <span class="pre">and</span> <span class="pre">System</span> <span class="pre">One</span> <span class="pre">to</span> <span class="pre">the</span> <span class="pre">connection</span> <span class="pre">vendor</span> <span class="pre">list</span> <span class="pre">(#73822)</span></code></p></li>
 </ul>
@@ -709,7 +792,18 @@ window.PAGEFIND_PATH = './_pagefind/pagefind.js';
 <section id="misc">
 <h3>Misc<a class="headerlink" href="#misc" title="Link to this heading">¶</a></h3>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Keep</span> <span class="pre">the</span> <span class="pre">Anthropic</span> <span class="pre">SDK</span> <span class="pre">below</span> <span class="pre">2</span> <span class="pre">until</span> <span class="pre">pydantic-ai</span> <span class="pre">supports</span> <span class="pre">it</span> <span class="pre">(#75640)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">List</span> <span class="pre">Meta</span> <span class="pre">among</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">external</span> <span class="pre">services</span> <span class="pre">and</span> <span class="pre">recognize</span> <span class="pre">pydantic-ai</span> <span class="pre">2.59</span> <span class="pre">providers</span> <span class="pre">(#75641)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Replace</span> <span class="pre">the</span> <span class="pre">experimental</span> <span class="pre">LoggingToolset</span> <span class="pre">API</span> <span class="pre">with</span> <span class="pre">ToolLoggingCapability</span> <span class="pre">(#74694)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Bump</span> <span class="pre">Vite</span> <span class="pre">to</span> <span class="pre">8.1.6</span> <span class="pre">(#75357)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Remove</span> <span class="pre">unused</span> <span class="pre">mypy</span> <span class="pre">suppressions</span> <span class="pre">in</span> <span class="pre">common</span> <span class="pre">providers</span> <span class="pre">(#75257)</span></code></p></li>
+</ul>
+</section>
+<section id="doc-only">
+<h3>Doc-only<a class="headerlink" href="#doc-only" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Rewrite</span> <span class="pre">the</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">sandbox</span> <span class="pre">configuration</span> <span class="pre">page</span> <span class="pre">around</span> <span class="pre">what</span> <span class="pre">users</span> <span class="pre">set</span> <span class="pre">up</span> <span class="pre">(#75826)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">an</span> <span class="pre">LLM</span> <span class="pre">task</span> <span class="pre">loop</span> <span class="pre">example</span> <span class="pre">that</span> <span class="pre">stops</span> <span class="pre">on</span> <span class="pre">a</span> <span class="pre">dollar</span> <span class="pre">or</span> <span class="pre">token</span> <span class="pre">budget</span> <span class="pre">(#75516)</span></code></p></li>
 </ul>
 </section>
 </section>
@@ -726,6 +820,9 @@ parsed. <code class="docutils literal notranslate"><span class="pre">agent_param
 <code class="docutils literal notranslate"><span class="pre">agent_params={&quot;retries&quot;:</span> <span class="pre">n}</span></code> becomes <code class="docutils literal notranslate"><span class="pre">output_retries=n</span></code>, and <code class="docutils literal notranslate"><span class="pre">tools</span></code>, <code class="docutils literal notranslate"><span class="pre">toolsets</span></code>,
 <code class="docutils literal notranslate"><span class="pre">capabilities</span></code> or <code class="docutils literal notranslate"><span class="pre">spec_file</span></code> move to <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>. See
 <a class="reference internal" href="operators/llm.html#howto-operator-llm"><span class="std std-ref">Single prompts: LLMOperator and &#64;task.llm</span></a>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
 <p>On Airflow &gt;= 3.3, the <code class="docutils literal notranslate"><span class="pre">usage_limits</span></code> of the <code class="docutils literal notranslate"><span class="pre">LLM*</span></code> operators (<code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>,
 <code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMSQLQueryOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMSchemaCompareOperator</span></code>,
 <code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code>) counts usage across every attempt of the task instance
@@ -913,8 +1010,8 @@ See <a class="reference internal" href="code_mode.html"><span class="doc">Code m
 <li><p><code class="docutils literal notranslate"><span class="pre">Require</span> <span class="pre">'common.sql'</span> <span class="pre">2.2.0</span> <span class="pre">for</span> <span class="pre">common.ai's</span> <span class="pre">SQL</span> <span class="pre">extras</span> <span class="pre">(#73867)</span></code></p></li>
 </ul>
 </section>
-<section id="doc-only">
-<h3>Doc-only<a class="headerlink" href="#doc-only" title="Link to this heading">¶</a></h3>
+<section id="id6">
+<h3>Doc-only<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Keep</span> <span class="pre">the</span> <span class="pre">custom-toolset</span> <span class="pre">example's</span> <span class="pre">version</span> <span class="pre">from</span> <span class="pre">changing</span> <span class="pre">the</span> <span class="pre">PyPI</span> <span class="pre">path</span> <span class="pre">(#74939)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">stale</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">docs</span> <span class="pre">and</span> <span class="pre">add</span> <span class="pre">a</span> <span class="pre">guide</span> <span class="pre">to</span> <span class="pre">writing</span> <span class="pre">a</span> <span class="pre">toolset</span> <span class="pre">(#74904)</span></code></p></li>
@@ -952,8 +1049,8 @@ See <a class="reference internal" href="code_mode.html"><span class="doc">Code m
 </ul>
 </section>
 </section>
-<section id="id6">
-<h2>0.10.0<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h2>
+<section id="id7">
+<h2>0.10.0<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-09-29</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p><code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code> now push a <code class="docutils literal notranslate"><span class="pre">decision</span></code> XCom on every run, next to
@@ -1008,16 +1105,16 @@ expressed as a connection URI scheme, so a connection stored in a secrets backen
 <code class="docutils literal notranslate"><span class="pre">conn_type</span></code> no longer matches its hook and the task fails to find it: re-create it with
 the underscored type (in the UI, pick the same vendor again and save).</p>
 </div>
-<section id="id7">
-<h3>Breaking changes<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h3>
+<section id="id8">
+<h3>Breaking changes<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Reject</span> <span class="pre">allowed_tables=None</span> <span class="pre">and</span> <span class="pre">allowed_tables=[]</span> <span class="pre">in</span> <span class="pre">SQLToolset</span> <span class="pre">so</span> <span class="pre">only</span> <span class="pre">omitting</span> <span class="pre">it</span> <span class="pre">allows</span> <span class="pre">every</span> <span class="pre">table</span> <span class="pre">(#73381,</span> <span class="pre">#73452)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">a</span> <span class="pre">decision</span> <span class="pre">policy</span> <span class="pre">so</span> <span class="pre">an</span> <span class="pre">LLM</span> <span class="pre">operator</span> <span class="pre">asks</span> <span class="pre">a</span> <span class="pre">person</span> <span class="pre">when</span> <span class="pre">the</span> <span class="pre">model</span> <span class="pre">is</span> <span class="pre">unsure</span> <span class="pre">(#73368)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">PydanticAI</span> <span class="pre">vendor</span> <span class="pre">connections</span> <span class="pre">not</span> <span class="pre">resolving</span> <span class="pre">from</span> <span class="pre">secrets</span> <span class="pre">backends</span> <span class="pre">(#72853)</span></code></p></li>
 </ul>
 </section>
-<section id="id8">
-<h3>Features<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h3>
+<section id="id9">
+<h3>Features<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Allow</span> <span class="pre">templated</span> <span class="pre">connection</span> <span class="pre">IDs</span> <span class="pre">in</span> <span class="pre">agent</span> <span class="pre">toolsets</span> <span class="pre">(#73578)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Cancel</span> <span class="pre">the</span> <span class="pre">agent</span> <span class="pre">run</span> <span class="pre">when</span> <span class="pre">a</span> <span class="pre">common.ai</span> <span class="pre">LLM</span> <span class="pre">or</span> <span class="pre">agent</span> <span class="pre">task</span> <span class="pre">is</span> <span class="pre">killed</span> <span class="pre">(#73495)</span></code></p></li>
@@ -1036,8 +1133,8 @@ the underscored type (in the UI, pick the same vendor again and save).</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">per-run</span> <span class="pre">cost</span> <span class="pre">limits</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">LLM</span> <span class="pre">and</span> <span class="pre">Agent</span> <span class="pre">operators</span> <span class="pre">(#71403)</span></code></p></li>
 </ul>
 </section>
-<section id="id9">
-<h3>Bug Fixes<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h3>
+<section id="id10">
+<h3>Bug Fixes<a class="headerlink" href="#id10" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Reject</span> <span class="pre">non-string</span> <span class="pre">prompts</span> <span class="pre">in</span> <span class="pre">LLMFileAnalysisOperator</span> <span class="pre">before</span> <span class="pre">reading</span> <span class="pre">files</span> <span class="pre">(#71734)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Reject</span> <span class="pre">durable</span> <span class="pre">replay</span> <span class="pre">and</span> <span class="pre">human-in-the-loop</span> <span class="pre">review</span> <span class="pre">when</span> <span class="pre">an</span> <span class="pre">agent</span> <span class="pre">holds</span> <span class="pre">a</span> <span class="pre">SandboxToolset</span> <span class="pre">(#73529)</span></code></p></li>
@@ -1048,8 +1145,8 @@ the underscored type (in the UI, pick the same vendor again and save).</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">Restore</span> <span class="pre">Dag-parse-time</span> <span class="pre">validation</span> <span class="pre">for</span> <span class="pre">common.ai</span> <span class="pre">operator</span> <span class="pre">arguments</span> <span class="pre">(#70628)</span></code></p></li>
 </ul>
 </section>
-<section id="id10">
-<h3>Misc<a class="headerlink" href="#id10" title="Link to this heading">¶</a></h3>
+<section id="id11">
+<h3>Misc<a class="headerlink" href="#id11" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Require</span> <span class="pre">pydantic-ai-slim</span> <span class="pre">2.33.0</span> <span class="pre">or</span> <span class="pre">newer</span> <span class="pre">so</span> <span class="pre">Anthropic</span> <span class="pre">models</span> <span class="pre">work</span> <span class="pre">with</span> <span class="pre">the</span> <span class="pre">anthropic</span> <span class="pre">1.x</span> <span class="pre">SDK</span> <span class="pre">(#73511)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Replace</span> <span class="pre">the</span> <span class="pre">retired</span> <span class="pre">gemini-2.0-flash</span> <span class="pre">example</span> <span class="pre">model</span> <span class="pre">in</span> <span class="pre">the</span> <span class="pre">Vertex</span> <span class="pre">connection</span> <span class="pre">placeholders</span> <span class="pre">and</span> <span class="pre">docs</span> <span class="pre">(#73516)</span></code></p></li>
@@ -1057,8 +1154,8 @@ the underscored type (in the UI, pick the same vendor again and save).</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">TypedDict</span> <span class="pre">type</span> <span class="pre">hints</span> <span class="pre">for</span> <span class="pre">AirflowPlugin</span> <span class="pre">list</span> <span class="pre">fields</span> <span class="pre">(#69761)</span></code></p></li>
 </ul>
 </section>
-<section id="id11">
-<h3>Doc-only<a class="headerlink" href="#id11" title="Link to this heading">¶</a></h3>
+<section id="id12">
+<h3>Doc-only<a class="headerlink" href="#id12" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Document</span> <span class="pre">sandbox</span> <span class="pre">enforcement,</span> <span class="pre">teardown</span> <span class="pre">and</span> <span class="pre">cost-limit</span> <span class="pre">scope</span> <span class="pre">for</span> <span class="pre">agents</span> <span class="pre">(#73589)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">a</span> <span class="pre">guide</span> <span class="pre">to</span> <span class="pre">developing</span> <span class="pre">and</span> <span class="pre">testing</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">tasks</span> <span class="pre">locally</span> <span class="pre">(#73602)</span></code></p></li>
@@ -1078,8 +1175,8 @@ the underscored type (in the UI, pick the same vendor again and save).</p>
 </ul>
 </section>
 </section>
-<section id="id12">
-<h2>0.9.0<a class="headerlink" href="#id12" title="Link to this heading">¶</a></h2>
+<section id="id13">
+<h2>0.9.0<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-09-14</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>A rejected <code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code> review now skips the direct downstream tasks – teardown tasks
@@ -1087,8 +1184,8 @@ excepted – instead of failing the task. Set <code class="docutils literal notr
 <code class="docutils literal notranslate"><span class="pre">ignore_downstream_trigger_rules=True</span></code> to skip every downstream task rather than only the direct
 ones.</p>
 </div>
-<section id="id13">
-<h3>Features<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h3>
+<section id="id14">
+<h3>Features<a class="headerlink" href="#id14" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">bzip2</span> <span class="pre">and</span> <span class="pre">xz</span> <span class="pre">compressed</span> <span class="pre">inputs</span> <span class="pre">in</span> <span class="pre">LLM</span> <span class="pre">file</span> <span class="pre">analysis</span> <span class="pre">(#70302)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">.md</span> <span class="pre">file</span> <span class="pre">support</span> <span class="pre">in</span> <span class="pre">LLMFileAnalysisOperator</span> <span class="pre">(#71611)</span></code></p></li>
@@ -1096,22 +1193,22 @@ ones.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">BaseManagedAgentToolset</span> <span class="pre">for</span> <span class="pre">vendor-managed</span> <span class="pre">AI</span> <span class="pre">agents</span> <span class="pre">(#71946)</span></code></p></li>
 </ul>
 </section>
-<section id="id14">
-<h3>Bug Fixes<a class="headerlink" href="#id14" title="Link to this heading">¶</a></h3>
+<section id="id15">
+<h3>Bug Fixes<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">require_approval</span> <span class="pre">preflight</span> <span class="pre">check</span> <span class="pre">to</span> <span class="pre">&#64;task.llm_schema_compare</span> <span class="pre">(#71688)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Skip</span> <span class="pre">downstream</span> <span class="pre">tasks</span> <span class="pre">instead</span> <span class="pre">of</span> <span class="pre">failing</span> <span class="pre">when</span> <span class="pre">an</span> <span class="pre">LLM</span> <span class="pre">branch</span> <span class="pre">review</span> <span class="pre">is</span> <span class="pre">rejected</span> <span class="pre">(#71073,</span> <span class="pre">#72183)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">Vertex</span> <span class="pre">AI</span> <span class="pre">hook</span> <span class="pre">silently</span> <span class="pre">discarding</span> <span class="pre">credentials</span> <span class="pre">when</span> <span class="pre">vertexai</span> <span class="pre">flag</span> <span class="pre">is</span> <span class="pre">set</span> <span class="pre">(#72012)</span></code></p></li>
 </ul>
 </section>
-<section id="id15">
-<h3>Misc<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h3>
+<section id="id16">
+<h3>Misc<a class="headerlink" href="#id16" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Import</span> <span class="pre">TaskInstanceState</span> <span class="pre">from</span> <span class="pre">airflow.sdk</span> <span class="pre">(#72446)</span></code></p></li>
 </ul>
 </section>
-<section id="id16">
-<h3>Doc-only<a class="headerlink" href="#id16" title="Link to this heading">¶</a></h3>
+<section id="id17">
+<h3>Doc-only<a class="headerlink" href="#id17" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">LlamaIndexHook</span> <span class="pre">docs</span> <span class="pre">to</span> <span class="pre">stop</span> <span class="pre">claiming</span> <span class="pre">Ollama/vLLM</span> <span class="pre">support</span> <span class="pre">(#72013)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Document</span> <span class="pre">the</span> <span class="pre">missing</span> <span class="pre">resource</span> <span class="pre">category</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">retry</span> <span class="pre">policy</span> <span class="pre">docs</span> <span class="pre">(#72189)</span></code></p></li>
@@ -1121,8 +1218,8 @@ ones.</p>
 </ul>
 </section>
 </section>
-<section id="id17">
-<h2>0.8.0<a class="headerlink" href="#id17" title="Link to this heading">¶</a></h2>
+<section id="id18">
+<h2>0.8.0<a class="headerlink" href="#id18" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-08-23</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">query</span></code> tool of <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> and <code class="docutils literal notranslate"><span class="pre">DataFusionToolset</span></code> returns a different
@@ -1136,8 +1233,8 @@ total. The tool’s own description states the new shape, so agents adapt withou
 changes; update any system prompt that describes the old shape, and any code
 calling <code class="docutils literal notranslate"><span class="pre">toolset.call_tool(&quot;query&quot;,</span> <span class="pre">...)</span></code> directly.</p>
 </div>
-<section id="id18">
-<h3>Features<a class="headerlink" href="#id18" title="Link to this heading">¶</a></h3>
+<section id="id19">
+<h3>Features<a class="headerlink" href="#id19" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">SandboxToolset</span> <span class="pre">for</span> <span class="pre">sandboxed</span> <span class="pre">agent</span> <span class="pre">shell</span> <span class="pre">and</span> <span class="pre">file</span> <span class="pre">access</span> <span class="pre">(#68847)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">require_approval</span> <span class="pre">in</span> <span class="pre">LLMSchemaCompareOperator</span> <span class="pre">(#71051)</span></code></p></li>
@@ -1145,20 +1242,20 @@ calling <code class="docutils literal notranslate"><span class="pre">toolset.cal
 <li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">custom</span> <span class="pre">redaction</span> <span class="pre">and</span> <span class="pre">message</span> <span class="pre">length</span> <span class="pre">cap</span> <span class="pre">in</span> <span class="pre">LLMRetryPolicy</span> <span class="pre">(#70830)</span></code></p></li>
 </ul>
 </section>
-<section id="id19">
-<h3>Bug Fixes<a class="headerlink" href="#id19" title="Link to this heading">¶</a></h3>
+<section id="id20">
+<h3>Bug Fixes<a class="headerlink" href="#id20" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Let</span> <span class="pre">the</span> <span class="pre">agent</span> <span class="pre">retry</span> <span class="pre">on</span> <span class="pre">a</span> <span class="pre">rejected</span> <span class="pre">DataFusion</span> <span class="pre">query</span> <span class="pre">instead</span> <span class="pre">of</span> <span class="pre">failing</span> <span class="pre">the</span> <span class="pre">task</span> <span class="pre">(#71445)</span></code></p></li>
 </ul>
 </section>
-<section id="id20">
-<h3>Misc<a class="headerlink" href="#id20" title="Link to this heading">¶</a></h3>
+<section id="id21">
+<h3>Misc<a class="headerlink" href="#id21" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Show</span> <span class="pre">which</span> <span class="pre">LLM</span> <span class="pre">providers</span> <span class="pre">each</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">connection</span> <span class="pre">type</span> <span class="pre">reaches</span> <span class="pre">(#70497)</span></code></p></li>
 </ul>
 </section>
-<section id="id21">
-<h3>Doc-only<a class="headerlink" href="#id21" title="Link to this heading">¶</a></h3>
+<section id="id22">
+<h3>Doc-only<a class="headerlink" href="#id22" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Document</span> <span class="pre">the</span> <span class="pre">dedicated</span> <span class="pre">pydantic-ai</span> <span class="pre">vendor</span> <span class="pre">connection</span> <span class="pre">types</span> <span class="pre">(#71774)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Document</span> <span class="pre">the</span> <span class="pre">common-ai</span> <span class="pre">MCPHook</span> <span class="pre">(#71817)</span></code></p></li>
@@ -1168,8 +1265,8 @@ calling <code class="docutils literal notranslate"><span class="pre">toolset.cal
 </ul>
 </section>
 </section>
-<section id="id22">
-<h2>0.7.0<a class="headerlink" href="#id22" title="Link to this heading">¶</a></h2>
+<section id="id23">
+<h2>0.7.0<a class="headerlink" href="#id23" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-08-08</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">skills</span></code> extra now requires <code class="docutils literal notranslate"><span class="pre">pydantic-ai-skills&gt;=1.2.0</span></code> (previously <code class="docutils literal notranslate"><span class="pre">&gt;=0.11.0</span></code>);
@@ -1188,8 +1285,8 @@ outside <code class="docutils literal notranslate"><span class="pre">allowed_tab
 <code class="docutils literal notranslate"><span class="pre">json_build_object</span></code> are also not recognized; pass them in the new <code class="docutils literal notranslate"><span class="pre">allowed_functions</span></code>
 argument to permit them. The database role remains the real security boundary.</p>
 </div>
-<section id="id23">
-<h3>Features<a class="headerlink" href="#id23" title="Link to this heading">¶</a></h3>
+<section id="id24">
+<h3>Features<a class="headerlink" href="#id24" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">pydantic-ai</span> <span class="pre">capability</span> <span class="pre">matrix</span> <span class="pre">references</span> <span class="pre">doc</span> <span class="pre">to</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">(#69887)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Support</span> <span class="pre">excluding</span> <span class="pre">files</span> <span class="pre">from</span> <span class="pre">'common.ai'</span> <span class="pre">Agent</span> <span class="pre">Skills</span> <span class="pre">discovery</span> <span class="pre">(#69924)</span></code></p></li>
@@ -1200,8 +1297,8 @@ argument to permit them. The database role remains the real security boundary.</
 <li><p><code class="docutils literal notranslate"><span class="pre">Render</span> <span class="pre">multi-branch</span> <span class="pre">review</span> <span class="pre">choices</span> <span class="pre">as</span> <span class="pre">a</span> <span class="pre">multi-select</span> <span class="pre">(#71046)</span></code></p></li>
 </ul>
 </section>
-<section id="id24">
-<h3>Bug Fixes<a class="headerlink" href="#id24" title="Link to this heading">¶</a></h3>
+<section id="id25">
+<h3>Bug Fixes<a class="headerlink" href="#id25" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Allow</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">SQL</span> <span class="pre">imports</span> <span class="pre">without</span> <span class="pre">DataFusion</span> <span class="pre">(#69990)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">HITL</span> <span class="pre">review</span> <span class="pre">showing</span> <span class="pre">altered</span> <span class="pre">agent</span> <span class="pre">output</span> <span class="pre">to</span> <span class="pre">reviewers</span> <span class="pre">(#70070)</span></code></p></li>
@@ -1217,8 +1314,8 @@ argument to permit them. The database role remains the real security boundary.</
 <li><p><code class="docutils literal notranslate"><span class="pre">Validate</span> <span class="pre">template</span> <span class="pre">fields</span> <span class="pre">after</span> <span class="pre">rendering</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">operators</span> <span class="pre">(#70338)</span></code></p></li>
 </ul>
 </section>
-<section id="id25">
-<h3>Misc<a class="headerlink" href="#id25" title="Link to this heading">¶</a></h3>
+<section id="id26">
+<h3>Misc<a class="headerlink" href="#id26" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">dataclasses-json</span> <span class="pre">floor</span> <span class="pre">to</span> <span class="pre">common.ai</span> <span class="pre">llamaindex</span> <span class="pre">extra</span> <span class="pre">(#69755)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">a</span> <span class="pre">Retry</span> <span class="pre">Policies</span> <span class="pre">category</span> <span class="pre">to</span> <span class="pre">the</span> <span class="pre">provider</span> <span class="pre">registry</span> <span class="pre">(#70499)</span></code></p></li>
@@ -1226,8 +1323,8 @@ argument to permit them. The database role remains the real security boundary.</
 <li><p><code class="docutils literal notranslate"><span class="pre">Mark</span> <span class="pre">KubernetesPodOperator</span> <span class="pre">and</span> <span class="pre">AgentOperator</span> <span class="pre">as</span> <span class="pre">durable</span> <span class="pre">capable</span> <span class="pre">(#70289)</span></code></p></li>
 </ul>
 </section>
-<section id="id26">
-<h3>Doc-only<a class="headerlink" href="#id26" title="Link to this heading">¶</a></h3>
+<section id="id27">
+<h3>Doc-only<a class="headerlink" href="#id27" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">self-hosted</span> <span class="pre">model</span> <span class="pre">guide</span> <span class="pre">for</span> <span class="pre">the</span> <span class="pre">common.ai</span> <span class="pre">provider</span> <span class="pre">(#69867)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Update</span> <span class="pre">retired</span> <span class="pre">model</span> <span class="pre">ids</span> <span class="pre">and</span> <span class="pre">fill</span> <span class="pre">doc</span> <span class="pre">gaps</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">provider</span> <span class="pre">docs</span> <span class="pre">(#69711)</span></code></p></li>
@@ -1240,29 +1337,29 @@ argument to permit them. The database role remains the real security boundary.</
 </ul>
 </section>
 </section>
-<section id="id27">
-<h2>0.6.0<a class="headerlink" href="#id27" title="Link to this heading">¶</a></h2>
-<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-07-10</span></code></p><section id="id28">
-<h3>Features<a class="headerlink" href="#id28" title="Link to this heading">¶</a></h3>
+<section id="id28">
+<h2>0.6.0<a class="headerlink" href="#id28" title="Link to this heading">¶</a></h2>
+<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-07-10</span></code></p><section id="id29">
+<h3>Features<a class="headerlink" href="#id29" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">'env_provider'</span> <span class="pre">and</span> <span class="pre">'Extra.env'</span> <span class="pre">support</span> <span class="pre">to</span> <span class="pre">MCP</span> <span class="pre">stdio</span> <span class="pre">transport</span> <span class="pre">(#69225)</span></code></p></li>
 </ul>
 </section>
-<section id="id29">
-<h3>Bug Fixes<a class="headerlink" href="#id29" title="Link to this heading">¶</a></h3>
+<section id="id30">
+<h3>Bug Fixes<a class="headerlink" href="#id30" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Replace</span> <span class="pre">deprecated</span> <span class="pre">'pydantic-ai'</span> <span class="pre">MCP</span> <span class="pre">classes</span> <span class="pre">with</span> <span class="pre">'MCPToolset'</span> <span class="pre">in</span> <span class="pre">'common.ai'</span> <span class="pre">(#69006)</span></code></p></li>
 </ul>
 </section>
-<section id="id30">
-<h3>Misc<a class="headerlink" href="#id30" title="Link to this heading">¶</a></h3>
+<section id="id31">
+<h3>Misc<a class="headerlink" href="#id31" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Migrate</span> <span class="pre">common.ai</span> <span class="pre">provider</span> <span class="pre">to</span> <span class="pre">pydantic-ai</span> <span class="pre">2.x</span> <span class="pre">and</span> <span class="pre">remove</span> <span class="pre">the</span> <span class="pre">&lt;2</span> <span class="pre">cap</span> <span class="pre">(#69358)</span></code></p></li>
 </ul>
 </section>
 </section>
-<section id="id31">
-<h2>0.5.0<a class="headerlink" href="#id31" title="Link to this heading">¶</a></h2>
+<section id="id32">
+<h2>0.5.0<a class="headerlink" href="#id32" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-06-22</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p><code class="docutils literal notranslate"><span class="pre">SQLToolset(allowed_tables=[...])</span></code> now enforces the allow-list on the <code class="docutils literal notranslate"><span class="pre">query</span></code> and
@@ -1274,14 +1371,14 @@ inline comments, cross-database references, <code class="docutils literal notran
 Agents querying a restricted connection must send unquoted, comment-free SQL. This is an
 application-level guardrail and not a substitute for least-privilege database permissions.</p>
 </div>
-<section id="id32">
-<h3>Breaking changes<a class="headerlink" href="#id32" title="Link to this heading">¶</a></h3>
+<section id="id33">
+<h3>Breaking changes<a class="headerlink" href="#id33" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Enforce</span> <span class="pre">SQLToolset</span> <span class="pre">allowed_tables</span> <span class="pre">on</span> <span class="pre">queries,</span> <span class="pre">not</span> <span class="pre">just</span> <span class="pre">discovery</span> <span class="pre">(#68487)</span></code></p></li>
 </ul>
 </section>
-<section id="id33">
-<h3>Features<a class="headerlink" href="#id33" title="Link to this heading">¶</a></h3>
+<section id="id34">
+<h3>Features<a class="headerlink" href="#id34" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">common.ai:</span> <span class="pre">Park</span> <span class="pre">approval</span> <span class="pre">reviews</span> <span class="pre">in</span> <span class="pre">awaiting_input</span> <span class="pre">on</span> <span class="pre">Airflow</span> <span class="pre">3.3+</span> <span class="pre">(#68489)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">spec_file</span> <span class="pre">support</span> <span class="pre">to</span> <span class="pre">PydanticAIHook.create_agent</span> <span class="pre">(#67788)</span></code></p></li>
@@ -1293,22 +1390,22 @@ application-level guardrail and not a substitute for least-privilege database pe
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">'message_history'</span> <span class="pre">to</span> <span class="pre">'AgentOperator'</span> <span class="pre">for</span> <span class="pre">multi-turn</span> <span class="pre">agent</span> <span class="pre">sessions</span> <span class="pre">(#68648)</span></code></p></li>
 </ul>
 </section>
-<section id="id34">
-<h3>Bug Fixes<a class="headerlink" href="#id34" title="Link to this heading">¶</a></h3>
+<section id="id35">
+<h3>Bug Fixes<a class="headerlink" href="#id35" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Fix</span> <span class="pre">'LlamaIndexEmbeddingOperator'</span> <span class="pre">returning</span> <span class="pre">'vector=None'</span> <span class="pre">for</span> <span class="pre">every</span> <span class="pre">chunk</span> <span class="pre">(#68491)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Verify</span> <span class="pre">durable</span> <span class="pre">cached</span> <span class="pre">agent</span> <span class="pre">steps</span> <span class="pre">match</span> <span class="pre">the</span> <span class="pre">request</span> <span class="pre">before</span> <span class="pre">replay</span> <span class="pre">(#68372)</span></code></p></li>
 </ul>
 </section>
-<section id="id35">
-<h3>Misc<a class="headerlink" href="#id35" title="Link to this heading">¶</a></h3>
+<section id="id36">
+<h3>Misc<a class="headerlink" href="#id36" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Access</span> <span class="pre">AgentRunResult.usage</span> <span class="pre">as</span> <span class="pre">a</span> <span class="pre">property</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">logging</span> <span class="pre">(#68405)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Bump</span> <span class="pre">pydantic-ai-slim&gt;=1.99.0</span> <span class="pre">(#68105)</span></code></p></li>
 </ul>
 </section>
-<section id="id36">
-<h3>Doc-only<a class="headerlink" href="#id36" title="Link to this heading">¶</a></h3>
+<section id="id37">
+<h3>Doc-only<a class="headerlink" href="#id37" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Explain</span> <span class="pre">the</span> <span class="pre">agent</span> <span class="pre">tool</span> <span class="pre">boundary</span> <span class="pre">in</span> <span class="pre">common.ai</span> <span class="pre">security</span> <span class="pre">docs</span> <span class="pre">(#68404)</span></code></p></li>
 </ul>
@@ -1334,8 +1431,8 @@ worker only loads its own DAG. On Airflow versions whose worker does not registe
 declared classes, the operators dump to <code class="docutils literal notranslate"><span class="pre">dict</span></code> instead.</p>
 </section>
 </section>
-<section id="id37">
-<h2>0.4.0<a class="headerlink" href="#id37" title="Link to this heading">¶</a></h2>
+<section id="id38">
+<h2>0.4.0<a class="headerlink" href="#id38" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-06-07</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>This release changes the return type of <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMAgentOperator</span></code> and
@@ -1344,14 +1441,14 @@ model instances instead of plain <code class="docutils literal notranslate"><spa
 XCom values must be updated accordingly. As this provider is still pre-1.0, the breaking
 change ships in a minor release.</p>
 </div>
-<section id="id38">
-<h3>Breaking changes<a class="headerlink" href="#id38" title="Link to this heading">¶</a></h3>
+<section id="id39">
+<h3>Breaking changes<a class="headerlink" href="#id39" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Return</span> <span class="pre">Pydantic</span> <span class="pre">model</span> <span class="pre">instances</span> <span class="pre">through</span> <span class="pre">XCom</span> <span class="pre">for</span> <span class="pre">structured</span> <span class="pre">output</span> <span class="pre">(#67644)</span></code></p></li>
 </ul>
 </section>
-<section id="id39">
-<h3>Features<a class="headerlink" href="#id39" title="Link to this heading">¶</a></h3>
+<section id="id40">
+<h3>Features<a class="headerlink" href="#id40" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">'OpenTelemetry'</span> <span class="pre">tracing</span> <span class="pre">for</span> <span class="pre">'common.ai'</span> <span class="pre">Pydantic</span> <span class="pre">AI</span> <span class="pre">agents</span> <span class="pre">(#67792)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">a</span> <span class="pre">bridge</span> <span class="pre">to</span> <span class="pre">expose</span> <span class="pre">'common.ai'</span> <span class="pre">toolsets</span> <span class="pre">as</span> <span class="pre">LangChain</span> <span class="pre">tools</span> <span class="pre">(#67791)</span></code></p></li>
@@ -1362,15 +1459,15 @@ change ships in a minor release.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">'Langchain'</span> <span class="pre">hook</span> <span class="pre">to</span> <span class="pre">'common-ai'</span> <span class="pre">provider</span> <span class="pre">(#67192)</span></code></p></li>
 </ul>
 </section>
-<section id="id40">
-<h3>Bug Fixes<a class="headerlink" href="#id40" title="Link to this heading">¶</a></h3>
+<section id="id41">
+<h3>Bug Fixes<a class="headerlink" href="#id41" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Register</span> <span class="pre">operator-declared</span> <span class="pre">XCom</span> <span class="pre">classes</span> <span class="pre">from</span> <span class="pre">a</span> <span class="pre">worker-side</span> <span class="pre">DAG</span> <span class="pre">walk</span> <span class="pre">(#67875)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">common-ai:</span> <span class="pre">Honour</span> <span class="pre">serialize_output=True</span> <span class="pre">on</span> <span class="pre">LLMFileAnalysisOperator</span> <span class="pre">(#67858)</span></code></p></li>
 </ul>
 </section>
-<section id="id41">
-<h3>Misc<a class="headerlink" href="#id41" title="Link to this heading">¶</a></h3>
+<section id="id42">
+<h3>Misc<a class="headerlink" href="#id42" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Bump</span> <span class="pre">common.ai</span> <span class="pre">floor</span> <span class="pre">to</span> <span class="pre">pydantic-ai-slim&gt;=1.71.0</span> <span class="pre">and</span> <span class="pre">document</span> <span class="pre">capabilities</span> <span class="pre">passthrough</span> <span class="pre">(#67444)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Remove</span> <span class="pre">further</span> <span class="pre">findings</span> <span class="pre">from</span> <span class="pre">positional</span> <span class="pre">session</span> <span class="pre">check</span> <span class="pre">(#67712)</span></code></p></li>
@@ -1379,48 +1476,48 @@ change ships in a minor release.</p>
 </ul>
 </section>
 </section>
-<section id="id42">
-<h2>0.3.0<a class="headerlink" href="#id42" title="Link to this heading">¶</a></h2>
-<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-05-23</span></code></p><section id="id43">
-<h3>Features<a class="headerlink" href="#id43" title="Link to this heading">¶</a></h3>
+<section id="id43">
+<h2>0.3.0<a class="headerlink" href="#id43" title="Link to this heading">¶</a></h2>
+<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-05-23</span></code></p><section id="id44">
+<h3>Features<a class="headerlink" href="#id44" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">'LLMRetryPolicy'</span> <span class="pre">to</span> <span class="pre">common-ai</span> <span class="pre">provider</span> <span class="pre">(#65451)</span></code></p></li>
 </ul>
 </section>
-<section id="id44">
-<h3>Bug Fixes<a class="headerlink" href="#id44" title="Link to this heading">¶</a></h3>
+<section id="id45">
+<h3>Bug Fixes<a class="headerlink" href="#id45" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Update</span> <span class="pre">dependencies</span> <span class="pre">to</span> <span class="pre">fix</span> <span class="pre">dependabot</span> <span class="pre">alarms</span> <span class="pre">in</span> <span class="pre">providers.common.ai</span> <span class="pre">(#66628)</span></code></p></li>
 </ul>
 </section>
 </section>
-<section id="id45">
-<h2>0.2.0<a class="headerlink" href="#id45" title="Link to this heading">¶</a></h2>
-<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-05-11</span></code></p><section id="id46">
-<h3>Features<a class="headerlink" href="#id46" title="Link to this heading">¶</a></h3>
+<section id="id46">
+<h2>0.2.0<a class="headerlink" href="#id46" title="Link to this heading">¶</a></h2>
+<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-05-11</span></code></p><section id="id47">
+<h3>Features<a class="headerlink" href="#id47" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">UsageLimits</span> <span class="pre">support</span> <span class="pre">to</span> <span class="pre">common.ai</span> <span class="pre">operators</span> <span class="pre">(#66248)</span></code></p></li>
 </ul>
 </section>
-<section id="id47">
-<h3>Doc-only<a class="headerlink" href="#id47" title="Link to this heading">¶</a></h3>
+<section id="id48">
+<h3>Doc-only<a class="headerlink" href="#id48" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Add</span> <span class="pre">Configuration</span> <span class="pre">Reference</span> <span class="pre">docs</span> <span class="pre">page</span> <span class="pre">to</span> <span class="pre">Common</span> <span class="pre">AI</span> <span class="pre">provider</span> <span class="pre">(#66024)</span></code></p></li>
 </ul>
 </section>
 </section>
-<section id="id48">
-<h2>0.1.1<a class="headerlink" href="#id48" title="Link to this heading">¶</a></h2>
-<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-04-26</span></code></p><section id="id49">
-<h3>Misc<a class="headerlink" href="#id49" title="Link to this heading">¶</a></h3>
+<section id="id49">
+<h2>0.1.1<a class="headerlink" href="#id49" title="Link to this heading">¶</a></h2>
+<p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-04-26</span></code></p><section id="id50">
+<h3>Misc<a class="headerlink" href="#id50" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">Update</span> <span class="pre">dependencies</span> <span class="pre">to</span> <span class="pre">address</span> <span class="pre">Dependabot</span> <span class="pre">security</span> <span class="pre">alarms</span> <span class="pre">in</span> <span class="pre">providers.common.ai</span> <span class="pre">(#65048)</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Bump</span> <span class="pre">vite</span> <span class="pre">(#64799)</span></code></p></li>
 </ul>
 </section>
 </section>
-<section id="id50">
-<h2>0.1.0<a class="headerlink" href="#id50" title="Link to this heading">¶</a></h2>
+<section id="id51">
+<h2>0.1.0<a class="headerlink" href="#id51" title="Link to this heading">¶</a></h2>
 <p>Release Date: <code class="docutils literal notranslate"><span class="pre">2026-04-13</span></code></p><div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>This release of provider is only available for Airflow 3.0+ as explained in the
@@ -1509,6 +1606,7 @@ change ships in a minor release.</p>
 <li><a class="reference internal" href="#features">Features</a></li>
 <li><a class="reference internal" href="#bug-fixes">Bug Fixes</a></li>
 <li><a class="reference internal" href="#misc">Misc</a></li>
+<li><a class="reference internal" href="#doc-only">Doc-only</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#id2">1.0.0</a><ul>
@@ -1516,74 +1614,74 @@ change ships in a minor release.</p>
 <li><a class="reference internal" href="#id3">Features</a></li>
 <li><a class="reference internal" href="#id4">Bug Fixes</a></li>
 <li><a class="reference internal" href="#id5">Misc</a></li>
-<li><a class="reference internal" href="#doc-only">Doc-only</a></li>
+<li><a class="reference internal" href="#id6">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id6">0.10.0</a><ul>
-<li><a class="reference internal" href="#id7">Breaking changes</a></li>
-<li><a class="reference internal" href="#id8">Features</a></li>
-<li><a class="reference internal" href="#id9">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id10">Misc</a></li>
-<li><a class="reference internal" href="#id11">Doc-only</a></li>
+<li><a class="reference internal" href="#id7">0.10.0</a><ul>
+<li><a class="reference internal" href="#id8">Breaking changes</a></li>
+<li><a class="reference internal" href="#id9">Features</a></li>
+<li><a class="reference internal" href="#id10">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id11">Misc</a></li>
+<li><a class="reference internal" href="#id12">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id12">0.9.0</a><ul>
-<li><a class="reference internal" href="#id13">Features</a></li>
-<li><a class="reference internal" href="#id14">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id15">Misc</a></li>
-<li><a class="reference internal" href="#id16">Doc-only</a></li>
+<li><a class="reference internal" href="#id13">0.9.0</a><ul>
+<li><a class="reference internal" href="#id14">Features</a></li>
+<li><a class="reference internal" href="#id15">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id16">Misc</a></li>
+<li><a class="reference internal" href="#id17">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id17">0.8.0</a><ul>
-<li><a class="reference internal" href="#id18">Features</a></li>
-<li><a class="reference internal" href="#id19">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id20">Misc</a></li>
-<li><a class="reference internal" href="#id21">Doc-only</a></li>
+<li><a class="reference internal" href="#id18">0.8.0</a><ul>
+<li><a class="reference internal" href="#id19">Features</a></li>
+<li><a class="reference internal" href="#id20">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id21">Misc</a></li>
+<li><a class="reference internal" href="#id22">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id22">0.7.0</a><ul>
-<li><a class="reference internal" href="#id23">Features</a></li>
-<li><a class="reference internal" href="#id24">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id25">Misc</a></li>
-<li><a class="reference internal" href="#id26">Doc-only</a></li>
+<li><a class="reference internal" href="#id23">0.7.0</a><ul>
+<li><a class="reference internal" href="#id24">Features</a></li>
+<li><a class="reference internal" href="#id25">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id26">Misc</a></li>
+<li><a class="reference internal" href="#id27">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id27">0.6.0</a><ul>
-<li><a class="reference internal" href="#id28">Features</a></li>
-<li><a class="reference internal" href="#id29">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id30">Misc</a></li>
+<li><a class="reference internal" href="#id28">0.6.0</a><ul>
+<li><a class="reference internal" href="#id29">Features</a></li>
+<li><a class="reference internal" href="#id30">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id31">Misc</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id31">0.5.0</a><ul>
-<li><a class="reference internal" href="#id32">Breaking changes</a></li>
-<li><a class="reference internal" href="#id33">Features</a></li>
-<li><a class="reference internal" href="#id34">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id35">Misc</a></li>
-<li><a class="reference internal" href="#id36">Doc-only</a></li>
+<li><a class="reference internal" href="#id32">0.5.0</a><ul>
+<li><a class="reference internal" href="#id33">Breaking changes</a></li>
+<li><a class="reference internal" href="#id34">Features</a></li>
+<li><a class="reference internal" href="#id35">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id36">Misc</a></li>
+<li><a class="reference internal" href="#id37">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id37">0.4.0</a><ul>
-<li><a class="reference internal" href="#id38">Breaking changes</a></li>
-<li><a class="reference internal" href="#id39">Features</a></li>
-<li><a class="reference internal" href="#id40">Bug Fixes</a></li>
-<li><a class="reference internal" href="#id41">Misc</a></li>
+<li><a class="reference internal" href="#id38">0.4.0</a><ul>
+<li><a class="reference internal" href="#id39">Breaking changes</a></li>
+<li><a class="reference internal" href="#id40">Features</a></li>
+<li><a class="reference internal" href="#id41">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id42">Misc</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id42">0.3.0</a><ul>
-<li><a class="reference internal" href="#id43">Features</a></li>
-<li><a class="reference internal" href="#id44">Bug Fixes</a></li>
+<li><a class="reference internal" href="#id43">0.3.0</a><ul>
+<li><a class="reference internal" href="#id44">Features</a></li>
+<li><a class="reference internal" href="#id45">Bug Fixes</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id45">0.2.0</a><ul>
-<li><a class="reference internal" href="#id46">Features</a></li>
-<li><a class="reference internal" href="#id47">Doc-only</a></li>
+<li><a class="reference internal" href="#id46">0.2.0</a><ul>
+<li><a class="reference internal" href="#id47">Features</a></li>
+<li><a class="reference internal" href="#id48">Doc-only</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id48">0.1.1</a><ul>
-<li><a class="reference internal" href="#id49">Misc</a></li>
+<li><a class="reference internal" href="#id49">0.1.1</a><ul>
+<li><a class="reference internal" href="#id50">Misc</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#id50">0.1.0</a></li>
+<li><a class="reference internal" href="#id51">0.1.0</a></li>
 </ul>
 </li>
 </ul>

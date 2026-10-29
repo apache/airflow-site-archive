@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -682,11 +682,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.plugins.adapter</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenLineageAdapter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.utils.utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_JOB_TYPE_DAG</span><span class="p">,</span>
+    <span class="n">_JOB_TYPE_TASK</span><span class="p">,</span>
+    <span class="n">get_airflow_job_type</span><span class="p">,</span>
     <span class="n">get_job_name</span><span class="p">,</span>
     <span class="n">get_parent_information_from_dagrun_conf</span><span class="p">,</span>
-    <span class="n">get_regional_task_instance_run_id</span><span class="p">,</span>
     <span class="n">get_root_information_from_dagrun_conf</span><span class="p">,</span>
-    <span class="n">get_task_instance_map_index</span><span class="p">,</span>
+    <span class="n">get_task_instance_run_id</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
 
@@ -722,6 +724,24 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
+<div class="viewcode-block" id="lineage_job_type">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/plugins/macros/index.html#airflow.providers.openlineage.plugins.macros.lineage_job_type">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lineage_job_type</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Macro function which returns the OpenLineage job type facet fields of an Airflow task.</span>
+
+<span class="sd">    The result has the ``processingType``, ``integration`` and ``jobType`` fields of the ``JobTypeJobFacet``</span>
+<span class="sd">    and can be forwarded to a child job together with the parent information.</span>
+<span class="sd">    Note that a dictionary is returned, not a string - see the guide for how to use it in templates.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information take a look at the guide:</span>
+<span class="sd">        :ref:`howto/macros:openlineage`</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">get_airflow_job_type</span><span class="p">(</span><span class="n">_JOB_TYPE_TASK</span><span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="lineage_run_id">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/plugins/macros/index.html#airflow.providers.openlineage.plugins.macros.lineage_run_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">lineage_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span><span class="p">):</span>
@@ -734,13 +754,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">        For more information take a look at the guide:</span>
 <span class="sd">        :ref:`howto/macros:openlineage`</span>
 <span class="sd">    """</span>
-    <span class="k">return</span> <span class="n">get_regional_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">)</span> <span class="ow">or</span> <span class="n">OpenLineageAdapter</span><span class="o">.</span><span class="n">build_task_instance_run_id</span><span class="p">(</span>
-        <span class="n">dag_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-        <span class="n">task_id</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-        <span class="n">try_number</span><span class="o">=</span><span class="n">task_instance</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
-        <span class="n">logical_date</span><span class="o">=</span><span class="n">_get_logical_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
-        <span class="n">map_index</span><span class="o">=</span><span class="n">get_task_instance_map_index</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
-    <span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">get_task_instance_run_id</span><span class="p">(</span><span class="n">task_instance</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">_get_logical_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">))</span></div>
 
 
 
@@ -812,6 +826,30 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">logical_date</span><span class="o">=</span><span class="n">_get_logical_date</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
         <span class="n">clear_number</span><span class="o">=</span><span class="n">_get_dag_run_clear_number</span><span class="p">(</span><span class="n">task_instance</span><span class="p">),</span>
     <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="lineage_root_job_type">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/openlineage/plugins/macros/index.html#airflow.providers.openlineage.plugins.macros.lineage_root_job_type">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">lineage_root_job_type</span><span class="p">(</span><span class="n">task_instance</span><span class="p">:</span> <span class="n">TaskInstance</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Macro function which returns the OpenLineage job type facet fields of the root job of given task.</span>
+
+<span class="sd">    The result has the ``processingType``, ``integration`` and ``jobType`` fields of the ``JobTypeJobFacet``.</span>
+<span class="sd">    The type is taken from the same source as the other ``lineage_root_*`` macros: DagRun conf root</span>
+<span class="sd">    information, then DagRun conf parent information used as root, then the Dag of the task.</span>
+<span class="sd">    None is returned if the root comes from the DagRun conf, but its job type is missing or invalid.</span>
+
+<span class="sd">    .. seealso::</span>
+<span class="sd">        For more information take a look at the guide:</span>
+<span class="sd">        :ref:`howto/macros:openlineage`</span>
+<span class="sd">    """</span>
+    <span class="n">dr_conf</span> <span class="o">=</span> <span class="n">_get_dag_run_conf</span><span class="p">(</span><span class="n">task_instance</span><span class="o">=</span><span class="n">task_instance</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ol_root_info</span> <span class="o">:=</span> <span class="n">get_root_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="o">=</span><span class="n">dr_conf</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ol_root_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"root_parent_job_type"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ol_parent_info</span> <span class="o">:=</span> <span class="n">get_parent_information_from_dagrun_conf</span><span class="p">(</span><span class="n">dr_conf</span><span class="o">=</span><span class="n">dr_conf</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ol_parent_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"parent_job_type"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">get_airflow_job_type</span><span class="p">(</span><span class="n">_JOB_TYPE_DAG</span><span class="p">)</span></div>
 
 
 

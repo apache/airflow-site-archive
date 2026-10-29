@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
             <link rel="next" title="airflow.providers.openlineage.utils.selective_enable" href="../selective_enable/index.html" />
@@ -684,15 +684,19 @@ operator type.</p></li>
 to the named DAG.  Use <code class="docutils literal notranslate"><span class="pre">emit_task_events</span></code> / <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code> to target one
 event type selectively.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">task_id</span></code> — only valid alongside <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>; targets a specific task.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hook</span></code>: fully-qualified class name of the object that reported a hook-collected
+dataset (usually a hook).  Can be added to any of the scopes above, and narrows the
+rule to datasets reported by that hook.  Only <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> and <code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code>
+are valid controls for a hook-scoped rule.</p></li>
 <li><p><em>(empty ``scope: {}``)</em> — global default override; applies to every task and DAG event.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">operator</span></code> cannot be combined with <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> or <code class="docutils literal notranslate"><span class="pre">task_id</span></code> (scope is one of:
-global, operator-only, dag-only, dag+task).  <code class="docutils literal notranslate"><span class="pre">task_id</span></code> without <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> and
-<code class="docutils literal notranslate"><span class="pre">operator</span></code> combined with <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code> (or <code class="docutils literal notranslate"><span class="pre">task_id</span></code> combined with
-<code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code>) are also rejected with a WARNING.</p>
+global, operator-only, dag-only, dag+task, each optionally with <code class="docutils literal notranslate"><span class="pre">hook</span></code>).  <code class="docutils literal notranslate"><span class="pre">task_id</span></code>
+without <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> and <code class="docutils literal notranslate"><span class="pre">operator</span></code> combined with <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code> (or <code class="docutils literal notranslate"><span class="pre">task_id</span></code>
+combined with <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code>) are also rejected with a WARNING.</p>
 <p><code class="docutils literal notranslate"><span class="pre">match_mode</span></code> lives at the top level: <code class="docutils literal notranslate"><span class="pre">&quot;exact&quot;</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">&quot;regex&quot;</span></code>.
 When set to <code class="docutils literal notranslate"><span class="pre">&quot;regex&quot;</span></code>, every value inside <code class="docutils literal notranslate"><span class="pre">scope</span></code> (<code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">task_id</span></code>,
-<code class="docutils literal notranslate"><span class="pre">operator</span></code>) is treated as a <code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code> pattern.</p>
+<code class="docutils literal notranslate"><span class="pre">operator</span></code>, <code class="docutils literal notranslate"><span class="pre">hook</span></code>) is treated as a <code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code> pattern.</p>
 <p>Control flag keys (all optional inside <code class="docutils literal notranslate"><span class="pre">controls</span></code>; the dict must be non-empty):</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">emit</span></code> — shorthand: disable ALL OpenLineage events in scope (both task and dag
@@ -712,11 +716,21 @@ when <code class="docutils literal notranslate"><span class="pre">extract_operat
 <li><p><code class="docutils literal notranslate"><span class="pre">hook_lineage</span></code> — whether to use <code class="docutils literal notranslate"><span class="pre">HookLineageCollector</span></code> as a fallback when the
 extractor finds no inputs/outputs.  <strong>Has no effect when ``extract_operator_metadata``
 is ``false``</strong> — the entire extraction pipeline (including hook lineage) is skipped.
-Only meaningful for task events.  Default: <code class="docutils literal notranslate"><span class="pre">true</span></code>.</p></li>
+Only meaningful for task events.  Default: <code class="docutils literal notranslate"><span class="pre">true</span></code>.  In a hook-scoped rule it instead
+keeps (<code class="docutils literal notranslate"><span class="pre">true</span></code>) or drops (<code class="docutils literal notranslate"><span class="pre">false</span></code>) every dataset reported by the matching hook, and it
+cannot be combined with <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> in the same rule.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">include_full_task_info</span></code> — whether to include the full serialized operator state
 in the <code class="docutils literal notranslate"><span class="pre">AirflowRunFacet</span></code>.  When <code class="docutils literal notranslate"><span class="pre">false</span></code> (default), only a curated subset of
 task attributes is sent.  Only meaningful for task events.  Default: <code class="docutils literal notranslate"><span class="pre">false</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code>: list of <code class="docutils literal notranslate"><span class="pre">re.fullmatch</span></code> patterns (independent of <code class="docutils literal notranslate"><span class="pre">match_mode</span></code>)
+matched against <code class="docutils literal notranslate"><span class="pre">&quot;&lt;namespace&gt;/&lt;name&gt;&quot;</span></code> of each OpenLineage dataset (without a doubled <code class="docutils literal notranslate"><span class="pre">/</span></code>
+when the name starts with one); matching datasets
+are dropped from task events and from the SQL hook lineage events of the task.  Applies
+to extractor, hook-collected and manually declared lineage.  Default: <code class="docutils literal notranslate"><span class="pre">[]</span></code>.</p></li>
 </ul>
+<p>Unlike the boolean controls, <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> is resolved per dataset, and the most
+specific matching rule’s list <strong>replaces</strong> broader lists instead of merging with them, so a
+narrower rule can shorten or clear (<code class="docutils literal notranslate"><span class="pre">[]</span></code>) a broader exclusion.</p>
 <p><code class="docutils literal notranslate"><span class="pre">locked:</span> <span class="pre">true</span></code> is an admin floor lock that prevents per-Dag / per-task authoring
 overrides from changing the field(s) carried by this rule’s <code class="docutils literal notranslate"><span class="pre">controls</span></code> dict.</p>
 <section id="flag-hierarchy">
@@ -742,6 +756,10 @@ rule wins):</p>
 </ol>
 <p>For <code class="docutils literal notranslate"><span class="pre">emit</span></code> at the task level: <code class="docutils literal notranslate"><span class="pre">emit_task_events</span></code> beats <code class="docutils literal notranslate"><span class="pre">emit</span></code> within the same
 rule.</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> on a dataset reported by a hook, each tier above is preceded by
+its hook-scoped variant: <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code>, <code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">task_id</span></code>,
+<code class="docutils literal notranslate"><span class="pre">dag_id</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code>, <code class="docutils literal notranslate"><span class="pre">dag_id</span></code>, <code class="docutils literal notranslate"><span class="pre">operator</span></code> + <code class="docutils literal notranslate"><span class="pre">hook</span></code>, <code class="docutils literal notranslate"><span class="pre">operator</span></code>, <code class="docutils literal notranslate"><span class="pre">hook</span></code>,
+global.  Datasets from other sources only see the tiers without <code class="docutils literal notranslate"><span class="pre">hook</span></code>.</p>
 <p>Priority for <strong>DAG run events</strong>:</p>
 <ol class="arabic simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">dag_id</span></code> rule (using <code class="docutils literal notranslate"><span class="pre">emit_dag_events</span></code> or <code class="docutils literal notranslate"><span class="pre">emit</span></code>)</p></li>
@@ -772,28 +790,40 @@ and the exact rule that caused the change.</p>
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.log" title="airflow.providers.openlineage.utils.emission_policy.log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetT" title="airflow.providers.openlineage.utils.emission_policy.DatasetT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DatasetT</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT" title="airflow.providers.openlineage.utils.emission_policy.EMIT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.log" title="airflow.providers.openlineage.utils.emission_policy.log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS" title="airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT_TASK_EVENTS</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.V" title="airflow.providers.openlineage.utils.emission_policy.V"><code class="xref py py-obj docutils literal notranslate"><span class="pre">V</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS" title="airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT_DAG_EVENTS</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.ControlValue" title="airflow.providers.openlineage.utils.emission_policy.ControlValue"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ControlValue</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EXTRACT_OPERATOR_METADATA" title="airflow.providers.openlineage.utils.emission_policy.EXTRACT_OPERATOR_METADATA"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EXTRACT_OPERATOR_METADATA</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT" title="airflow.providers.openlineage.utils.emission_policy.EMIT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE" title="airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INCLUDE_SOURCE_CODE</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS" title="airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT_TASK_EVENTS</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE" title="airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HOOK_LINEAGE</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS" title="airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EMIT_DAG_EVENTS</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO" title="airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INCLUDE_FULL_TASK_INFO</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EXTRACT_OPERATOR_METADATA" title="airflow.providers.openlineage.utils.emission_policy.EXTRACT_OPERATOR_METADATA"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EXTRACT_OPERATOR_METADATA</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE" title="airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INCLUDE_SOURCE_CODE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE" title="airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HOOK_LINEAGE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO" title="airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO"><code class="xref py py-obj docutils literal notranslate"><span class="pre">INCLUDE_FULL_TASK_INFO</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS" title="airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EXCLUDE_DATASETS</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID" title="airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SCOPE_DAG_ID</span></code></a></p></td>
@@ -805,19 +835,22 @@ and the exact rule that caused the change.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR" title="airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SCOPE_OPERATOR</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE" title="airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_SCOPE</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK" title="airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SCOPE_HOOK</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS" title="airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_CONTROLS</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE" title="airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_SCOPE</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE" title="airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_MATCH_MODE</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS" title="airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_CONTROLS</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_LOCKED" title="airflow.providers.openlineage.utils.emission_policy.RULE_LOCKED"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_LOCKED</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE" title="airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_MATCH_MODE</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.OL_EMISSION_POLICY_PARAM" title="airflow.providers.openlineage.utils.emission_policy.OL_EMISSION_POLICY_PARAM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OL_EMISSION_POLICY_PARAM</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_LOCKED" title="airflow.providers.openlineage.utils.emission_policy.RULE_LOCKED"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RULE_LOCKED</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.OL_EMISSION_POLICY_PARAM" title="airflow.providers.openlineage.utils.emission_policy.OL_EMISSION_POLICY_PARAM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OL_EMISSION_POLICY_PARAM</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -833,6 +866,9 @@ and the exact rule that caused the change.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule" title="airflow.providers.openlineage.utils.emission_policy.Rule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Rule</span></code></a></p></td>
 <td><p>A single, fully-validated <code class="docutils literal notranslate"><span class="pre">emission_policy</span></code> rule.</p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter" title="airflow.providers.openlineage.utils.emission_policy.DatasetFilter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DatasetFilter</span></code></a></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> resolution for the datasets of one task.</p></td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -840,6 +876,12 @@ and the exact rule that caused the change.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.get_hook_class_name" title="airflow.providers.openlineage.utils.emission_policy.get_hook_class_name"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_hook_class_name</span></code></a>(hook)</p></td>
+<td><p>Return the fully-qualified class name that the <code class="docutils literal notranslate"><span class="pre">hook</span></code> scope key matches, if any.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern" title="airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_invalid_pattern</span></code></a>(field_name, value)</p></td>
+<td><p>Return an error message if <em>value</em> is not a list of valid regex patterns, else <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.resolve_task_emission_policy" title="airflow.providers.openlineage.utils.emission_policy.resolve_task_emission_policy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">resolve_task_emission_policy</span></code></a>(operator, dag_id, task_id)</p></td>
 <td><p>Resolve the emission policy for a task-level event.</p></td>
 </tr>
@@ -852,8 +894,23 @@ and the exact rule that caused the change.</p>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
 <dl class="py data">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetT">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">DatasetT</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
 <dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.log">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">log</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.log" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.V">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">V</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#V"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.V" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.ControlValue">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">ControlValue</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#ControlValue"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.ControlValue" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py data">
@@ -892,6 +949,11 @@ and the exact rule that caused the change.</p>
 <dd></dd></dl>
 
 <dl class="py data">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">EXCLUDE_DATASETS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'exclude_datasets'</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#EXCLUDE_DATASETS"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
 <dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">SCOPE_DAG_ID</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'dag_id'</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#SCOPE_DAG_ID"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -904,6 +966,11 @@ and the exact rule that caused the change.</p>
 <dl class="py data">
 <dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">SCOPE_OPERATOR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'operator'</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#SCOPE_OPERATOR"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">SCOPE_HOOK</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'hook'</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#SCOPE_HOOK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py data">
@@ -960,6 +1027,11 @@ and the exact rule that caused the change.</p>
 <span class="sig-name descname"><span class="pre">include_full_task_info</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><span class="pre">bool</span></a></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#EmissionPolicy.include_full_task_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.include_full_task_info" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.dataset_filter">
+<span class="sig-name descname"><span class="pre">dataset_filter</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter" title="airflow.providers.openlineage.utils.emission_policy.DatasetFilter"><span class="pre">DatasetFilter</span></a></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#EmissionPolicy.dataset_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.dataset_filter" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.defaults">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">defaults</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#EmissionPolicy.defaults"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.defaults" title="Link to this definition">¶</a></dt>
@@ -984,7 +1056,7 @@ never re-validates. <code class="docutils literal notranslate"><span class="pre"
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.Rule.controls">
-<span class="sig-name descname"><span class="pre">controls</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#Rule.controls"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.Rule.controls" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">controls</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.ControlValue" title="airflow.providers.openlineage.utils.emission_policy.ControlValue"><span class="pre">ControlValue</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#Rule.controls"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.Rule.controls" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1018,6 +1090,80 @@ never re-validates. <code class="docutils literal notranslate"><span class="pre"
 </dl>
 </dd></dl>
 
+<dl class="py property">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.Rule.has_hook">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">has_hook</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><span class="pre">bool</span></a></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#Rule.has_hook"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.Rule.has_hook" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.get_hook_class_name">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">get_hook_class_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#get_hook_class_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.get_hook_class_name" title="Link to this definition">¶</a></dt>
+<dd><p>Return the fully-qualified class name that the <code class="docutils literal notranslate"><span class="pre">hook</span></code> scope key matches, if any.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">DatasetFilter</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">exclude_datasets</span></code> resolution for the datasets of one task.</p>
+<p>Hook-scoped rules can only be matched once the reporting hook is known, so the winning
+patterns are resolved lazily per hook (<code class="docutils literal notranslate"><span class="pre">None</span></code> for datasets not reported by a hook)
+and cached.  <em>tiers</em> holds only rules that set patterns, most specific first:
+dag+task+hook, dag+task, dag+hook, dag, operator+hook, operator, hook, global.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.tiers">
+<span class="sig-name descname"><span class="pre">tiers</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule" title="airflow.providers.openlineage.utils.emission_policy.Rule"><span class="pre">Rule</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">()</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.tiers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.tiers" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.authoring_patterns">
+<span class="sig-name descname"><span class="pre">authoring_patterns</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.authoring_patterns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.authoring_patterns" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.context">
+<span class="sig-name descname"><span class="pre">context</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.context" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.get_patterns">
+<span class="sig-name descname"><span class="pre">get_patterns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.get_patterns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.get_patterns" title="Link to this definition">¶</a></dt>
+<dd><p>Return the exclusion patterns that apply to datasets reported by <em>hook</em>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.is_excluded">
+<span class="sig-name descname"><span class="pre">is_excluded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hook</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.is_excluded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.is_excluded" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> if <em>dataset</em>, reported by <em>hook</em> (if any), matches an exclusion pattern.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.DatasetFilter.exclude">
+<span class="sig-name descname"><span class="pre">exclude</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">datasets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hook</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#DatasetFilter.exclude"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.exclude" title="Link to this definition">¶</a></dt>
+<dd><p>Return <em>datasets</em> without the ones excluded for <em>hook</em>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.openlineage.utils.emission_policy.</span></span><span class="sig-name descname"><span class="pre">find_invalid_pattern</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">field_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/openlineage/utils/emission_policy.html#find_invalid_pattern"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern" title="Link to this definition">¶</a></dt>
+<dd><p>Return an error message if <em>value</em> is not a list of valid regex patterns, else <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<p>Shared by the conf parser (which skips the offending rule) and the authoring API (which
+raises), so every pattern that reaches dataset matching has compiled at least once.</p>
+<dl class="field-list simple">
+</dl>
 </dd></dl>
 
 <dl class="py function">
@@ -1161,7 +1307,10 @@ than crashing the listener’s dag-run-notification path.</p>
 <li><a class="reference internal" href="#classes">Classes</a></li>
 <li><a class="reference internal" href="#functions">Functions</a></li>
 <li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetT"><code class="docutils literal notranslate"><span class="pre">DatasetT</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.log"><code class="docutils literal notranslate"><span class="pre">log</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.V"><code class="docutils literal notranslate"><span class="pre">V</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.ControlValue"><code class="docutils literal notranslate"><span class="pre">ControlValue</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT"><code class="docutils literal notranslate"><span class="pre">EMIT</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_TASK_EVENTS"><code class="docutils literal notranslate"><span class="pre">EMIT_TASK_EVENTS</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EMIT_DAG_EVENTS"><code class="docutils literal notranslate"><span class="pre">EMIT_DAG_EVENTS</span></code></a></li>
@@ -1169,9 +1318,11 @@ than crashing the listener’s dag-run-notification path.</p>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_SOURCE_CODE"><code class="docutils literal notranslate"><span class="pre">INCLUDE_SOURCE_CODE</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.HOOK_LINEAGE"><code class="docutils literal notranslate"><span class="pre">HOOK_LINEAGE</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.INCLUDE_FULL_TASK_INFO"><code class="docutils literal notranslate"><span class="pre">INCLUDE_FULL_TASK_INFO</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EXCLUDE_DATASETS"><code class="docutils literal notranslate"><span class="pre">EXCLUDE_DATASETS</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_DAG_ID"><code class="docutils literal notranslate"><span class="pre">SCOPE_DAG_ID</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_TASK_ID"><code class="docutils literal notranslate"><span class="pre">SCOPE_TASK_ID</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_OPERATOR"><code class="docutils literal notranslate"><span class="pre">SCOPE_OPERATOR</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.SCOPE_HOOK"><code class="docutils literal notranslate"><span class="pre">SCOPE_HOOK</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_SCOPE"><code class="docutils literal notranslate"><span class="pre">RULE_SCOPE</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_CONTROLS"><code class="docutils literal notranslate"><span class="pre">RULE_CONTROLS</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.RULE_MATCH_MODE"><code class="docutils literal notranslate"><span class="pre">RULE_MATCH_MODE</span></code></a></li>
@@ -1183,6 +1334,7 @@ than crashing the listener’s dag-run-notification path.</p>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.include_source_code"><code class="docutils literal notranslate"><span class="pre">EmissionPolicy.include_source_code</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.hook_lineage"><code class="docutils literal notranslate"><span class="pre">EmissionPolicy.hook_lineage</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.include_full_task_info"><code class="docutils literal notranslate"><span class="pre">EmissionPolicy.include_full_task_info</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.dataset_filter"><code class="docutils literal notranslate"><span class="pre">EmissionPolicy.dataset_filter</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.EmissionPolicy.defaults"><code class="docutils literal notranslate"><span class="pre">EmissionPolicy.defaults()</span></code></a></li>
 </ul>
 </li>
@@ -1194,8 +1346,20 @@ than crashing the listener’s dag-run-notification path.</p>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule.has_dag"><code class="docutils literal notranslate"><span class="pre">Rule.has_dag</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule.has_task"><code class="docutils literal notranslate"><span class="pre">Rule.has_task</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule.has_op"><code class="docutils literal notranslate"><span class="pre">Rule.has_op</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.Rule.has_hook"><code class="docutils literal notranslate"><span class="pre">Rule.has_hook</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.get_hook_class_name"><code class="docutils literal notranslate"><span class="pre">get_hook_class_name()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter"><code class="docutils literal notranslate"><span class="pre">DatasetFilter</span></code></a><ul>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.tiers"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.tiers</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.authoring_patterns"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.authoring_patterns</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.context"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.context</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.get_patterns"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.get_patterns()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.is_excluded"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.is_excluded()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.DatasetFilter.exclude"><code class="docutils literal notranslate"><span class="pre">DatasetFilter.exclude()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.find_invalid_pattern"><code class="docutils literal notranslate"><span class="pre">find_invalid_pattern()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.resolve_task_emission_policy"><code class="docutils literal notranslate"><span class="pre">resolve_task_emission_policy()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.openlineage.utils.emission_policy.resolve_dag_emission_policy"><code class="docutils literal notranslate"><span class="pre">resolve_dag_emission_policy()</span></code></a></li>
 </ul>

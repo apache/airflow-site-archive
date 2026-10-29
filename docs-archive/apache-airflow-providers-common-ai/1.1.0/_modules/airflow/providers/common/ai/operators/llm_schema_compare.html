@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -716,6 +716,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.operators.llm</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">describe_prompt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.usage</span><span class="w"> </span><span class="kn">import</span> <span class="n">coerce_usage_limits</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span>
 
@@ -846,7 +847,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        ``temperature`` or ``max_tokens``. See :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`.</span>
 <span class="sd">    :param output_retries: How many times the model is asked again when its output</span>
 <span class="sd">        fails validation. See :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`.</span>
-<span class="sd">    :param data_sources: List of DataSourceConfig objects, one per system.</span>
+<span class="sd">    :param data_sources: List of DataSourceConfig objects, one per system. A</span>
+<span class="sd">        source whose connection is not a ``DbApiHook`` is read through DataFusion, which</span>
+<span class="sd">        ``common.sql`` pins below 52.</span>
 <span class="sd">    :param db_conn_ids: Connection IDs for databases to compare (used with</span>
 <span class="sd">        ``table_names``).</span>
 <span class="sd">    :param table_names: Tables to introspect from each ``db_conn_id``.</span>
@@ -1120,7 +1123,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">body</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Compatible: </span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">compatible</span><span class="si">}</span><span class="s2">"</span>
                 <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">" (mismatches: </span><span class="si">{</span><span class="n">summary</span><span class="si">}</span><span class="s2">)"</span> <span class="k">if</span> <span class="n">summary</span> <span class="k">else</span> <span class="s2">""</span><span class="p">)</span>
-                <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n\n</span><span class="s2">```</span><span class="se">\n</span><span class="s2">Prompt: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="si">}</span><span class="se">\n\n</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">```"</span>
+                <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n\n</span><span class="s2">```</span><span class="se">\n</span><span class="s2">Prompt: </span><span class="si">{</span><span class="n">describe_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">)</span><span class="si">}</span><span class="se">\n\n</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="si">}</span><span class="se">\n</span><span class="s2">```"</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer_for_approval</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>  <span class="c1"># type: ignore[misc]</span>
 
