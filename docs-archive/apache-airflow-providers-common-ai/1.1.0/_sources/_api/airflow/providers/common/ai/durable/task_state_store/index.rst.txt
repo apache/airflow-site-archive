@@ -1,0 +1,86 @@
+airflow.providers.common.ai.durable.task_state_store
+====================================================
+
+.. py:module:: airflow.providers.common.ai.durable.task_state_store
+
+.. autoapi-nested-parse::
+
+   Task-state-store-backed storage for the durable execution journal.
+
+   Available on Airflow >= 3.3, where the AIP-103 task state store provides a
+   per-task-instance key/value store that survives retries within a run and is
+   cleared when the run is removed. Each journal step is written under its own key
+   (``step_{N}``, prefixed with the reserved ``DURABLE_KEY_PREFIX`` so it cannot
+   collide with user keys in the shared key namespace); the store handles
+   persistence and, when ``[workers] state_store_backend`` is configured,
+   transparently offloads large values to external storage. No
+   ``[common.ai] durable_cache_path`` is needed.
+
+   This module is imported only on Airflow >= 3.3 (see
+   :func:`~airflow.providers.common.ai.durable.journal.build_task_storage`);
+   ``NEVER_EXPIRE`` does not exist on older Airflow versions.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.task_state_store.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.task_state_store.TaskStateStoreDurableStorage
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: TaskStateStoreDurableStorage(accessor)
+
+   Stores durable journal steps in the AIP-103 task state store.
+
+   Each step is written under its own key, scoped to the current task instance.
+   Entries are written with ``NEVER_EXPIRE`` so a retry can replay them regardless
+   of ``retry_delay`` or the global retention config, and the keys this attempt
+   touched are deleted by :meth:`delete_steps` once the run succeeds.
+
+   A run that fails permanently leaves its keys behind (``NEVER_EXPIRE`` skips
+   garbage collection); they are removed when the Dag run is cleaned up, since
+   task state store rows cascade with the run.
+
+   :param accessor: The task state store accessor for the current task
+       instance (``context["task_state_store"]``).
+
+
+   .. py:method:: save_step(key, entry)
+
+      Store one journal step.
+
+      Best-effort: the save runs *after* the step already succeeded, so a failed
+      write (e.g. a value over the backend's size limit) must not fail the step.
+      It is skipped with a warning, and the step runs again on the next retry.
+
+      :return: ``True`` if the entry was written, ``False`` if it was skipped.
+
+
+
+   .. py:method:: load_step(key)
+
+      Load one journal step, or ``None`` when there is none or it is not a journal entry.
+
+
+
+   .. py:method:: delete_steps(keys)
+
+      Delete these keys; a key left behind by a failed delete is reclaimed by the Dag-run cascade.
+
+
+

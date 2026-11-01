@@ -10,7 +10,10 @@ Attributes
 .. autoapisummary::
 
    airflow.providers.common.ai.hooks.pydantic_ai.OutputT
+   airflow.providers.common.ai.hooks.pydantic_ai.P
+   airflow.providers.common.ai.hooks.pydantic_ai.R
    airflow.providers.common.ai.hooks.pydantic_ai.FALLBACK_CONN_IDS_EXTRA_KEY
+   airflow.providers.common.ai.hooks.pydantic_ai.MODEL_PROVIDER_EXTRA_KEY
 
 
 Classes
@@ -29,8 +32,16 @@ Module Contents
 
 .. py:data:: OutputT
 
+.. py:data:: P
+
+.. py:data:: R
+
 .. py:data:: FALLBACK_CONN_IDS_EXTRA_KEY
    :value: 'fallback_conn_ids'
+
+
+.. py:data:: MODEL_PROVIDER_EXTRA_KEY
+   :value: 'model_provider'
 
 
 .. py:class:: PydanticAIHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, **kwargs)
@@ -51,7 +62,8 @@ Module Contents
        - **password**: API key
        - **host**: Base URL (optional, e.g. ``https://api.openai.com/v1``)
        - **extra** JSON: ``{"model": "openai:gpt-5",
-         "fallback_conn_ids": ["anthropic_prod", "bedrock_dr"]}``
+         "fallback_conn_ids": ["anthropic_prod", "bedrock_dr"]}``; add
+         ``"model_provider": "openai-chat"`` to resolve bare model names on this connection
 
    :param llm_conn_id: Airflow connection ID for the LLM provider.
    :param model_id: Model identifier. A name whose segment before the first ``:``
@@ -63,8 +75,9 @@ Module Contents
        platform: vendor subclasses (:class:`PydanticAIAzureHook`,
        :class:`PydanticAIBedrockHook`, :class:`PydanticAIVertexHook`) each default
        to their own platform via :attr:`model_provider`; the generic connection
-       type has none, so a bare name there raises ``ValueError`` instead of
-       reaching pydantic-ai's own, less actionable ``Unknown model`` error.
+       type uses the ``model_provider`` in its extra, and without one a bare name there
+       raises ``ValueError`` instead of reaching pydantic-ai's own, less actionable
+       ``Unknown model`` error.
        Overrides the model stored in the connection's extra field. Whichever of
        the two configures the primary's model is forwarded (only while still
        bare) down the fallback chain -- see :meth:`_resolve_fallback_models`.
@@ -132,6 +145,25 @@ Module Contents
 
 
 
+   .. py:method:: aget_hook(conn_id, hook_params = None)
+      :classmethod:
+
+      :async:
+
+
+      Return the hook for ``conn_id``, built with ``hook_params``, for use inside an async task.
+
+      The async counterpart of :meth:`get_hook`, with the same connection type check and
+      the connection already cached on the hook. ``get_connection`` sends to the supervisor
+      synchronously, which blocks the event loop while another async call is in flight (from
+      Airflow 3.3.1 it raises ``DeadlockImminentError`` instead), but only waits its turn from
+      any other thread, so the lookup runs on the hook's own worker thread.
+
+      :raises ValueError: if the connection's type is registered to a hook that is not a
+          ``PydanticAIHook``.
+
+
+
    .. py:method:: get_ui_field_behaviour()
       :staticmethod:
 
@@ -173,6 +205,22 @@ Module Contents
 
 
 
+   .. py:method:: aget_conn()
+      :async:
+
+
+      Return the configured pydantic-ai ``Model``, for use inside an async task.
+
+      The same model as :meth:`get_conn`, fallback chain included. Resolving it reads
+      connections with ``get_connection`` and ``extra_dejson``, and a subclass's
+      :meth:`_get_provider_kwargs` may read more (Snowflake's builds a ``SnowflakeHook``);
+      each of those sends to the supervisor synchronously, which blocks the event loop while
+      another async call is in flight (from Airflow 3.3.1 it raises ``DeadlockImminentError``
+      instead), but only waits its turn from any other thread, so the resolution runs on the
+      hook's own worker thread.
+
+
+
    .. py:method:: create_agent(output_type: type[OutputT], *, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
                   create_agent(*, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, str]
                   create_agent(output_type: type[OutputT], *, spec_file: str | pathlib.Path, instructions: str | None = ..., **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
@@ -207,15 +255,29 @@ Module Contents
 
 
 
+   .. py:method:: acreate_agent(output_type: type[OutputT], *, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
+                  acreate_agent(*, instructions: str, **agent_kwargs) -> pydantic_ai.Agent[object, str]
+                  acreate_agent(output_type: type[OutputT], *, spec_file: str | pathlib.Path, instructions: str | None = ..., **agent_kwargs) -> pydantic_ai.Agent[object, OutputT]
+                  acreate_agent(*, spec_file: str | pathlib.Path, instructions: str | None = ..., **agent_kwargs) -> pydantic_ai.Agent[object, str]
+      :async:
+
+
+      Create a pydantic-ai Agent configured with this hook's model, for use inside an async task.
+
+      The async counterpart of :meth:`create_agent`, with the same parameters, built on the
+      hook's own worker thread for the reason given in :meth:`aget_conn`. Run the agent with
+      ``await agent.run(...)``.
+
+
+
    .. py:method:: test_connection()
 
       Test connection by resolving the model.
 
-      A success here can come from this connection's own credentials, or -- when a
-      provider class rejects them with a ``TypeError`` -- from a silent retry against
-      the standard environment variables, which ignores those credentials entirely.
-      See :doc:`/provider_fallback`'s *Verifying a chain* section for how to tell the
-      two apart. Does NOT make an LLM API call — that would be expensive and fail for
+      A provider class that cannot be built from the connection's fields is reported as a failure
+      naming the provider, the fields passed and the provider's ``TypeError`` text.
+
+      Does NOT make an LLM API call — that would be expensive and fail for
       reasons unrelated to connectivity (quotas, billing, rate limits).
 
       Every connection in ``fallback_conn_ids`` is resolved too, so a
@@ -352,7 +414,7 @@ Module Contents
 
    1. ``service_account_info`` (JSON object) in ``extra``
       — loaded into a ``google.auth.credentials.Credentials``
-      object and passed as ``credentials`` to ``GoogleProvider``.
+      object and passed as ``credentials`` to ``GoogleCloudProvider``.
    2. ``api_key`` in ``extra`` — for Generative Language API (non-Vertex) or
       Vertex API-key auth.
    3. Application Default Credentials (``GOOGLE_APPLICATION_CREDENTIALS``,
@@ -384,8 +446,11 @@ Module Contents
    above), so its presence alone cannot tell the two platforms apart; guessing
    would risk silently authenticating against the wrong endpoint. To use the
    Generative Language API, set an explicit ``google:``-prefixed model id (on
-   the hook or the connection's ``model`` extra) -- that spelling already
-   works today.
+   the hook or the connection's ``model`` extra). ``GoogleProvider`` accepts only
+   ``api_key`` and ``base_url`` (without a key it reads ``GOOGLE_API_KEY``), so on
+   this connection type that spelling must not set Vertex-only fields
+   (``project``, ``location``, ``service_account_info``): they are rejected
+   (fail closed).
 
    :param llm_conn_id: Airflow connection ID.
    :param model_id: Model identifier, e.g. ``"google-cloud:gemini-2.5-flash"``. A

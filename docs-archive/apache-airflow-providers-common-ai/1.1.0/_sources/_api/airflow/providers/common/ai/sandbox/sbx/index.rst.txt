@@ -1,0 +1,172 @@
+airflow.providers.common.ai.sandbox.sbx
+=======================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.sbx
+
+.. autoapi-nested-parse::
+
+   Docker Sandboxes (``sbx``) microVM backend for the SandboxToolset.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.sbx.log
+   airflow.providers.common.ai.sandbox.sbx.HostNetworkPolicy
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.sbx.SbxSandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: HostNetworkPolicy
+
+.. py:class:: SbxSandboxBackend(*, image = 'python:3.12-slim', memory = '2g', cpus = None, sbx_path = 'sbx', create_timeout = 600.0, host_network_policy = 'unknown')
+
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+
+
+   Sandbox backend that runs agent commands in a Docker Sandboxes (``sbx``) microVM.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   Drives the ``sbx`` CLI: ``create`` provisions a per-session microVM, ``exec``
+   runs commands in it, and ``rm`` tears it down. Each sandbox is a microVM with
+   its own kernel, so agent code is isolated by a hardware boundary rather than a
+   shared kernel. Effective isolation still depends on the image, host policy,
+   and resource limits.
+
+   **Use this for local development, not production.** Docker Sandboxes is
+   built for running coding agents against a checkout on your own machine, so
+   driving it from an Airflow worker is off-label use. A production worker would
+   need the ``sbx`` binary on the host, an authenticated Docker account
+   (``sbx login``), a one-time ``sbx policy init``, and on Linux, KVM or nested
+   virtualization -- which an unprivileged container cannot provide. If you need
+   Kubernetes, use a remote backend --
+   :class:`~airflow.providers.common.ai.sandbox.ModalSandboxBackend` or
+   :class:`~airflow.providers.common.ai.sandbox.BoatSandboxBackend` for a
+   managed service or
+   :class:`~airflow.providers.common.ai.sandbox.OpenSandboxBackend` for a
+   self-hosted one -- or add your own behind :class:`SandboxBackend`.
+
+   **Network policy is layered on a host-level setting, not independent of
+   one.** ``sbx`` governs egress through a host-level ``sbx policy``.
+   ``create`` applies ``allow_egress_to`` as a per-sandbox rule on top of
+   that policy, but the rule can only narrow a host policy that is already
+   ``deny-all`` and never widen one. ``block_network`` has no per-sandbox
+   enforcement at all: no ``sbx`` call implements it. Rather than let a Dag
+   author believe a
+   :class:`~airflow.providers.common.ai.sandbox.SandboxSpec` restriction is
+   in force when it is not, ``create`` raises instead of silently ignoring a
+   spec that asks for either -- and since ``block_network`` defaults to
+   ``True``, a bare ``SandboxSpec()`` with no arguments already asks for it.
+   It lets the spec through only when the Deployment Manager has already
+   declared the host policy as ``deny-all`` through ``host_network_policy``.
+
+   **Orphans are not reclaimed automatically.** There is no server-side TTL to
+   fall back on: if the worker is killed outright, the microVM and its workspace
+   directory survive. Sandboxes are named ``airflow-sandbox-*`` so an operator
+   can find and remove them; budget for that sweep before running this at scale.
+
+   The template image must provide GNU coreutils ``timeout``, ``base64``, ``stat``,
+   ``head``, ``find``, ``mkdir`` and ``dirname``, which the command and file tools use. Any Debian or Ubuntu based
+   image, including ``python:*-slim``, does.
+
+   :param image: Container image for the sandbox (``sbx --template``).
+       Default ``"python:3.12-slim"``.
+   :param memory: Memory limit in binary units (e.g. ``"2g"``). ``sbx`` enforces a
+       1 GiB minimum. Default ``"2g"``.
+   :param cpus: Number of CPUs to allocate. ``None`` (default) uses the ``sbx``
+       default, which is all host CPUs.
+   :param sbx_path: Path to the ``sbx`` binary. Default ``"sbx"``.
+   :param create_timeout: Seconds to allow for provisioning; first-run microVM
+       boot plus an image pull can be slow. Default ``600``.
+   :param host_network_policy: What ``sbx policy`` is set to on this host.
+       ``"unknown"`` (default) makes ``create`` refuse any spec that asks for a
+       network guarantee. Set ``"deny-all"`` after running
+       ``sbx policy init deny-all``, or ``"allow-all"`` to state that egress is
+       open and have specs requesting isolation refused.
+
+
+   .. py:attribute:: name
+      :value: 'sbx'
+
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+      Every failure raised here is terminal, whichever class carries it. The
+      model has no input into provisioning, so a :class:`SandboxError` from
+      ``create`` is not something it can work around; the toolset re-raises one
+      as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
+      attempts the provisioning again.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Override: send the payload on stdin instead of in the command.
+
+      The base implementation embeds the content in the command itself, which
+      the guest's command-line length caps. ``sbx exec`` accepts stdin, so a
+      large file needs no such ceiling here.
+
+
+
+   .. py:method:: export_file(sandbox, path, dest, *, max_bytes)
+
+      Override: stream the file out of one ``sbx exec`` straight into ``dest``.
+
+      ``sbx exec`` carries the guest's stdout byte for byte, so the default's
+      base64 round trip per slice buys nothing here. The guest reports the size it
+      is about to send on stderr, which is how a file still being written is caught.
+
+
+
+   .. py:method:: destroy(sandbox)
+
+      Tear down the sandbox. Must be idempotent.
+
+
+

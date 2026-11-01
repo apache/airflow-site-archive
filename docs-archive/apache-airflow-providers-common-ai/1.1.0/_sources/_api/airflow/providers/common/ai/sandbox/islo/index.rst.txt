@@ -1,0 +1,168 @@
+airflow.providers.common.ai.sandbox.islo
+========================================
+
+.. py:module:: airflow.providers.common.ai.sandbox.islo
+
+.. autoapi-nested-parse::
+
+   islo.dev microVM backend for :class:`~airflow.providers.common.ai.toolsets.sandbox.SandboxToolset`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.islo.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.sandbox.islo.IsloSandboxBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: IsloSandboxBackend(*, image = None, vcpus = None, memory_mb = None, pause_after_idle = 600, auto_resume = 'on_activity', delete_after = 86400)
+
+   Bases: :py:obj:`airflow.providers.common.ai.sandbox.base.SandboxBackend`
+
+
+   Sandbox backend that runs agent commands in an `islo.dev <https://islo.dev>`__ microVM.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   Islo is a hosted API with no local daemon or host-virtualization requirement,
+   so this backend works from an Airflow worker running in a container.
+
+   **Credentials are ambient.** The SDK reads ``ISLO_API_KEY``, and optionally
+   ``ISLO_BASE_URL`` and ``ISLO_COMPUTE_URL``, from the worker environment on first
+   use; an unset ``ISLO_API_KEY`` fails the task at that point. Modal reads a
+   ``modal`` connection first, but that connection type is owned by the Modal
+   provider; an ``islo`` connection type belongs in a future Islo provider, not in
+   this one.
+
+   File reads, writes and exports move file contents through Islo's native
+   streaming APIs. Everything else runs through a shell wrapper in the sandbox,
+   so the image needs ``sh``, ``mkdir`` and ``rm`` for the wrapper, ``tail`` to
+   bound command output, ``dirname`` to create a written file's parent
+   directory, ``stat`` to size an over-budget read and to check a file before it
+   is exported, ``realpath`` to resolve a relative export path, and GNU ``find``
+   for directory listings. The server default
+   image and any Debian or Ubuntu based image provide them. Each command's
+   output is captured to a scratch file in the sandbox and only its last
+   ``max_output_bytes`` are returned, so the worker sees a bounded tail while
+   the sandbox's own ephemeral disk absorbs the rest.
+
+   Islo sets ``PATH`` for every command itself and drops a ``PATH`` given at
+   creation, so a spec that names it is refused rather than silently ignored.
+   ``SandboxSpec.owner`` is refused for the same reason: this backend keeps no
+   per-sandbox metadata, so a sandbox created here cannot be attached to later.
+
+   :param image: Sandbox image. ``None`` (default) uses the server default.
+   :param vcpus: Number of virtual CPUs. ``None`` uses the server default.
+   :param memory_mb: Memory in MB. ``None`` uses the server default.
+   :param pause_after_idle: Seconds without a command or file operation after
+       which the server pauses the microVM and releases its compute. ``None``
+       disables it. Default ``600``.
+   :param auto_resume: ``"on_activity"`` (default) resumes a paused sandbox on
+       the next command or file operation; ``"never"`` leaves it paused, and the
+       backend then treats a paused sandbox as unusable.
+   :param delete_after: Seconds after *creation* at which the server deletes the
+       sandbox whether or not it is in use. ``None`` disables it. Default
+       ``86400``.
+
+
+   .. py:attribute:: name
+      :value: 'islo'
+
+
+      Short backend identifier (e.g. ``"sbx"``), used in the toolset id.
+
+
+
+   .. py:method:: create(*, spec = None)
+
+      Provision one sandbox and return its handle (name or id).
+
+      ``spec`` of ``None`` means "no requirements stated": the backend applies
+      its own defaults and makes no guarantee. It is not the same as a default
+      :class:`SandboxSpec`, which is an explicit request for an isolated
+      sandbox. The toolset always sends a concrete spec, so ``None`` only
+      reaches a backend a caller drives directly.
+
+      Raise :class:`SandboxTerminalError` if ``spec`` asks for something this
+      backend cannot enforce, rather than provisioning something weaker than
+      was asked for. It is terminal rather than recoverable because it states
+      a configuration fact the model cannot see and cannot fix by retrying.
+
+      Every failure raised here is terminal, whichever class carries it. The
+      model has no input into provisioning, so a :class:`SandboxError` from
+      ``create`` is not something it can work around; the toolset re-raises one
+      as :class:`SandboxTerminalError` and fails the task, so Airflow's retry
+      attempts the provisioning again.
+
+
+
+   .. py:method:: run_command(sandbox, command, *, timeout, max_output_bytes)
+
+      Run ``command`` through a shell in the sandbox, bounded by ``timeout`` seconds.
+
+      ``max_output_bytes`` bounds what the backend retains *per stream* while
+      reading, so unbounded command output cannot exhaust worker memory before
+      the toolset gets a chance to format it.
+
+
+
+   .. py:method:: read_file(sandbox, path, *, max_bytes)
+
+      Read a file from the sandbox.
+
+      Raise :class:`SandboxFileTooLargeError` instead of transferring a file
+      larger than ``max_bytes``.
+
+
+
+   .. py:method:: export_file(sandbox, path, dest, *, max_bytes)
+
+      Override: stream the file through Islo's download API into ``dest``.
+
+      The default reads 4 MiB slices through ``run_command``, which here returns at
+      most 1 MiB per stream. The guest still runs the default's checks first, so a
+      refusal means what it does on every backend and the size it reports catches
+      a file that is still being written.
+
+
+
+   .. py:method:: write_file(sandbox, path, content)
+
+      Write ``content`` to ``path`` in the sandbox, creating parent directories.
+
+      The payload rides in the command itself, so this default is bounded by
+      the guest's command-line length. A backend that can stream stdin or
+      upload directly should override.
+
+
+
+   .. py:method:: list_directory(sandbox, path)
+
+      Return ``(name, is_dir)`` for each entry in a sandbox directory.
+
+
+
+   .. py:method:: destroy(sandbox)
+
+      Tear down the sandbox. Must be idempotent.
+
+
+

@@ -20,7 +20,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: LlamaIndexHook(llm_conn_id = None, embed_conn_id = None, embed_model = None, llm_model = None, *, embedding_kwargs = None, **kwargs)
+.. py:class:: LlamaIndexHook(llm_conn_id = None, embed_conn_id = None, *args, llm_model = None, embed_model = None, embedding_kwargs = None, **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
 
@@ -67,7 +67,8 @@ Module Contents
        still fails on the model name, not on connectivity.
        ``get_embedding_model()`` raises immediately at construction;
        ``get_llm()`` defers the error until the first call that reads
-       ``.metadata`` (``.chat()`` / ``.complete()``).
+       ``.metadata`` (``.chat()`` / ``.complete()``); ``test_connection()``
+       reads it, so it reports such a model name as a failure.
 
    Connection fields:
 
@@ -87,10 +88,10 @@ Module Contents
        embedding provider. Falls back to ``llm_conn_id`` when not set.
    :param embed_model: Embedding model name (e.g.
        ``"text-embedding-3-small"``). Overrides ``extra["embed_model"]``
-       on the connection.
+       on the connection. Passing it positionally (1.0.0 order: ``embed_model, llm_model``) is deprecated.
    :param llm_model: LLM model name (e.g. ``"gpt-5"``). Overrides
        ``extra["llm_model"]`` on the connection. Required when calling
-       :meth:`get_llm`.
+       :meth:`get_llm`. Passing it positionally (1.0.0 order: ``embed_model, llm_model``) is deprecated.
    :param embedding_kwargs: Additional keyword arguments to pass to the embedding
        model constructor without filtering. Connection ``api_key`` and ``api_base``
        values take precedence at the top level, but nested options supported by the
@@ -125,16 +126,12 @@ Module Contents
 
 
    .. py:attribute:: embed_model
-      :value: None
-
 
 
    .. py:attribute:: embedding_kwargs
 
 
    .. py:attribute:: llm_model
-      :value: None
-
 
 
    .. py:method:: get_ui_field_behaviour()
@@ -168,12 +165,13 @@ Module Contents
 
    .. py:method:: test_connection()
 
-      Test connection by resolving the LLM.
+      Test connection by resolving the LLM and reading its metadata.
 
-      Validates that the model identifier is valid and the provider can be
-      instantiated with the supplied credentials. Does NOT make an LLM API
-      call -- that would be expensive and fail for reasons unrelated to
-      connectivity (quotas, billing, rate limits).
+      Reading ``.metadata`` makes LlamaIndex validate the model name against its
+      OpenAI-only allowlist, so an Ollama or vLLM model name fails here instead of at the
+      first ``.chat()`` call. Does NOT make an LLM API call -- that would be expensive and
+      fail for reasons unrelated to connectivity (quotas, billing, rate limits), so a
+      revoked API key or an unreachable **host** still passes.
 
 
 

@@ -1,0 +1,378 @@
+airflow.providers.common.ai.durable.journal
+===========================================
+
+.. py:module:: airflow.providers.common.ai.durable.journal
+
+.. autoapi-nested-parse::
+
+   The durable journal: replay an agent's completed steps when Airflow retries its task.
+
+   An Airflow task retry is a fresh process that runs the agent again from the top. The
+   journal records each step an agent run completes (a model response, a tool result, a
+   capability operation) under the step's position in that run, and on the retry hands
+   back the recorded result instead of running the step again. Steps the previous
+   attempt never reached run live and are recorded in turn.
+
+   A step is replayed only when the step at the same position in the previous attempt
+   had the same name and the same fingerprint. The name says what kind of step it was
+   (``agent__model.request``, ``agent__function_toolset__x.call_tool:query``); the
+   fingerprint, computed by the framework adapter, says what it was asked (the message
+   history, the tool arguments). The first mismatch means the run took a different path
+   from the previous attempt, so that step and every step after it run live. So does
+   everything the previous attempt did after a step that raised, and, when the previous
+   attempt failed on the model's answers, everything from the model's last request on.
+
+   A :class:`DurableJournal` belongs to one task attempt. Each agent run in it is a
+   :class:`DurableRun`, numbered in the order the runs start, with positions of its own,
+   so a task that runs several agents replays each of them independently.
+
+   Nothing here depends on an agent framework. Payloads are JSON-compatible values and
+   fingerprints are opaque strings.
+   :class:`~airflow.providers.common.ai.durable.capability.AirflowDurability` drives the
+   journal for pydantic-ai. Another framework's adapter starts a run with
+   :meth:`DurableJournal.start_run` and calls one of two shapes of API on it:
+
+   * :meth:`DurableRun.run` wraps a step:
+     ``await run.run(name, kind=..., fingerprint=..., body=...)``.
+   * :meth:`DurableRun.claim` and :meth:`JournalStep.record` split it in two, for a
+     framework whose hooks see a step's input and its output in separate callbacks.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.journal.log
+   airflow.providers.common.ai.durable.journal.StepKind
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.journal.JournalStep
+   airflow.providers.common.ai.durable.journal.JournalStats
+   airflow.providers.common.ai.durable.journal.DurableRun
+   airflow.providers.common.ai.durable.journal.DurableJournal
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.durable.journal.build_task_storage
+   airflow.providers.common.ai.durable.journal.journal_scope
+   airflow.providers.common.ai.durable.journal.current_journal
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: StepKind
+
+   What a step is, for the end-of-run summary and for adapters that treat model steps specially.
+
+
+.. py:class:: JournalStep
+
+   One position in a run, claimed by :meth:`DurableRun.claim`.
+
+   When :attr:`replayed` is true, :attr:`payload` holds what the previous attempt
+   recorded and the caller returns it instead of running the step. Otherwise the
+   caller runs the step inside :meth:`executing` and passes its result to
+   :meth:`record`, or the exception it raised to :meth:`fail`; :meth:`run` does all three.
+
+
+   .. py:attribute:: durable_run
+      :type:  DurableRun
+
+
+   .. py:attribute:: position
+      :type:  int
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: kind
+      :type:  StepKind
+
+
+   .. py:attribute:: fingerprint
+      :type:  str | None
+
+
+   .. py:attribute:: replayable
+      :type:  bool
+      :value: True
+
+
+
+   .. py:attribute:: replayed
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: payload
+      :type:  Any
+      :value: None
+
+
+
+   .. py:attribute:: nested_runs
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: run(body, *, to_record = None)
+      :async:
+
+
+      Run a step that was not replayed and record what ``body`` returns, or that it raised.
+
+      :param to_record: Transforms the live result before it is recorded, such as
+          masking secrets in a tool result. The live result is returned unchanged.
+
+
+
+   .. py:method:: executing()
+
+      Mark the code in the ``with`` block as this step's work.
+
+      An agent run that starts inside the block, such as an agent a tool calls, is
+      numbered under this step, so the runs of later steps keep their numbers on a
+      retry that replays this step instead of running it.
+
+
+
+   .. py:method:: record(payload)
+
+      Record the step's result so a retry can replay it.
+
+      :param payload: A JSON-compatible value.
+      :return: Whether it was recorded. A step that was not recorded runs again on retry,
+          and one claimed with ``replayable=False`` is never recorded.
+
+
+
+   .. py:method:: fail(error)
+
+      Note that the step raised ``error``.
+
+      Nothing is recorded for the step, so it runs again on retry. If ``error`` goes on to
+      fail the run, :meth:`DurableRun.fail` uses this to tell which steps the run had
+      already started when it failed; a run that recovers from the error is unaffected.
+
+
+
+.. py:class:: JournalStats
+
+   What one task attempt replayed and recorded, by step kind.
+
+
+   .. py:attribute:: replayed
+      :type:  collections.Counter[StepKind]
+
+
+   .. py:attribute:: recorded
+      :type:  collections.Counter[StepKind]
+
+
+   .. py:attribute:: not_recorded
+      :type:  list[tuple[StepKind, str]]
+      :value: []
+
+
+
+.. py:class:: DurableRun(journal, key)
+
+   One agent run's steps in the journal.
+
+   Positions are handed out in the order steps are claimed. A step must be claimed
+   before its first ``await``, so concurrent steps (parallel tool calls) take their
+   positions in the order they were started rather than the order they finish.
+
+   Besides its steps, a run keeps one entry about itself: where the last attempt that
+   failed stopped being trustworthy, and the furthest position any attempt reached, so
+   a successful run deletes every step an earlier attempt left behind.
+
+
+   .. py:attribute:: journal
+
+
+   .. py:attribute:: key
+
+
+   .. py:attribute:: diverged
+      :value: False
+
+
+
+   .. py:property:: position
+      :type: int
+
+
+      The position the next claimed step will take.
+
+
+
+   .. py:method:: peek(position)
+
+      Return the entry the previous attempt recorded at ``position``, without claiming it.
+
+      ``None`` when nothing usable was recorded there, or the run has already diverged.
+      The entry is a dict with ``name``, ``kind``, ``fingerprint`` and ``payload``.
+
+
+
+   .. py:method:: claim(name, *, kind, fingerprint, replayable = True)
+
+      Take the next position and look up what the previous attempt recorded there.
+
+      :param name: What kind of step this is. Must be the same on every attempt for the
+          same step, and should differ between steps that are not interchangeable.
+      :param kind: ``"model"``, ``"tool"`` or ``"other"``.
+      :param fingerprint: What the step was asked, or ``None`` when it cannot be
+          fingerprinted. A step without one replays on a matching name, and only right
+          after a step that replayed.
+      :param replayable: ``False`` for a step that must always run live, such as a tool
+          whose effect Airflow cannot observe. It still takes a position, so the steps
+          after it keep theirs, but nothing is looked up or recorded for it.
+
+
+
+   .. py:method:: run(name, *, kind, fingerprint, body, replayable = True, to_record = None)
+      :async:
+
+
+      Replay the step at the next position, or run ``body`` and record what it returns.
+
+
+
+   .. py:method:: save(position, entry)
+
+      Store ``entry`` at ``position``; ``False`` when the storage skipped it.
+
+
+
+   .. py:method:: fail(error, *, model_at_fault = False)
+
+      Record that the run failed with ``error``, so a retry does not replay its error path.
+
+      Steps the run started before the step that raised ``error`` (tool calls running
+      alongside it, say) still replay on retry; everything from then on, including what
+      error handling recorded, runs again.
+
+      :param model_at_fault: The run failed because of what the model answered rather than
+          in a step, such as the framework giving up after the model's answers failed its
+          checks too many times. Those answers were recorded and would replay into the same
+          failure on every retry, so the retry asks the model again from its last request.
+          Ignored when a step raised ``error``: that step decides where the retry runs live.
+
+
+
+   .. py:method:: cleanup()
+
+      Delete this run's steps. Call only once the run, and anything that consumes it, has succeeded.
+
+
+
+   .. py:method:: reject(step, *, reason)
+
+      Run a step that was going to replay live instead, and every step after it.
+
+      For an adapter that finds the recorded payload unusable after :meth:`claim`
+      matched it, such as one written by a version whose types have changed since.
+
+
+
+.. py:class:: DurableJournal(storage, *, clean_up_after_run = False)
+
+   One task attempt's view of the durable journal.
+
+   :param storage: Where steps are stored; see :func:`build_task_storage`.
+   :param clean_up_after_run: Delete a run's steps as soon as it succeeds. A journal the
+       operator manages leaves this off and calls :meth:`cleanup` itself after the
+       task's own post-run work has succeeded.
+
+
+   .. py:attribute:: storage
+
+
+   .. py:attribute:: clean_up_after_run
+      :value: False
+
+
+
+   .. py:attribute:: stats
+
+
+   .. py:method:: get_run_id(*, default)
+
+      Return the id that names the task's agent run on every attempt.
+
+      The first attempt stores ``default`` beside the journal; a retry reads it back. It
+      is deleted with the journal when the task succeeds, so a later clear of the task
+      starts over with a new id. Capabilities that key their own state on the agent's
+      ``run_id``, such as pydantic-ai-harness ``SpendLimits`` and ``StepPersistence``,
+      need it to stay the same across a replay.
+
+      :param default: The id to use when no earlier attempt stored one, such as the
+          first attempt's task instance id.
+
+
+
+   .. py:method:: start_run()
+
+      Start an agent run.
+
+      A run started while a step of this journal executes (an agent a tool calls) is
+      numbered under that step; any other run takes the next top-level number.
+
+
+
+   .. py:method:: cleanup()
+
+      Delete the steps of every run in this attempt. Call only once the task's work has succeeded.
+
+
+
+   .. py:method:: log_summary(logger)
+
+      Log what this attempt replayed and recorded, and which steps a retry would run again.
+
+
+
+.. py:function:: build_task_storage(context)
+
+   Return the journal storage for the task instance ``context`` belongs to.
+
+   On Airflow >= 3.3 the journal lives in the AIP-103 task state store, which handles
+   persistence and large-value offload, so ``[common.ai] durable_cache_path`` is not
+   needed. On older versions it is a JSON file under that ObjectStorage path.
+
+
+.. py:function:: journal_scope(journal)
+
+   Make ``journal`` the active journal for the code in the ``with`` block.
+
+
+.. py:function:: current_journal()
+
+   Return the active journal, or ``None`` outside an Airflow task.
+
+   A journal set with :func:`journal_scope` wins. Otherwise, inside a running task,
+   this returns the task attempt's own journal, created on first use, which deletes the
+   steps of each run as soon as it succeeds. Outside a task there is nothing to replay
+   into, so durable execution is off and the agent runs as it would without it.
+
+

@@ -1,0 +1,110 @@
+airflow.providers.common.ai.triggers.llm_batch
+==============================================
+
+.. py:module:: airflow.providers.common.ai.triggers.llm_batch
+
+.. autoapi-nested-parse::
+
+   Trigger that polls a ``@task.llm_batch`` batch until it reaches a terminal state.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.triggers.llm_batch.LLMBatchTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: LLMBatchTrigger(*, llm_conn_id, adapter, batch_id, poll_interval, end_time, cancel_on_kill, cancel_on_timeout, timeout = 0)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Poll a batch adapter until the batch reaches a terminal state.
+
+   Deliberately thin: this trigger only polls and, on kill or timeout,
+   cancels. It never downloads or validates results; that is
+   :meth:`~airflow.providers.common.ai.operators.llm_batch.LLMBatchOperator.execute_complete`'s
+   job, back on the worker, so a 100k-row download never runs inside the
+   triggerer (a shared process serving many tasks).
+
+   :param llm_conn_id: Airflow connection ID, re-resolved into a live
+       adapter via :func:`~airflow.providers.common.ai.batch.dispatch.build_adapter`
+       (adapters are not serializable, so only the connection id travels).
+   :param adapter: The already-resolved adapter name (``"openai"`` /
+       ``"anthropic"``), not the adapter class or instance.
+   :param batch_id: The provider batch id to poll.
+   :param poll_interval: Seconds to sleep between polls.
+   :param end_time: Wall-clock deadline (``time.time()`` epoch seconds).
+       Wall-clock, not ``time.monotonic()``, because this trigger is
+       serialized to the metadata DB and may resume in a different
+       triggerer process after a restart.
+   :param timeout: The configured budget in seconds, used only to build the
+       timeout message.
+   :param cancel_on_kill: Cancel the batch from ``on_kill`` when the
+       deferred task is killed. Only takes effect on Airflow 3.3+, which is
+       the first version whose triggerer calls a trigger's ``on_kill``.
+   :param cancel_on_timeout: Cancel the batch when ``end_time`` passes
+       without the batch reaching a terminal state. When ``False``, the
+       task still fails with a ``timeout`` event, but the batch is left
+       running (and billing) and a later retry re-attaches to it.
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: adapter
+
+
+   .. py:attribute:: batch_id
+
+
+   .. py:attribute:: poll_interval
+
+
+   .. py:attribute:: end_time
+
+
+   .. py:attribute:: timeout
+      :value: 0
+
+
+
+   .. py:attribute:: cancel_on_kill
+
+
+   .. py:attribute:: cancel_on_timeout
+
+
+   .. py:method:: serialize()
+
+      Serialize trigger arguments and class path.
+
+
+
+   .. py:method:: on_kill()
+      :async:
+
+
+      Cancel the batch when a user kills the deferred task.
+
+      Runs in the triggerer event loop on Airflow 3.3+ only; older versions
+      never call a trigger's ``on_kill``, so a killed deferred task's batch
+      is not cancelled automatically there. Both the connection lookup and
+      the cancel call are blocking I/O, so both run off the event loop.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Poll the batch status and yield exactly one terminal event.
+
+
+

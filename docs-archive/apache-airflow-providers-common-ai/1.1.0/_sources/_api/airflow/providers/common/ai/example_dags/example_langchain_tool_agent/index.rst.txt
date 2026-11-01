@@ -1,0 +1,138 @@
+airflow.providers.common.ai.example_dags.example_langchain_tool_agent
+=====================================================================
+
+.. py:module:: airflow.providers.common.ai.example_dags.example_langchain_tool_agent
+
+.. autoapi-nested-parse::
+
+   ReAct tool-calling agent with LangChain -- research and report pipeline.
+
+   Demonstrates the "agent as a task" pattern using a LangChain ReAct agent
+   that autonomously decides which tools to call, composed with common.ai's
+   :class:`~airflow.providers.common.ai.operators.llm.LLMOperator` for report
+   formatting and AIP-90 HITL operators for human review.
+
+   Unlike RAG examples (fixed pipeline: retrieve then synthesize), this
+   agent's tool-call sequence is determined by the LLM at runtime.  The agent
+   might call zero tools or ten tools depending on the question.  This is the
+   canonical "agent as a task" pattern: Airflow handles scheduling, retry,
+   connections, and the surrounding workflow; the LangChain agent handles
+   internal reasoning.
+
+   ``example_langchain_tool_agent`` (manual trigger):
+
+   .. code-block:: text
+
+       prompt_review (HITLEntryOperator)
+           -> prepare_tools (@task)
+           -> run_research_agent (@task)
+           -> format_report (LLMOperator)
+           -> report_approval (ApprovalOperator)
+
+   **What this makes visible that running an agent alone hides:**
+
+   * The question goes through human review before the agent runs.
+   * The agent's raw findings are a visible XCom value between tasks.
+   * Report formatting is a separate, independently retryable LLM call.
+   * The formatted report requires human approval before delivery.
+
+   **Contrast with AIP-99's AgentOperator:**
+
+   AIP-99's ``AgentOperator`` uses PydanticAI for agent execution.  This
+   example uses LangChain's ``create_agent`` with LangChain-native ``@tool``
+   definitions.  Users with existing LangChain tools (700+ integrations)
+   can use them directly without rewriting as PydanticAI tools.
+
+   Before running:
+
+   1. Install LangChain packages::
+
+          pip install langchain langchain-openai langchain-text-splitters \
+                      langchain-community faiss-cpu
+
+   2. Create an LLM connection of type ``langchain`` named ``langchain_default``
+      (or the value of ``LLM_CONN_ID`` below) for your chosen model provider.
+      Set ``password`` to your API key; the ``host`` field is optional and only
+      needed for custom endpoints / Ollama.
+
+   3. Optionally place a knowledge base directory at ``DOCS_PATH`` and a
+      survey CSV at ``SURVEY_CSV_PATH``.  If ``DOCS_PATH`` is empty, sample
+      documents about Apache Airflow are created automatically.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.LLM_CONN_ID
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.LLM_MODEL
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.EMBEDDING_MODEL
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.DOCS_PATH
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.SURVEY_CSV_PATH
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.INDEX_PERSIST_DIR
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.DEFAULT_QUESTION
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.SAMPLE_DOCUMENTS
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.REPORT_SYSTEM_PROMPT
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.example_dags.example_langchain_tool_agent.example_langchain_tool_agent
+
+
+Module Contents
+---------------
+
+.. py:data:: LLM_CONN_ID
+   :value: 'langchain_default'
+
+
+.. py:data:: LLM_MODEL
+
+.. py:data:: EMBEDDING_MODEL
+
+.. py:data:: DOCS_PATH
+
+.. py:data:: SURVEY_CSV_PATH
+
+.. py:data:: INDEX_PERSIST_DIR
+
+.. py:data:: DEFAULT_QUESTION
+   :value: 'What percentage of Airflow users are on Kubernetes? Also check what the documentation says...
+
+
+.. py:data:: SAMPLE_DOCUMENTS
+
+.. py:data:: REPORT_SYSTEM_PROMPT
+   :value: 'You are a technical report writer. Format the research findings into a clear, well-structured...
+
+
+.. py:function:: example_langchain_tool_agent()
+
+   Research agent with LangChain tools and human review.
+
+   Task graph::
+
+       prompt_review (HITLEntryOperator)
+           -> prepare_tools (@task)
+           -> run_research_agent (@task)
+           -> format_report (LLMOperator)
+           -> report_approval (ApprovalOperator)
+
+   The agent uses LangChain's ``create_agent`` with a ReAct reasoning
+   loop.  It autonomously decides which tools to call -- knowledge base
+   search, survey data query, web search, or current-time lookup --
+   based on the user's question.  The number and sequence of tool calls
+   is determined by the LLM at runtime.
+
+   The surrounding Airflow DAG provides what the agent cannot:
+   human review of the question (HITLEntryOperator), formatted report
+   generation (LLMOperator), and human approval of the final output
+   (ApprovalOperator).
+
+

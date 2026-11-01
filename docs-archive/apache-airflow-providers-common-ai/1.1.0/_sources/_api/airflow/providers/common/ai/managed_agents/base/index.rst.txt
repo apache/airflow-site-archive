@@ -1,0 +1,367 @@
+airflow.providers.common.ai.managed_agents.base
+===============================================
+
+.. py:module:: airflow.providers.common.ai.managed_agents.base
+
+.. autoapi-nested-parse::
+
+   The contract a provider hook implements to expose a vendor-managed agent.
+
+   A managed agent runs its own reasoning loop on the vendor's infrastructure -- Snowflake
+   Cortex Agents, Amazon Bedrock AgentCore, Azure AI Foundry hosted agents, Vertex AI Agent
+   Engine. Airflow submits a request and reads an answer. This module defines the shape of that
+   exchange once, so that every consumer in ``common.ai`` (the toolset, the failover group)
+   is written against one interface rather than one per cloud.
+
+   The design follows ``DbApiHook`` in ``common.sql``: a small base mixed into each vendor's
+   own hook, with the agent as an *argument* to every method, because a hook is scoped to a
+   connection and one connection reaches many agents. Vendor providers adopt it the way they
+   adopt ``BaseMessageQueueProvider`` from ``common.messaging``: behind an optional extra, in a
+   module whose import of this contract is guarded, so a provider that floors Airflow 2 never
+   has to raise its floor.
+
+   This module imports nothing from pydantic-ai on purpose. A vendor hook's guarded import of
+   the contract must stay cheap.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentCapabilities
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentRequest
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentUsage
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentResponse
+   airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook
+   airflow.providers.common.ai.managed_agents.base.ManagedAgentClient
+   airflow.providers.common.ai.managed_agents.base.BoundManagedAgent
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.managed_agents.base.describe
+
+
+Module Contents
+---------------
+
+.. py:class:: ManagedAgentRef
+
+   Normalized identity of a remote agent.
+
+   :param platform: A stable, dotted platform id such as ``aws.bedrock_agentcore`` or
+       ``gcp.vertex_agent_engine``. Used as a metric tag, so keep the set small.
+   :param name: The vendor's canonical identifier for the agent: an ARN, a full resource
+       name, ``DATABASE.SCHEMA.NAME``.
+   :param version: The resolved version or revision when the platform exposes one. Recorded
+       so a behaviour change can be attributed to a deployment rather than to Airflow.
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: version
+      :type:  str | None
+      :value: None
+
+
+
+.. py:class:: ManagedAgentCapabilities
+
+   What a ``(hook, agent)`` pair can do.
+
+   Consumers check these and refuse rather than degrade: a bound agent rejects a request that
+   carries a ``session_id`` when ``sessions`` is False, and a failover group never offers
+   sessions at all, because failing over discards the conversation the primary was holding.
+
+
+   .. py:attribute:: sessions
+      :type:  bool
+      :value: False
+
+
+      Whether ``ManagedAgentRequest.session_id`` continues a conversation.
+
+
+
+   .. py:attribute:: structured_output
+      :type:  bool
+      :value: False
+
+
+      Whether ``ManagedAgentResponse.structured`` can carry a typed value.
+
+
+
+   .. py:attribute:: usage
+      :type:  bool
+      :value: False
+
+
+      Whether ``ManagedAgentResponse.usage`` is populated.
+
+
+
+   .. py:attribute:: trace
+      :type:  bool
+      :value: False
+
+
+      Whether ``ManagedAgentResponse.trace_ref`` is populated.
+
+
+
+.. py:class:: ManagedAgentRequest
+
+   One request to a managed agent.
+
+   Exactly one of ``prompt`` and ``messages`` must be set. Everything the contract does not
+   type travels in ``vendor_options``. A hook may read some of them itself and passes the rest
+   through to the vendor call.
+   Hooks reject options that would re-target the call (the agent identity, the connection),
+   because a model-facing caller must not be able to change what it is talking to.
+
+
+   .. py:attribute:: prompt
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: messages
+      :type:  collections.abc.Sequence[dict[str, Any]] | None
+      :value: None
+
+
+
+   .. py:attribute:: session_id
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: timeout
+      :type:  float | None
+      :value: None
+
+
+      Seconds to wait for the vendor call. The hook must enforce it on the request itself.
+
+
+
+   .. py:attribute:: vendor_options
+      :type:  dict[str, Any]
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: as_messages()
+
+      Return the request as a message list, for vendors that only accept messages.
+
+
+
+.. py:class:: ManagedAgentUsage
+
+   Usage the vendor reported for one invocation. Every field is optional because vendors differ.
+
+
+   .. py:attribute:: input_tokens
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: output_tokens
+      :type:  int | None
+      :value: None
+
+
+
+.. py:class:: ManagedAgentResponse
+
+   One answer from a managed agent.
+
+   ``text`` is what a calling model should read; the hook unwraps the vendor envelope to
+   produce it. ``raw`` is that envelope, always populated and never handed to a model, so a
+   Python caller loses nothing.
+
+
+   .. py:attribute:: text
+      :type:  str
+
+
+   .. py:attribute:: raw
+      :type:  Any
+
+
+   .. py:attribute:: structured
+      :type:  Any | None
+      :value: None
+
+
+
+   .. py:attribute:: session_id
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: usage
+      :type:  ManagedAgentUsage | None
+      :value: None
+
+
+
+   .. py:attribute:: trace_ref
+      :type:  str | None
+      :value: None
+
+
+      A vendor request, invocation or trace id, for joining Airflow's record to the vendor's.
+
+
+
+.. py:class:: BaseManagedAgentHook
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   Mixin a vendor hook adopts to expose its managed agents through the common contract.
+
+   Mixed in beside the vendor's own base and never replacing it::
+
+       class BedrockAgentCoreHook(AwsBaseHook, BaseManagedAgentHook): ...
+
+   It therefore has no ``__init__`` and makes no assumption about ``get_conn``. The agent is
+   an argument to every method, the way a statement is an argument to ``DbApiHook.run``.
+
+   Method names are chosen to collide with nothing on the shipped vendor hooks. That matters
+   more than it looks: ``SnowflakeCortexAgentHook`` already defines ``run_agent`` and
+   ``describe_agent``, and an abstract method that a vendor base happens to define is
+   silently satisfied with the wrong signature.
+
+   Implementations sort failures into three classes, and conflating them is the most common
+   way an adoption goes wrong:
+
+   * :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected` -- the agent
+     rejected the request in a way rephrasing could fix. The toolset turns it into a
+     pydantic-ai ``ModelRetry`` so the calling model tries again.
+   * :class:`~airflow.providers.common.ai.exceptions.ManagedAgentInvocationError` --
+     terminal: bad credentials, missing agent, revoked quota. Nothing on the agent side
+     recovers it; whether the task retries is the task's retry policy.
+   * Anything transient (429, 5xx, connection reset, read timeout) -- propagate unchanged.
+     Airflow's task-level retry is the right layer; a rephrase does nothing for a 503.
+
+
+   .. py:attribute:: agent_platform
+      :type:  ClassVar[str]
+
+      The ``platform`` every :class:`ManagedAgentRef` from this hook carries.
+
+
+
+   .. py:method:: resolve_agent(agent)
+      :abstractmethod:
+
+
+      Normalize ``agent`` into a platform-qualified reference. Must not make a network call.
+
+
+
+   .. py:method:: get_agent_capabilities(agent)
+      :abstractmethod:
+
+
+      Report what ``agent`` on this connection can do. Must not make a network call.
+
+
+
+   .. py:method:: invoke_agent(agent, request)
+      :abstractmethod:
+
+
+      Send ``request`` to ``agent`` and return its answer. Blocking.
+
+
+
+   .. py:method:: agent(agent)
+
+      Bind one agent on this connection. This is what the ``common.ai`` toolsets consume.
+
+
+
+.. py:class:: ManagedAgentClient
+
+   Bases: :py:obj:`Protocol`
+
+
+   What ``common.ai``'s consumers are typed against.
+
+   A :class:`BoundManagedAgent` satisfies it. So does
+   :class:`~airflow.providers.common.ai.managed_agents.failover.FailoverManagedAgentClient`,
+   and so can anything that needs no Airflow connection at all.
+
+
+   .. py:property:: ref
+      :type: ManagedAgentRef
+
+
+
+   .. py:property:: capabilities
+      :type: ManagedAgentCapabilities
+
+
+
+   .. py:method:: invoke(request)
+
+
+.. py:class:: BoundManagedAgent
+
+   A ``(hook, agent)`` pair. Forwards to the hook and resolves identity lazily.
+
+   This is also where the contract's "refuse rather than degrade" rule is enforced for every
+   adopter: a request that asks for something the pair's capabilities do not include is
+   rejected before the hook is called.
+
+
+   .. py:attribute:: hook
+      :type:  BaseManagedAgentHook
+
+
+   .. py:attribute:: agent
+      :type:  str
+
+
+   .. py:property:: ref
+      :type: ManagedAgentRef
+
+
+
+   .. py:property:: capabilities
+      :type: ManagedAgentCapabilities
+
+
+
+   .. py:method:: invoke(request)
+
+
+.. py:function:: describe(client)
+
+   Render a client's identity for a log line without letting identity resolution fail the caller.
+
+   A standby whose connection is misconfigured must not fail a call the primary served.
+
+
