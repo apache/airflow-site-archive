@@ -28,7 +28,7 @@ Module Contents
 
 .. py:function:: execute_callable(func, value, context, message)
 
-.. py:class:: MSGraphAsyncOperator(*, url, response_type = None, path_parameters = None, url_template = None, method = 'GET', query_parameters = None, headers = None, data = None, conn_id = KiotaRequestAdapterHook.default_conn_name, key = XCOM_RETURN_KEY, timeout = None, proxies = None, scopes = None, api_version = None, pagination_function = None, result_processor = lambda result, **context: result, event_handler = None, serializer = ResponseSerializer, **kwargs)
+.. py:class:: MSGraphAsyncOperator(*, url, response_type = None, path_parameters = None, url_template = None, method = 'GET', query_parameters = None, headers = None, data = None, conn_id = KiotaRequestAdapterHook.default_conn_name, key = XCOM_RETURN_KEY, timeout = None, proxies = None, scopes = None, api_version = None, pagination_function = None, result_processor = lambda result, **context: result, event_handler = None, serializer = ResponseSerializer, durable = False, **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
@@ -62,6 +62,14 @@ Module Contents
        the message from the event, otherwise the response from the event payload is returned.
    :param serializer: Class which handles response serialization (default is ResponseSerializer).
        Bytes will be base64 encoded into a string, so it can be stored as an XCom.
+   :param durable: Keep progress in the task state store, so that a retry, for instance after a worker
+       crash, resumes instead of starting over (default is False). Every processed page is kept with the
+       link to the next one, so the retry continues at the page it stopped at. The result of a request
+       that is not a GET is kept too, so the retry returns it instead of sending the request again. A
+       crash between a response and its write to the store still repeats that one request. The pages
+       are removed from the store once the result is returned. Pages are stored as they are, so pages
+       larger than the store's ``max_value_storage_bytes`` need a state store backend that offloads
+       large values. Needs Airflow 3.3 or later.
 
 
    .. py:attribute:: template_fields
@@ -151,6 +159,11 @@ Module Contents
       :type:  airflow.providers.microsoft.azure.triggers.msgraph.ResponseSerializer
 
 
+   .. py:attribute:: durable
+      :value: False
+
+
+
    .. py:method:: execute(context)
 
       Derive when creating an operator.
@@ -174,6 +187,37 @@ Module Contents
 
 
 
+   .. py:method:: get_task_state_store(context)
+
+      Return the task state store when this task is durable and the store is available.
+
+
+
+   .. py:method:: get_cursor(task_state_store)
+      :staticmethod:
+
+
+
+   .. py:method:: pull_pages(task_state_store)
+
+      Return the results of the pages processed so far, kept in the task state store.
+
+      A page is kept wrapped in a dict, so a page whose result is ``None`` is told apart from a page
+      that is gone, for instance because it expired under ``[state_store] default_retention_days``.
+      A missing page removes the pages and the cursor, so the next try starts again from the first page
+      instead of returning results with a hole in them.
+
+
+
+   .. py:method:: push_page(task_state_store, result, deferred)
+
+      Keep the result of a processed page and the link to the next one in the task state store.
+
+      The page goes in before the cursor that counts it, so a crash in between only fetches that page
+      again.
+
+
+
    .. py:method:: append_result(results, result, append_result_as_list_if_absent = False)
       :classmethod:
 
@@ -191,5 +235,8 @@ Module Contents
 
 
    .. py:method:: trigger_next_link(response, method_name, context)
+
+
+   .. py:method:: defer_to_next_link(url, query_parameters, method_name)
 
 

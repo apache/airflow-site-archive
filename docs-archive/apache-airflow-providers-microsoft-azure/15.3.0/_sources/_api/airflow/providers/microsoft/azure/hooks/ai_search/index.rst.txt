@@ -1,0 +1,219 @@
+airflow.providers.microsoft.azure.hooks.ai_search
+=================================================
+
+.. py:module:: airflow.providers.microsoft.azure.hooks.ai_search
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.microsoft.azure.hooks.ai_search.AzureAISearchHook
+
+
+Module Contents
+---------------
+
+.. py:class:: AzureAISearchHook(azure_ai_search_conn_id = default_conn_name, index = None, batch_size = None)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Query and write the documents of one Azure AI Search index, natively async.
+
+   A thin layer over :class:`azure.search.documents.aio.SearchClient`. The SDK pages the search
+   results and retries throttled requests (429 and 503) with their ``Retry-After``; the hook binds
+   the client to one index and adds what every Dag would otherwise repeat:
+
+   * :meth:`search` is an async generator over every matching document, without the ``@search.*``
+     metadata.
+   * :meth:`count` and :meth:`get_document` (``None`` when the index has no such document).
+   * :meth:`upload`, :meth:`merge`, :meth:`merge_or_upload` and :meth:`delete` write in batches of
+     ``batch_size`` documents and raise
+     :class:`~airflow.providers.microsoft.azure.exceptions.AzureAISearchIndexingError` when the
+     service rejects any document, naming the keys and reasons. The SDK itself returns the rejected
+     documents of a partially failed write without raising.
+
+   Other errors are the SDK's: :class:`azure.core.exceptions.HttpResponseError` with its
+   ``status_code``, and ``ServiceRequestError`` or ``ServiceResponseError`` when the connection fails.
+
+   Every method is a coroutine, so the hook is meant for async tasks and triggers. The credential is
+   chosen in this order:
+
+   1. Login, password and ``tenantId``: a service principal.
+   2. Password alone: an API key (a query key is enough to read, writing needs an admin key).
+   3. Neither: ``DefaultAzureCredential``, i.e. a managed or workload identity, or the environment.
+
+   With Microsoft Entra ID the identity needs the *Search Index Data Reader* role, or
+   *Search Index Data Contributor* to write.
+
+   .. seealso::
+       - Azure AI Search: https://learn.microsoft.com/en-us/azure/search/
+       - Roles for Microsoft Entra ID: https://learn.microsoft.com/en-us/azure/search/search-security-rbac
+       - Limits of a write request (1000 documents, 16 MB):
+         https://learn.microsoft.com/en-us/azure/search/search-limits-quotas-capacity#api-request-limits
+       - Per-document results of a write (HTTP 207):
+         https://learn.microsoft.com/en-us/rest/api/searchservice/documents/index
+
+   :param azure_ai_search_conn_id: The :ref:`Azure AI Search connection id<howto/connection:azure_ai_search>`.
+       Default is ``azure_ai_search_default``.
+   :param index: The index this hook works on. Overrides the ``index`` connection extra.
+   :param batch_size: Documents per write request, at most 1000 (the limit of the service). Overrides
+       the ``batch_size`` connection extra. Lower it for large documents: the service also refuses a
+       request over about 16 MB.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'azure_ai_search_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'azure_ai_search_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'azure_ai_search'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Azure AI Search'
+
+
+
+   .. py:attribute:: MAX_BATCH_SIZE
+      :value: 1000
+
+
+
+   .. py:attribute:: conn_id
+      :value: 'azure_ai_search_default'
+
+
+
+   .. py:attribute:: index
+      :value: None
+
+
+
+   .. py:attribute:: batch_size
+      :value: None
+
+
+
+   .. py:method:: get_connection_form_widgets()
+      :classmethod:
+
+
+      Return connection widgets to add to connection form.
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :classmethod:
+
+
+      Return custom field behaviour.
+
+
+
+   .. py:method:: get_async_conn()
+      :async:
+
+
+      Yield the async ``SearchClient`` of the index, closed with its credential on exit.
+
+
+
+   .. py:method:: search(search = '*', *, select = None, filter = None, order_by = None)
+      :async:
+
+
+      Yield every document of the index matching ``search`` and ``filter``.
+
+      The service pages the results with ``$skip``, which stops at 100,000: past that many matches
+      the search fails with an ``HttpResponseError``. To read a larger index, order by a sortable and
+      filterable key and filter on ranges of it, e.g. ``order_by=["id"]`` and
+      ``filter="id gt '<last key read>'"``, one range per call.
+
+      .. seealso::
+          - Paging through a large number of results:
+            https://learn.microsoft.com/en-us/azure/search/search-pagination-page-layout#paging-through-a-large-number-of-results
+          - The ``skip`` limit of the search request:
+            https://learn.microsoft.com/en-us/rest/api/searchservice/documents/search-post
+
+      :param search: Full-text query, ``*`` for every document.
+      :param select: Fields to return, all retrievable fields when omitted.
+      :param filter: OData filter, e.g. ``"category eq 'report'"``.
+      :param order_by: OData sort expressions, e.g. ``["modified desc"]``.
+
+
+
+   .. py:method:: count(*, filter = None)
+      :async:
+
+
+      Return the number of documents of the index, or of those matching ``filter``.
+
+      :param filter: OData filter, e.g. ``"category eq 'report'"``.
+
+
+
+   .. py:method:: get_document(key, *, select = None)
+      :async:
+
+
+      Return the document with this key, or ``None`` when the index has none.
+
+      :param key: The key of the document.
+      :param select: Fields to return, all retrievable fields when omitted.
+
+
+
+   .. py:method:: upload(documents)
+      :async:
+
+
+      Insert documents, or replace the ones whose key exists (every field is replaced).
+
+      :param documents: The documents to write.
+      :return: The number of documents written.
+
+
+
+   .. py:method:: merge(documents)
+      :async:
+
+
+      Update the given fields of existing documents; a document whose key is missing is rejected.
+
+      :param documents: The key and the fields to update of each document.
+      :return: The number of documents written.
+
+
+
+   .. py:method:: merge_or_upload(documents)
+      :async:
+
+
+      Update the given fields of existing documents, or insert the document when its key is new.
+
+      :param documents: The key and the fields to write of each document.
+      :return: The number of documents written.
+
+
+
+   .. py:method:: delete(documents)
+      :async:
+
+
+      Delete documents.
+
+      :param documents: The documents to delete; each needs at least its key field.
+      :return: The number of documents deleted.
+
+
+

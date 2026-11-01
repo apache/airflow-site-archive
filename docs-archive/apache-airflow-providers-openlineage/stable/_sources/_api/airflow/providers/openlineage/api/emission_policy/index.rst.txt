@@ -44,6 +44,10 @@ airflow.providers.openlineage.api.emission_policy
 
        extend_global_openlineage_emission_policy(dag, emit_dag_events=False)
 
+   **Drop the per-chunk objects a task writes, keeping the rest of its lineage**::
+
+       extend_global_openlineage_emission_policy(upload, exclude_datasets=["s3://my-bucket/staging/part_.*"])
+
    **Works with XComArg** — flags are applied to the underlying operator::
 
        result = extend_global_openlineage_emission_policy(
@@ -80,7 +84,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: extend_global_openlineage_emission_policy(obj, *, emit = None, emit_task_events = None, emit_dag_events = None, extract_operator_metadata = None, include_source_code = None, hook_lineage = None, include_full_task_info = None)
+.. py:function:: extend_global_openlineage_emission_policy(obj, *, emit = None, emit_task_events = None, emit_dag_events = None, extract_operator_metadata = None, include_source_code = None, hook_lineage = None, include_full_task_info = None, exclude_datasets = None)
 
    Extend the global OpenLineage emission policy with per-task / per-DAG overrides.
 
@@ -91,8 +95,8 @@ Module Contents
    When called on a **DAG**, flags are applied as follows:
 
    - Task-relevant flags (``emit``, ``emit_task_events``, ``extract_operator_metadata``,
-     ``include_source_code``, ``hook_lineage``, ``include_full_task_info``) are
-     **propagated to all tasks** in the Dag at the time of the call.
+     ``include_source_code``, ``hook_lineage``, ``include_full_task_info``,
+     ``exclude_datasets``) are **propagated to all tasks** in the Dag at the time of the call.
    - DAG-run-level flags (``emit``, ``emit_dag_events``) are stored on the Dag itself.
    - ``emit_dag_events`` is meaningless on a task and logs a warning if provided.
 
@@ -139,6 +143,12 @@ Module Contents
    :param include_source_code: Whether to include operator source code in Python/Bash operator events.
    :param hook_lineage: Whether to use ``HookLineageCollector`` as a fallback.
    :param include_full_task_info: Whether to include the full serialized operator state.
+   :param exclude_datasets: Regex patterns matched with ``re.fullmatch`` against
+       ``"<namespace>/<name>"`` of each OpenLineage dataset of the task (without a doubled ``/``
+       when the name starts with one); matching datasets are
+       dropped. Replaces, instead of extending, any list from the ``emission_policy`` config,
+       including lists set for specific hooks.
+   :raises ValueError: If ``exclude_datasets`` is not a list of valid regex patterns.
    :return: The same *obj* — allows use as a decorator or in chained calls.
 
 

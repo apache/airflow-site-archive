@@ -11,6 +11,7 @@ Attributes
 
    tests.system.openlineage.operator.NoVariableError
    tests.system.openlineage.operator.log
+   tests.system.openlineage.operator.VALIDATION_ERROR_TAG
 
 
 Classes
@@ -18,6 +19,7 @@ Classes
 
 .. autoapisummary::
 
+   tests.system.openlineage.operator.Attempt
    tests.system.openlineage.operator.OpenLineageTestOperator
 
 
@@ -26,6 +28,7 @@ Functions
 
 .. autoapisummary::
 
+   tests.system.openlineage.operator.log_validation_error
    tests.system.openlineage.operator.any
    tests.system.openlineage.operator.is_numeric
    tests.system.openlineage.operator.is_datetime
@@ -37,6 +40,8 @@ Functions
    tests.system.openlineage.operator.url_path
    tests.system.openlineage.operator.setup_jinja
    tests.system.openlineage.operator.match
+   tests.system.openlineage.operator.check_run_id_integrity
+   tests.system.openlineage.operator.sort_by_execution
 
 
 Module Contents
@@ -45,6 +50,12 @@ Module Contents
 .. py:data:: NoVariableError
 
 .. py:data:: log
+
+.. py:data:: VALIDATION_ERROR_TAG
+   :value: '[OL_VALIDATION_ERROR]'
+
+
+.. py:function:: log_validation_error(msg, *args)
 
 .. py:function:: any(result)
 
@@ -94,7 +105,81 @@ Module Contents
 
 
 
-.. py:class:: OpenLineageTestOperator(event_templates = None, file_path = None, env = None, event_count_assertions = None, clear_variables = True, fail_fast = False, event_sort_fn = None, **kwargs)
+.. py:class:: Attempt
+
+   Bases: :py:obj:`NamedTuple`
+
+
+   Which execution of a job an event belongs to.
+
+   ``try_number``, ``map_index``, ``loop_index`` and ``region_id`` are None for a Dag event and when the task has
+   none. ``clear_number`` plays for a Dag run the role ``try_number`` plays for a task instance, and ``region_id``
+   tells apart two executions of one loop iteration after the loop was cleared, which can share every other field.
+
+
+   .. py:attribute:: dag_run_id
+      :type:  Any
+
+
+   .. py:attribute:: clear_number
+      :type:  Any
+
+
+   .. py:attribute:: try_number
+      :type:  Any
+
+
+   .. py:attribute:: map_index
+      :type:  Any
+
+
+   .. py:attribute:: loop_index
+      :type:  Any
+
+
+   .. py:attribute:: region_id
+      :type:  Any
+
+
+.. py:function:: check_run_id_integrity(events_by_key, repeated_start_keys = ())
+
+   Check that ``run.runId`` identifies exactly one attempt of exactly one job, and return the problems found.
+
+   Events are grouped by ``runId``. The attempt of an event is its Dag run id and clear number, plus for a task
+   event ``(try_number, map_index, loop.index, region_id)``, all from ``run.facets.airflow`` (``airflowDagRun`` for Dag
+   events). Query events, which are child runs of a task, have no attempt. For every group:
+
+   1. all events share one ``job.name``;
+   2. all events share one attempt, so another Dag run, clear, retry, map index or loop iteration can't reuse
+      a ``runId``;
+   3. the lifecycle is complete, so START and COMPLETE/FAIL of an attempt can't carry different ``runId`` values:
+
+      * task and query: exactly one START, or several when the key of the START events is in
+        ``repeated_start_keys`` (deferral re-emits START on every resume), and exactly one COMPLETE or FAIL;
+      * Dag run: one START and at most one COMPLETE or FAIL. The Dag run that contains the checking task is
+        still running when the check happens, so its COMPLETE/FAIL is missing, while Dag runs triggered by it
+        can already have finished.
+
+   Across groups:
+
+   4. one attempt of a job has one ``runId``.
+
+   For a task in a loop, i.e. with ``task.loop``, also:
+
+   5. ``runId`` is ``taskInstance.id``, as its iterations share every other coordinate;
+   6. ``taskInstance.loop.region_id`` is ``taskInstance.region_id`` for a task that isn't mapped, and another region
+      for a mapped one, whose own region is its expansion inside the loop's;
+   7. one run of a loop, i.e. its Dag run, clear and ``loop.trajectory``, has one ``loop.region_id``.
+
+   Only the events passed in are checked, i.e. those of the keys listed in the expected events.
+
+
+.. py:function:: sort_by_execution(event)
+
+   Order the events of a task's executions by loop iteration, map index and try, as ``event_sort_fn``.
+
+
+.. py:class:: OpenLineageTestOperator(event_templates = None, file_path = None, env = None, event_count_assertions = None, clear_variables = True, fail_fast = False, event_sort_fn = None, check_run_ids = True, **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
@@ -135,6 +220,10 @@ Module Contents
        ascending before comparison. Useful for mapped tasks whose events arrive in non-deterministic
        order. When the template for a key is a list, sorting is required for pairwise comparison to
        be meaningful.
+   :param check_run_ids: if True (default), additionally check the collected events with
+       ``check_run_id_integrity``: START and COMPLETE/FAIL of one attempt share a ``runId``, while another
+       try, map index or loop iteration gets its own. Set to False only for a Dag whose expected events
+       intentionally list a task's lifecycle partially. It runs only once every key matches its template.
 
    Special sentinel values in expected dicts:
 
@@ -178,6 +267,11 @@ Module Contents
 
    .. py:attribute:: fail_fast
       :value: False
+
+
+
+   .. py:attribute:: check_run_ids
+      :value: True
 
 
 
