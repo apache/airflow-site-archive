@@ -10,12 +10,13 @@ Classes
 .. autoapisummary::
 
    airflow.timetables.assets.AssetOrTimeSchedule
+   airflow.timetables.assets.AssetAndTimeSchedule
 
 
 Module Contents
 ---------------
 
-.. py:class:: AssetOrTimeSchedule(*, timetable, assets)
+.. py:class:: AssetOrTimeSchedule
 
    Bases: :py:obj:`airflow.timetables.simple.AssetTriggeredTimetable`
 
@@ -23,46 +24,25 @@ Module Contents
    Combine time-based scheduling with event-based scheduling.
 
 
+   .. py:attribute:: asset_condition
+      :type:  airflow.serialization.definitions.assets.SerializedAssetBase
+
+      The asset condition that triggers a DAG using this timetable.
+
+
+
    .. py:attribute:: timetable
+      :type:  airflow.timetables.base.Timetable
 
 
-   .. py:attribute:: description
+   .. py:attribute:: batch_asset_events
+      :type:  bool
 
-      Human-readable description of the timetable.
-
-      For example, this can produce something like ``'At 21:30, only on Friday'``
-      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
-
-
-
-   .. py:attribute:: periodic
-
-      Whether this timetable runs periodically.
-
-      This defaults to and should generally be *True*, but some special setups
-      like ``schedule=None`` and ``"@once"`` set it to *False*.
+      Whether queued asset events are consumed together in one Dag run.
 
 
 
-   .. py:attribute:: can_be_scheduled
-
-      Whether this timetable can actually schedule runs in an automated manner.
-
-      This defaults to and should generally be *True* (including non periodic
-      execution types like *@once* and data triggered tables), but
-      ``NullTimetable`` sets this to *False*.
-
-
-
-   .. py:attribute:: active_runs_limit
-
-      Maximum active runs that can be active at one time for a DAG.
-
-      This is called during DAG initialization, and the return value is used as
-      the DAG's default ``max_active_runs``. This should generally return *None*,
-      but there are good reasons to limit DAG run parallelism in some cases, such
-      as for :class:`~airflow.timetable.simple.ContinuousTimetable`.
-
+   .. py:method:: __attrs_post_init__()
 
 
    .. py:method:: deserialize(data)
@@ -149,6 +129,168 @@ Module Contents
       :param run_type: type of DagRun
       :param data_interval: the data interval
       :param run_after: the date before which dag run won't start.
+
+
+
+.. py:class:: AssetAndTimeSchedule(*, timetable, assets)
+
+   Bases: :py:obj:`airflow.timetables.base.Timetable`
+
+
+   Time-based schedule that waits for required assets before creating a run.
+
+   This timetable composes a time-based timetable with an asset condition. It
+   schedules runs according to the provided ``timetable`` (e.g. cron), but a run
+   is only created when all required assets are present. Unlike
+   :class:`AssetOrTimeSchedule`, this does not create asset-triggered runs.
+
+
+   .. py:attribute:: asset_gated
+      :value: True
+
+
+      Whether this timetable's scheduled runs are gated on an asset condition.
+
+      This is *True* for timetables whose time-based runs are only created once
+      their asset condition is satisfied. Manual and backfill runs are unaffected.
+      A timetable that enables this must define a non-null ``asset_condition``.
+
+
+
+   .. py:attribute:: timetable
+
+
+   .. py:method:: deserialize(data)
+      :classmethod:
+
+
+      Deserialize a timetable from data.
+
+      This is called when a serialized DAG is deserialized. ``data`` will be
+      whatever was returned by ``serialize`` during DAG serialization. The
+      default implementation constructs the timetable without any arguments.
+
+
+
+   .. py:method:: serialize()
+
+      Serialize the timetable for JSON encoding.
+
+      This is called during DAG serialization to store timetable information
+      in the database. This should return a JSON-serializable dict that will
+      be fed into ``deserialize`` when the DAG is deserialized. The default
+      implementation returns an empty dict.
+
+
+
+   .. py:method:: validate()
+
+      Validate the timetable is correctly specified.
+
+      Override this method to provide run-time validation raised when a DAG
+      is put into a dagbag. The default implementation does nothing.
+
+      :raises: AirflowTimetableInvalid on validation failure.
+
+
+
+   .. py:property:: description
+      :type: str
+
+
+      Human-readable description of the timetable.
+
+      For example, this can produce something like ``'At 21:30, only on Friday'``
+      from the cron expression ``'30 21 * * 5'``. This is used in the webserver UI.
+
+
+
+   .. py:property:: summary
+      :type: str
+
+
+      A short summary for the timetable.
+
+      This is used to display the timetable in the web UI. A cron expression
+      timetable, for example, can use this to display the expression. The
+      default implementation returns the timetable's type name.
+
+
+
+   .. py:property:: periodic
+      :type: bool
+
+
+      Whether this timetable runs periodically.
+
+      This defaults to and should generally be *True*, but some special setups
+      like ``schedule=None`` and ``"@once"`` set it to *False*.
+
+
+
+   .. py:property:: can_be_scheduled
+      :type: bool
+
+
+      Whether this timetable can actually schedule runs in an automated manner.
+
+      This defaults to and should generally be *True* (including non periodic
+      execution types like *@once* and data triggered tables), but
+      ``NullTimetable`` sets this to *False*.
+
+
+
+   .. py:property:: active_runs_limit
+      :type: int | None
+
+
+      Maximum active runs that can be active at one time for a DAG.
+
+      This is called during DAG initialization, and the return value is used as
+      the DAG's default ``max_active_runs``. This should generally return *None*,
+      but there are good reasons to limit DAG run parallelism in some cases, such
+      as for :class:`~airflow.timetable.simple.ContinuousTimetable`.
+
+
+
+   .. py:method:: infer_manual_data_interval(*, run_after)
+
+      When a DAG run is manually triggered, infer a data interval for it.
+
+      This is used for e.g. manually-triggered runs, where ``run_after`` would
+      be when the user triggers the run. The default implementation raises
+      ``NotImplementedError``.
+
+
+
+   .. py:method:: next_dagrun_info(*, last_automated_data_interval, restriction)
+
+      Provide information to schedule the next DagRun.
+
+      The default implementation raises ``NotImplementedError``.
+
+      :param last_automated_data_interval: The data interval of the associated
+          DAG's last scheduled or backfilled run (manual runs not considered).
+          This is only ``None`` when the Dag is being scheduled for the first
+          time, which happens when the Dag processor first parses the Dag --
+          before any Dag run exists.
+      :param restriction: Restriction to apply when scheduling the DAG run.
+          See documentation of :class:`TimeRestriction` for details.
+
+      :return: Information on when the next DagRun can be scheduled. None
+          means a DagRun will not happen. This does not mean no more runs
+          will be scheduled even again for this DAG; the timetable can return
+          a DagRunInfo object when asked at another time.
+
+
+
+   .. py:method:: generate_run_id(*, run_type, **kwargs)
+
+      Generate a unique run ID.
+
+      :param run_type: The type of DAG run.
+      :param run_after: the datetime before which to Dag cannot run.
+      :param data_interval: The data interval of the DAG run.
 
 
 
