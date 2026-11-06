@@ -1,0 +1,137 @@
+airflow.providers.common.ai.batch.polling
+=========================================
+
+.. py:module:: airflow.providers.common.ai.batch.polling
+
+.. autoapi-nested-parse::
+
+   The poll-until-terminal decision logic shared by the trigger and the operator's sync path.
+
+   Both loops do the same thing with different I/O primitives (``await
+   asyncio.to_thread(...)`` vs a direct call, ``asyncio.sleep`` vs ``time.sleep``).
+   The decision of *what to do* with each poll result lives here, once, so the
+   two cannot drift: the caller feeds in either a :class:`~airflow.providers.common.ai.batch.base.BatchState`
+   or the exception a poll raised, and gets back "keep polling" or a finished
+   event dict, plus whether the batch should be cancelled first.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.polling.MAX_CONSECUTIVE_POLL_FAILURES
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.polling.PollOutcome
+   airflow.providers.common.ai.batch.polling.BatchPoller
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.batch.polling.terminal_event
+
+
+Module Contents
+---------------
+
+.. py:data:: MAX_CONSECUTIVE_POLL_FAILURES
+   :value: 5
+
+
+.. py:class:: PollOutcome
+
+   What the poll loop should do after one status check.
+
+   ``event`` is ``None`` while the batch is still running. Otherwise it is the
+   dict the trigger yields as its ``TriggerEvent`` payload (and the operator's
+   sync loop returns), with ``status`` in ``success``/``failed``/``expired``/
+   ``cancelled``/``timeout``/``error``. ``cancel`` says the caller should
+   cancel the batch before emitting the event (our own deadline passed with
+   ``cancel_on_timeout=True``); the caller then reports the result of that
+   cancel through :meth:`BatchPoller.finish_timeout`.
+
+
+   .. py:attribute:: event
+      :type:  dict[str, Any] | None
+
+
+   .. py:attribute:: cancel
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: BatchPoller(*, batch_id, end_time, timeout, cancel_on_timeout)
+
+   Tracks consecutive failures and the wall-clock deadline across polls.
+
+   :param batch_id: The provider batch id, echoed into every event.
+   :param end_time: Wall-clock deadline in epoch seconds.
+   :param timeout: The configured budget in seconds, for the timeout message.
+   :param cancel_on_timeout: Whether the deadline should cancel the batch.
+
+
+   .. py:attribute:: batch_id
+
+
+   .. py:attribute:: end_time
+
+
+   .. py:attribute:: timeout
+
+
+   .. py:attribute:: cancel_on_timeout
+
+
+   .. py:attribute:: consecutive_failures
+      :value: 0
+
+
+
+   .. py:property:: deadline_iso
+      :type: str
+
+
+
+   .. py:method:: on_state(state, *, now)
+
+      Decide after a successful status check.
+
+
+
+   .. py:method:: on_error(exc, *, now)
+
+      Decide after a status check raised.
+
+      Persistent failures past the deadline are a real timeout and honor
+      ``cancel_on_timeout``. Persistent failures inside the deadline give up
+      with ``"error"`` and leave the batch alone: its health is unknown, so
+      cancelling it would be presumptuous.
+
+
+
+   .. py:method:: finish_timeout(*, cancelled, cancel_error = None)
+
+      Build the final ``timeout`` event once the caller has (not) cancelled the batch.
+
+      The message names the budget, the deadline, and what happened to the
+      batch, so an on-call reader can tell "cancelled, a retry resubmits"
+      from "still running and billing, a retry re-attaches".
+
+
+
+.. py:function:: terminal_event(batch_id, state)
+
+   Reshape a terminal :class:`~airflow.providers.common.ai.batch.base.BatchState` into the shared event dict.
+
+

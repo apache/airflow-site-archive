@@ -10,6 +10,7 @@ Attributes
 .. autoapisummary::
 
    tests.system.openlineage.operator.NoVariableError
+   tests.system.openlineage.operator.AIRFLOW_VERSION
    tests.system.openlineage.operator.log
    tests.system.openlineage.operator.VALIDATION_ERROR_TAG
 
@@ -29,6 +30,7 @@ Functions
 .. autoapisummary::
 
    tests.system.openlineage.operator.log_validation_error
+   tests.system.openlineage.operator.check_values
    tests.system.openlineage.operator.any
    tests.system.openlineage.operator.is_numeric
    tests.system.openlineage.operator.is_datetime
@@ -49,6 +51,8 @@ Module Contents
 
 .. py:data:: NoVariableError
 
+.. py:data:: AIRFLOW_VERSION
+
 .. py:data:: log
 
 .. py:data:: VALIDATION_ERROR_TAG
@@ -56,6 +60,13 @@ Module Contents
 
 
 .. py:function:: log_validation_error(msg, *args)
+
+.. py:function:: check_values(checks)
+
+   Check values a task computes itself, given as ``{name: (actual, expected)}``, e.g. what a macro returns.
+
+   Every mismatch is logged as a validation error before failing the task.
+
 
 .. py:function:: any(result)
 
@@ -141,7 +152,7 @@ Module Contents
       :type:  Any
 
 
-.. py:function:: check_run_id_integrity(events_by_key, repeated_start_keys = ())
+.. py:function:: check_run_id_integrity(events_by_key, repeated_start_keys = (), corrected_terminal_keys = (), unstarted_terminal_keys = ())
 
    Check that ``run.runId`` identifies exactly one attempt of exactly one job, and return the problems found.
 
@@ -158,7 +169,11 @@ Module Contents
         ``repeated_start_keys`` (deferral re-emits START on every resume), and exactly one COMPLETE or FAIL;
       * Dag run: one START and at most one COMPLETE or FAIL. The Dag run that contains the checking task is
         still running when the check happens, so its COMPLETE/FAIL is missing, while Dag runs triggered by it
-        can already have finished.
+        can already have finished;
+      * one more COMPLETE or FAIL is allowed when one of them has its key in ``corrected_terminal_keys``: a user
+        marking a finished task or Dag run with another state emits a second one for the same run;
+      * no START is needed when the key of its COMPLETE or FAIL is in ``unstarted_terminal_keys``: a task that
+        fails before it runs, e.g. on rendering its templates, or that a user marks before it started.
 
    Across groups:
 
@@ -176,10 +191,10 @@ Module Contents
 
 .. py:function:: sort_by_execution(event)
 
-   Order the events of a task's executions by loop iteration, map index and try, as ``event_sort_fn``.
+   Order the events of executions by Dag run clear, loop run and iteration, map index and try, as ``event_sort_fn``.
 
 
-.. py:class:: OpenLineageTestOperator(event_templates = None, file_path = None, env = None, event_count_assertions = None, clear_variables = True, fail_fast = False, event_sort_fn = None, check_run_ids = True, **kwargs)
+.. py:class:: OpenLineageTestOperator(event_templates = None, file_path = None, env = None, event_count_assertions = None, clear_variables = True, fail_fast = False, event_sort_fn = None, check_run_ids = True, corrected_terminal_keys = (), unstarted_terminal_keys = (), **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
@@ -206,7 +221,9 @@ Module Contents
        included in the error if events are unexpectedly found.
    :param file_path: alternatively, a path to a JSON file containing an array of event templates.
        Multiple events sharing the same ``job.name`` + ``eventType`` key are accumulated into a list.
-       An event with ``"$absent": "<reason>"`` asserts the variable must not exist.
+       An event with ``"$absent": "<reason>"`` asserts the variable must not exist. An event with
+       ``"$since": "<version>"`` is checked only from that Airflow version on, e.g. when older versions don't
+       emit it.
    :param env: jinja environment used to render event templates.
    :param event_count_assertions: dict mapping a regex pattern (matched against variable keys) to a
        count expression. Supported expressions: ``"N"``, ``"==N"``, ``">=N"``, ``"<=N"``.
@@ -220,6 +237,12 @@ Module Contents
        ascending before comparison. Useful for mapped tasks whose events arrive in non-deterministic
        order. When the template for a key is a list, sorting is required for pairwise comparison to
        be meaningful.
+   :param corrected_terminal_keys: keys of COMPLETE/FAIL events emitted when a user marks a finished task or
+       Dag run with another state. The run they belong to may then have one COMPLETE/FAIL more in the
+       ``check_run_id_integrity`` check: the one of its original outcome, and the one of the correction.
+   :param unstarted_terminal_keys: keys of COMPLETE/FAIL events of runs that have no START, as the task never ran:
+       it failed before it started or a user marked it before it started. The ``check_run_id_integrity`` check
+       then doesn't require a START for their runs.
    :param check_run_ids: if True (default), additionally check the collected events with
        ``check_run_id_integrity``: START and COMPLETE/FAIL of one attempt share a ``runId``, while another
        try, map index or loop iteration gets its own. Set to False only for a Dag whose expected events
@@ -272,6 +295,16 @@ Module Contents
 
    .. py:attribute:: check_run_ids
       :value: True
+
+
+
+   .. py:attribute:: corrected_terminal_keys
+      :value: ()
+
+
+
+   .. py:attribute:: unstarted_terminal_keys
+      :value: ()
 
 
 

@@ -46,8 +46,11 @@ Module Contents
    ``credential_chain`` (the default)
        Issues ``CREATE SECRET (TYPE s3, PROVIDER credential_chain)``, which resolves credentials
        through the AWS SDK inside DuckDB's ``aws`` extension. Nothing secret is written into SQL
-       text, and because DuckDB holds the resolution itself the SDK refreshes expiring credentials,
-       so a query that outlives a set of temporary credentials does not fail partway through.
+       text, and the secret is created with ``REFRESH 'auto'``: when S3 rejects expired credentials,
+       DuckDB resolves the chain again and retries, so a query that outlives a set of temporary
+       credentials does not fail partway through. Before DuckDB 1.5.6, only opening a file to read
+       refreshes the credentials, so listing files, reading further into a file that is already
+       open, and writing can still fail once the credentials expire.
 
    ``config``
        Resolves credentials through :class:`~airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`
@@ -180,7 +183,7 @@ Module Contents
 
    .. py:method:: configure_secrets(conn)
 
-      Create the DuckDB S3 secret for this connection.
+      Create the DuckDB S3 secret for this connection, and log the AWS identity it uses.
 
 
 

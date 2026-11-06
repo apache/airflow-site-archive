@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -691,19 +691,26 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">V1Container</span><span class="p">,</span> <span class="n">V1ObjectMeta</span><span class="p">,</span> <span class="n">V1Pod</span><span class="p">,</span> <span class="n">V1PodSpec</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.eks</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClusterStates</span><span class="p">,</span> <span class="n">NodegroupStates</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.eks</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClusterStates</span><span class="p">,</span> <span class="n">EksHook</span><span class="p">,</span> <span class="n">NodegroupStates</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.operators.eks</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">EksCreateClusterOperator</span><span class="p">,</span>
     <span class="n">EksCreateNodegroupOperator</span><span class="p">,</span>
     <span class="n">EksDeleteClusterOperator</span><span class="p">,</span>
     <span class="n">EksDeleteNodegroupOperator</span><span class="p">,</span>
+    <span class="n">EksPodExecOperator</span><span class="p">,</span>
     <span class="n">EksPodOperator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.sensors.eks</span><span class="w"> </span><span class="kn">import</span> <span class="n">EksClusterStateSensor</span><span class="p">,</span> <span class="n">EksNodegroupStateSensor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.hooks.kubernetes</span><span class="w"> </span><span class="kn">import</span> <span class="n">KubernetesHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.cncf.kubernetes.utils.pod_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">PodManager</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">tests_common.test_utils.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
 
@@ -724,9 +731,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">system.amazon.aws.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_ID_KEY</span><span class="p">,</span> <span class="n">SystemTestContextBuilder</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">system.amazon.aws.utils.k8s</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_describe_pod_operator</span>
 
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">kubernetes.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoreV1Api</span>
+
 <div class="viewcode-block" id="DAG_ID">
 <a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.DAG_ID">[docs]</a>
 <span class="n">DAG_ID</span> <span class="o">=</span> <span class="s2">"example_eks_with_nodegroups"</span></div>
+
+<div class="viewcode-block" id="EXPECTED_EXEC_OUTPUT">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.EXPECTED_EXEC_OUTPUT">[docs]</a>
+<span class="n">EXPECTED_EXEC_OUTPUT</span> <span class="o">=</span> <span class="s2">"command executed in existing EKS pod"</span></div>
 
 
 <span class="c1"># Externally fetched variables:</span>
@@ -769,6 +785,55 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
+<span class="nd">@contextmanager</span>
+<div class="viewcode-block" id="get_eks_kubernetes_client">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.get_eks_kubernetes_client">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_eks_kubernetes_client</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">CoreV1Api</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+    <span class="n">eks_hook</span> <span class="o">=</span> <span class="n">EksHook</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">eks_hook</span><span class="o">.</span><span class="n">generate_config_file_with_credentials</span><span class="p">(</span>
+        <span class="n">eks_cluster_name</span><span class="o">=</span><span class="n">cluster_name</span><span class="p">,</span> <span class="n">pod_namespace</span><span class="o">=</span><span class="s2">"default"</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="p">(</span><span class="n">config_file</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">KubernetesHook</span><span class="p">(</span><span class="n">kubernetes_conn_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">config_file</span><span class="o">=</span><span class="n">config_file</span><span class="p">)</span><span class="o">.</span><span class="n">core_v1_client</span></div>
+
+
+
+<span class="nd">@task</span>
+<div class="viewcode-block" id="create_exec_pod">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.create_exec_pod">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_exec_pod</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">pod_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">pod</span> <span class="o">=</span> <span class="n">V1Pod</span><span class="p">(</span>
+        <span class="n">metadata</span><span class="o">=</span><span class="n">V1ObjectMeta</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">pod_name</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="s2">"default"</span><span class="p">),</span>
+        <span class="n">spec</span><span class="o">=</span><span class="n">V1PodSpec</span><span class="p">(</span>
+            <span class="n">containers</span><span class="o">=</span><span class="p">[</span><span class="n">V1Container</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"main"</span><span class="p">,</span> <span class="n">image</span><span class="o">=</span><span class="s2">"busybox:1.38.0"</span><span class="p">,</span> <span class="n">command</span><span class="o">=</span><span class="p">[</span><span class="s2">"sleep"</span><span class="p">,</span> <span class="s2">"3600"</span><span class="p">])],</span>
+            <span class="n">restart_policy</span><span class="o">=</span><span class="s2">"Never"</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">with</span> <span class="n">get_eks_kubernetes_client</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">)</span> <span class="k">as</span> <span class="n">kube_client</span><span class="p">:</span>
+        <span class="n">pod_manager</span> <span class="o">=</span> <span class="n">PodManager</span><span class="p">(</span><span class="n">kube_client</span><span class="o">=</span><span class="n">kube_client</span><span class="p">)</span>
+        <span class="n">created_pod</span> <span class="o">=</span> <span class="n">pod_manager</span><span class="o">.</span><span class="n">create_pod</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span>
+        <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">pod_manager</span><span class="o">.</span><span class="n">await_pod_start</span><span class="p">(</span><span class="n">created_pod</span><span class="p">))</span></div>
+
+
+
+<span class="nd">@task</span><span class="p">(</span><span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">)</span>
+<div class="viewcode-block" id="delete_exec_pod">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.delete_exec_pod">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">delete_exec_pod</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">pod_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">pod</span> <span class="o">=</span> <span class="n">V1Pod</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="n">V1ObjectMeta</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">pod_name</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="s2">"default"</span><span class="p">))</span>
+    <span class="k">with</span> <span class="n">get_eks_kubernetes_client</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">)</span> <span class="k">as</span> <span class="n">kube_client</span><span class="p">:</span>
+        <span class="n">PodManager</span><span class="p">(</span><span class="n">kube_client</span><span class="o">=</span><span class="n">kube_client</span><span class="p">)</span><span class="o">.</span><span class="n">delete_pod</span><span class="p">(</span><span class="n">pod</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@task</span>
+<div class="viewcode-block" id="verify_exec_output">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_eks_with_nodegroups/index.html#tests.system.amazon.aws.example_eks_with_nodegroups.verify_exec_output">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">verify_exec_output</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">output</span> <span class="o">!=</span> <span class="n">EXPECTED_EXEC_OUTPUT</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unexpected command output: </span><span class="si">{</span><span class="n">output</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span></div>
+
+
+
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
     <span class="n">dag_id</span><span class="o">=</span><span class="n">DAG_ID</span><span class="p">,</span>
     <span class="n">schedule</span><span class="o">=</span><span class="s2">"@once"</span><span class="p">,</span>
@@ -784,6 +849,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">cluster_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-cluster"</span>
     <span class="n">nodegroup_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-nodegroup"</span>
     <span class="n">launch_template_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-launch-template"</span>
+    <span class="n">exec_pod_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s2">-exec-pod"</span>
 
     <span class="c1"># [START howto_operator_eks_create_cluster]</span>
     <span class="c1"># Create an Amazon EKS Cluster control plane without attaching compute service.</span>
@@ -847,6 +913,22 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="c1"># it is cleaned anyway with the cluster later on.</span>
     <span class="n">start_pod</span><span class="o">.</span><span class="n">is_delete_operator_pod</span> <span class="o">=</span> <span class="kc">False</span>
 
+    <span class="n">create_exec_pod_task</span> <span class="o">=</span> <span class="n">create_exec_pod</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">,</span> <span class="n">exec_pod_name</span><span class="p">)</span>
+
+    <span class="c1"># [START howto_operator_eks_pod_exec]</span>
+    <span class="n">run_command</span> <span class="o">=</span> <span class="n">EksPodExecOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"run_command_in_existing_pod"</span><span class="p">,</span>
+        <span class="n">cluster_name</span><span class="o">=</span><span class="n">cluster_name</span><span class="p">,</span>
+        <span class="n">pod_name</span><span class="o">=</span><span class="n">exec_pod_name</span><span class="p">,</span>
+        <span class="n">command</span><span class="o">=</span><span class="p">[</span><span class="s2">"sh"</span><span class="p">,</span> <span class="s2">"-c"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"printf '</span><span class="si">{</span><span class="n">EXPECTED_EXEC_OUTPUT</span><span class="si">}</span><span class="s2">'"</span><span class="p">],</span>
+        <span class="n">do_xcom_push</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># [END howto_operator_eks_pod_exec]</span>
+
+    <span class="n">exec_output_is_valid</span> <span class="o">=</span> <span class="n">verify_exec_output</span><span class="p">(</span><span class="n">run_command</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+
+    <span class="n">delete_exec_pod_task</span> <span class="o">=</span> <span class="n">delete_exec_pod</span><span class="p">(</span><span class="n">cluster_name</span><span class="p">,</span> <span class="n">exec_pod_name</span><span class="p">)</span>
+
     <span class="n">describe_pod</span> <span class="o">=</span> <span class="n">get_describe_pod_operator</span><span class="p">(</span>
         <span class="n">cluster_name</span><span class="p">,</span> <span class="n">pod_name</span><span class="o">=</span><span class="s2">"{{ ti.xcom_pull(key='pod_name', task_ids='run_pod') }}"</span>
     <span class="p">)</span>
@@ -907,14 +989,30 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="c1"># TEST SETUP</span>
         <span class="n">test_context</span><span class="p">,</span>
         <span class="n">create_launch_template</span><span class="p">(</span><span class="n">launch_template_name</span><span class="p">),</span>
-        <span class="c1"># TEST BODY</span>
         <span class="n">create_cluster</span><span class="p">,</span>
         <span class="n">await_create_cluster</span><span class="p">,</span>
         <span class="n">create_nodegroup</span><span class="p">,</span>
         <span class="n">await_create_nodegroup</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">chain</span><span class="p">(</span>
+        <span class="c1"># TEST BODY: EksPodOperator</span>
+        <span class="n">await_create_nodegroup</span><span class="p">,</span>
         <span class="n">start_pod</span><span class="p">,</span>
-        <span class="c1"># TEST TEARDOWN</span>
         <span class="n">describe_pod</span><span class="p">,</span>
+        <span class="n">await_nodegroup_stable</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">chain</span><span class="p">(</span>
+        <span class="c1"># TEST BODY: EksPodExecOperator</span>
+        <span class="n">await_create_nodegroup</span><span class="p">,</span>
+        <span class="n">create_exec_pod_task</span><span class="p">,</span>
+        <span class="n">run_command</span><span class="p">,</span>
+        <span class="n">exec_output_is_valid</span><span class="p">,</span>
+        <span class="c1"># TEST TEARDOWN</span>
+        <span class="n">delete_exec_pod_task</span><span class="p">,</span>
+        <span class="n">await_nodegroup_stable</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">chain</span><span class="p">(</span>
+        <span class="c1"># TEST TEARDOWN</span>
         <span class="n">await_nodegroup_stable</span><span class="p">,</span>
         <span class="n">delete_nodegroup</span><span class="p">,</span>  <span class="c1"># part of the test AND teardown</span>
         <span class="n">await_delete_nodegroup</span><span class="p">,</span>
@@ -1197,7 +1295,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

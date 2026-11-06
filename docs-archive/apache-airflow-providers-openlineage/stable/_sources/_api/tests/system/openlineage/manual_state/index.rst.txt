@@ -1,0 +1,143 @@
+tests.system.openlineage.manual_state
+=====================================
+
+.. py:module:: tests.system.openlineage.manual_state
+
+.. autoapi-nested-parse::
+
+   Helpers for system test Dags that change the state of a task or a Dag run of another Dag through the REST API.
+
+   That is what a user does in the UI. The state change is emitted by the API server instead of the worker, so the
+   Dags using these helpers need a deployment with an API server (the OpenLineage e2e tests), not ``dag.test()``.
+
+   The helpers run inside a task of the deployment they change, and are configured with environment variables, so
+   the same Dags run in the e2e tests and in other deployments:
+
+   - ``SYSTEM_TESTS_OL_API_URL``: base URL of the Airflow API server, without ``/api/...``.
+   - ``SYSTEM_TESTS_OL_API_TOKEN``: a token sent as ``Bearer``. When it isn't set, ``SYSTEM_TESTS_OL_API_USERNAME`` and
+     ``SYSTEM_TESTS_OL_API_PASSWORD`` are used: exchanged for a token on Airflow 3, as basic auth on Airflow 2.
+
+   The REST API version follows the Airflow version the task runs on: ``/api/v2`` on Airflow 3, ``/api/v1`` on 2.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   tests.system.openlineage.manual_state.API_URL
+   tests.system.openlineage.manual_state.IS_API_V2
+   tests.system.openlineage.manual_state.POLL_INTERVAL_SECONDS
+   tests.system.openlineage.manual_state.TOKEN_ATTEMPTS
+   tests.system.openlineage.manual_state.FINISHED_DAG_RUN_STATES
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tests.system.openlineage.manual_state.get_task_instances
+   tests.system.openlineage.manual_state.wait_for_task_instance
+   tests.system.openlineage.manual_state.wait_for_dag_run_to_finish
+   tests.system.openlineage.manual_state.mark_task_instance
+   tests.system.openlineage.manual_state.mark_task_group
+   tests.system.openlineage.manual_state.mark_dag_run
+   tests.system.openlineage.manual_state.change_state
+   tests.system.openlineage.manual_state.change_finished_state
+   tests.system.openlineage.manual_state.clear_dag_run
+   tests.system.openlineage.manual_state.clear_tasks
+   tests.system.openlineage.manual_state.clear_loop_task
+   tests.system.openlineage.manual_state.rerun_loop
+
+
+Module Contents
+---------------
+
+.. py:data:: API_URL
+
+.. py:data:: IS_API_V2
+
+.. py:data:: POLL_INTERVAL_SECONDS
+   :value: 2
+
+
+.. py:data:: TOKEN_ATTEMPTS
+   :value: 10
+
+
+.. py:data:: FINISHED_DAG_RUN_STATES
+   :value: ('success', 'failed')
+
+
+.. py:function:: get_task_instances(dag_id, run_id)
+
+.. py:function:: wait_for_task_instance(dag_id, run_id, task_id, *, states = ('running', ), map_index = -1, loop_iteration = None, timeout = 180)
+
+.. py:function:: wait_for_dag_run_to_finish(dag_id, run_id, timeout = 180)
+
+.. py:function:: mark_task_instance(task_instance, state, *, include_upstream = False, include_downstream = False)
+
+.. py:function:: mark_task_group(dag_id, run_id, group_id, state)
+
+.. py:function:: mark_dag_run(dag_id, run_id, state)
+
+.. py:function:: change_state(dag_id, run_id, *, level, state, task_id, map_index = -1, wait_for_states = ('running', ), target_task_id = None, include_upstream = False, include_downstream = False, wait_until_finished = True, timeout = 180)
+
+   Wait until the task instance is in one of ``wait_for_states``, then change the state of something.
+
+   ``level`` selects what changes:
+
+   - ``"task"``: the task instance waited for, or ``target_task_id`` of the same Dag run, e.g. a task that hasn't
+     started yet, optionally with its upstream or downstream tasks;
+   - ``"task_group"``: the task group ``target_task_id``;
+   - ``"dag_run"``: the Dag run.
+
+   Returns once the Dag run has finished, so the events of the state change have been emitted, unless
+   ``wait_until_finished`` is False, e.g. to change more tasks of the same Dag run.
+
+
+.. py:function:: change_finished_state(dag_id, run_id, *, task_id, state, timeout = 180)
+
+   Wait until the Dag run finishes, then mark one of its finished tasks with another state.
+
+   That is what a user does to correct the outcome of a task afterwards. Returns once the Dag run has finished
+   again, so the events of the state change have been emitted.
+
+
+.. py:function:: clear_dag_run(dag_id, run_id, *, only_failed = False, timeout = 180)
+
+   Wait until the Dag run finishes, then clear it, all of its tasks or only the failed ones.
+
+   Returns once the Dag run has finished again, so the events of the rerun have been emitted.
+
+
+.. py:function:: clear_tasks(dag_id, run_id, *, task_ids = None, task_group_id = None, wait_for_task_id = None, wait_for_states = ('running', ), timeout = 180)
+
+   Clear tasks of a Dag run, like the Clear button of a task, a map index or a task group in the UI.
+
+   By default it waits until the Dag run finishes before clearing. With ``wait_for_task_id`` it clears as soon as
+   that task is in one of ``wait_for_states`` instead, e.g. to clear a task while it runs. Select the tasks with
+   ``task_ids``, where a task id of a mapped task selects its whole expansion and a ``(task_id, map_index)`` pair
+   one map index, or with ``task_group_id``.
+
+   Returns once the Dag run has finished again, so the events of the rerun have been emitted.
+
+
+.. py:function:: clear_loop_task(dag_id, run_id, *, task_id, iteration, include_later_loop_iterations = False, timeout = 180)
+
+   Wait until the Dag run finishes, then clear the task of one loop iteration, by its execution.
+
+   Clearing the gate of an iteration with ``include_later_loop_iterations`` runs the loop again from the next
+   iteration. Returns once the Dag run has finished again, so the events of the rerun have been emitted.
+
+
+.. py:function:: rerun_loop(dag_id, run_id, *, gate_task_id, iteration, timeout = 180)
+
+   Wait until the Dag run finishes, then clear the gate of a loop iteration with the iterations after it.
+
+   That is what a user does to run a loop again after an iteration. Returns once the Dag run has finished
+   again, so the events of the rerun have been emitted.
+
+

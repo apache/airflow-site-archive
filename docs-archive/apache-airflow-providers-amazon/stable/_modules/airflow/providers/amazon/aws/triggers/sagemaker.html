@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -701,10 +701,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">asgiref.sync</span><span class="w"> </span><span class="kn">import</span> <span class="n">sync_to_async</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">WaiterError</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">WaiterMaxAttemptsError</span><span class="p">,</span> <span class="n">WaiterTerminalFailure</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">WaiterMaxAttemptsError</span><span class="p">,</span>
+    <span class="n">WaiterNoCredentialsError</span><span class="p">,</span>
+    <span class="n">WaiterTerminalFailure</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.sagemaker</span><span class="w"> </span><span class="kn">import</span> <span class="n">SageMakerHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.triggers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsBaseWaiterTrigger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span>
@@ -728,6 +733,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param region_name: The AWS region where the job is running. Used to build the hook.</span>
 <span class="sd">    :param verify: Whether or not to verify SSL certificates. Used to build the hook.</span>
 <span class="sd">    :param botocore_config: Configuration dictionary for the botocore client. Used to build the hook.</span>
+<span class="sd">    :param cancel_on_kill: If True, stop the training job when the user marks the deferred task failed,</span>
+<span class="sd">        clears it, or marks it succeeded. Only applies when ``job_type`` is ``Training``. Requires</span>
+<span class="sd">        ``apache-airflow`` with ``BaseTrigger.on_kill()`` support (3.3 and later); below that it is inert.</span>
 <span class="sd">    :param poke_interval: (deprecated) use ``waiter_delay`` instead.</span>
 <span class="sd">    :param max_attempts: (deprecated) use ``waiter_max_attempts`` instead.</span>
 <span class="sd">    """</span>
@@ -742,6 +750,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">verify</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">botocore_config</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">cancel_on_kill</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">poke_interval</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
@@ -769,8 +778,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/triggers/sagemaker/index.html#airflow.providers.amazon.aws.triggers.sagemaker.SageMakerTrigger.job_type">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">job_type</span> <span class="o">=</span> <span class="n">job_type</span></div>
 
+<div class="viewcode-block" id="SageMakerTrigger.cancel_on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/triggers/sagemaker/index.html#airflow.providers.amazon.aws.triggers.sagemaker.SageMakerTrigger.cancel_on_kill">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="o">=</span> <span class="n">cancel_on_kill</span></div>
+
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-            <span class="n">serialized_fields</span><span class="o">=</span><span class="p">{</span><span class="s2">"job_name"</span><span class="p">:</span> <span class="n">job_name</span><span class="p">,</span> <span class="s2">"job_type"</span><span class="p">:</span> <span class="n">job_type</span><span class="p">},</span>
+            <span class="n">serialized_fields</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"job_name"</span><span class="p">:</span> <span class="n">job_name</span><span class="p">,</span>
+                <span class="s2">"job_type"</span><span class="p">:</span> <span class="n">job_type</span><span class="p">,</span>
+                <span class="s2">"cancel_on_kill"</span><span class="p">:</span> <span class="n">cancel_on_kill</span><span class="p">,</span>
+            <span class="p">},</span>
             <span class="n">waiter_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_job_type_waiter</span><span class="p">(</span><span class="n">job_type</span><span class="p">),</span>
             <span class="n">waiter_args</span><span class="o">=</span><span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_waiter_arg_name</span><span class="p">(</span><span class="n">job_type</span><span class="p">):</span> <span class="n">job_name</span><span class="p">},</span>
             <span class="n">failure_message</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Error while waiting for </span><span class="si">{</span><span class="n">job_type</span><span class="si">}</span><span class="s2"> job"</span><span class="p">,</span>
@@ -797,7 +814,27 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="SageMakerTrigger.on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/triggers/sagemaker/index.html#airflow.providers.amazon.aws.triggers.sagemaker.SageMakerTrigger.on_kill">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_kill</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Stop the training job when the user acts on the deferred task."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">"training"</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Stopping SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">)</span>
+        <span class="n">hook</span><span class="p">:</span> <span class="n">SageMakerHook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="p">()</span>  <span class="c1"># type: ignore[assignment]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">sync_to_async</span><span class="p">(</span><span class="n">hook</span><span class="o">.</span><span class="n">stop_training_job</span><span class="p">)(</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">"Failed to stop SageMaker training job </span><span class="si">%s</span><span class="s2">. The job may still be running."</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_event_from_exception</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="n">AirflowException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TriggerEvent</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">WaiterNoCredentialsError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_event_from_exception</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">WaiterMaxAttemptsError</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">TriggerEvent</span><span class="p">(</span>
@@ -1248,7 +1285,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

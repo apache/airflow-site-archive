@@ -1,0 +1,179 @@
+airflow.providers.common.ai.hooks.llamaindex
+============================================
+
+.. py:module:: airflow.providers.common.ai.hooks.llamaindex
+
+.. autoapi-nested-parse::
+
+   Hook for LlamaIndex integration with Airflow connections.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.hooks.llamaindex.LlamaIndexHook
+
+
+Module Contents
+---------------
+
+.. py:class:: LlamaIndexHook(llm_conn_id = None, embed_conn_id = None, embed_model = None, llm_model = None, *, embedding_kwargs = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Bridge an Airflow connection to LlamaIndex chat and embedding models.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   The hook resolves credentials (API key, optional API base URL) from the
+   Airflow connection and returns native LlamaIndex objects ready to pass
+   to ``VectorStoreIndex(..., embed_model=...)``,
+   ``load_index_from_storage(..., embed_model=...)``, or
+   ``index.as_retriever(..., llm=...)``.
+
+   LlamaIndex does not ship a universal ``init_chat_model`` /
+   ``init_embedding_model`` equivalent (each vendor is a separate package
+   under ``llama-index-llms-*`` / ``llama-index-embeddings-*`` with its own
+   constructor kwargs). The hook therefore covers the OpenAI-compatible
+   surface that matches LlamaIndex's own ``resolve_embed_model("default")``
+   behaviour. For other vendors (Cohere, Bedrock, Vertex, HuggingFace, ...)
+   instantiate the LlamaIndex class directly in your ``@task`` and pass it
+   to the operator's ``embed_model=`` / ``llm=`` parameter -- both
+   ``LlamaIndexEmbeddingOperator`` and ``LlamaIndexRetrievalOperator`` accept a pre-built
+   ``BaseEmbedding`` / ``LLM`` instance and bypass the hook in that case.
+
+   .. note::
+
+       The hook deliberately does **not** mutate LlamaIndex's global
+       ``Settings`` singleton. Operators pass the resolved model directly
+       to LlamaIndex constructors so concurrent tasks in the same worker
+       don't race on shared state.
+
+   .. note::
+
+       ``get_llm()`` and ``get_embedding_model()`` return LlamaIndex's
+       ``OpenAI`` / ``OpenAIEmbedding`` classes, which validate ``model=``
+       client-side against LlamaIndex's OpenAI-only model-name allowlists
+       before any request is sent. Pointing **host** at an Ollama or vLLM
+       endpoint does not add support for those backends: their model names
+       (e.g. ``llama3.2``) are never in the OpenAI allowlist, so the call
+       still fails on the model name, not on connectivity.
+       ``get_embedding_model()`` raises immediately at construction;
+       ``get_llm()`` defers the error until the first call that reads
+       ``.metadata`` (``.chat()`` / ``.complete()``).
+
+   Connection fields:
+
+   * **password**: API key passed as ``api_key=``.
+   * **host**: Optional base URL passed as ``api_base=``. Only useful for
+     an OpenAI-compatible proxy that accepts OpenAI's exact model names
+     (e.g. an internal gateway) -- not Ollama or vLLM, whose model
+     catalogs are rejected regardless of ``host`` (see note above).
+   * **extra** JSON: ``{"embed_model": "text-embedding-3-small",
+     "llm_model": "gpt-5"}`` -- default model identifiers stored on the
+     connection.
+
+   :param llm_conn_id: Airflow connection ID for the LLM provider. Falls
+       back to :attr:`default_conn_name` (``"llamaindex_default"``) when
+       not provided.
+   :param embed_conn_id: Optional separate Airflow connection ID for the
+       embedding provider. Falls back to ``llm_conn_id`` when not set.
+   :param embed_model: Embedding model name (e.g.
+       ``"text-embedding-3-small"``). Overrides ``extra["embed_model"]``
+       on the connection.
+   :param llm_model: LLM model name (e.g. ``"gpt-5"``). Overrides
+       ``extra["llm_model"]`` on the connection. Required when calling
+       :meth:`get_llm`.
+   :param embedding_kwargs: Additional keyword arguments to pass to the embedding
+       model constructor without filtering. Connection ``api_key`` and ``api_base``
+       values take precedence at the top level, but nested options supported by the
+       underlying library can override hook-provided request values, including
+       credentials, the model, and the input. Only pass trusted values.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'llm_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'llamaindex_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'llamaindex'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'LlamaIndex'
+
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: embed_conn_id
+
+
+   .. py:attribute:: embed_model
+      :value: None
+
+
+
+   .. py:attribute:: embedding_kwargs
+
+
+   .. py:attribute:: llm_model
+      :value: None
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+   .. py:method:: get_embedding_model()
+
+      Return a LlamaIndex embedding model configured from the Airflow connection.
+
+      Uses ``embed_conn_id`` (falls back to ``llm_conn_id``) for credentials.
+      Returns an ``OpenAIEmbedding`` instance; for other vendors,
+      instantiate the LlamaIndex class directly and pass it to the
+      operator's ``embed_model=`` parameter.
+
+
+
+   .. py:method:: get_llm()
+
+      Return a LlamaIndex LLM configured from the Airflow connection.
+
+      Returns an ``OpenAI`` LLM instance; for other vendors, instantiate
+      the LlamaIndex class directly and pass it to the operator's ``llm=``
+      parameter.
+
+
+
+   .. py:method:: test_connection()
+
+      Test connection by resolving the LLM.
+
+      Validates that the model identifier is valid and the provider can be
+      instantiated with the supplied credentials. Does NOT make an LLM API
+      call -- that would be expensive and fail for reasons unrelated to
+      connectivity (quotas, billing, rate limits).
+
+
+

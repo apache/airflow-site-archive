@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">5.1.0</span>
+        <span class="version-label">Version: </span><span class="version">5.1.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -489,7 +489,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">5.1.0</span>
+        <span class="version-label">Version: </span><span class="version">5.1.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -1348,6 +1348,13 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Log file </span><span class="si">%s</span><span class="s2"> vanished while reading, ignoring."</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">logfile</span><span class="p">)</span>
             <span class="c1"># Swallow the exception; the file may have been removed by log rotation or cleanup while we were reading it.</span>
             <span class="c1"># We'll catch up on the next heartbeat/log push or file was uploaded by log integration in parallel.</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="c1"># Log pushing is best effort. The job state must still reach the central site, or the job</span>
+            <span class="c1"># stays RUNNING there until [scheduler] task_instance_heartbeat_timeout passes.</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">"Failed to push logs of </span><span class="si">%s</span><span class="s2"> to the central site. This part of the log will not be sent again."</span><span class="p">,</span>
+                <span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">identifier</span><span class="p">,</span>
+            <span class="p">)</span>
 
 <div class="viewcode-block" id="EdgeWorker.start">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/edge3/cli/worker/index.html#airflow.providers.edge3.cli.worker.EdgeWorker.start">[docs]</a>
@@ -1500,12 +1507,18 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"Job failed: </span><span class="si">%s</span><span class="s2"> with:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">identifier</span><span class="p">,</span> <span class="n">ex_txt</span><span class="p">)</span>
 
                 <span class="c1"># Push it upwards to logs for better diagnostic as well</span>
-                <span class="k">await</span> <span class="n">logs_push</span><span class="p">(</span>
-                    <span class="n">task</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">key</span><span class="p">,</span>
-                    <span class="n">log_chunk_time</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">(),</span>
-                    <span class="n">log_chunk_data</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Error executing job:</span><span class="se">\n</span><span class="si">{</span><span class="n">ex_txt</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-                    <span class="n">task_instance_id</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">task_instance_id</span><span class="p">,</span>
-                <span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">await</span> <span class="n">logs_push</span><span class="p">(</span>
+                        <span class="n">task</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">key</span><span class="p">,</span>
+                        <span class="n">log_chunk_time</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">(),</span>
+                        <span class="n">log_chunk_data</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Error executing job:</span><span class="se">\n</span><span class="si">{</span><span class="n">ex_txt</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                        <span class="n">task_instance_id</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">task_instance_id</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                        <span class="s2">"Failed to push the error message of </span><span class="si">%s</span><span class="s2"> to the central site."</span><span class="p">,</span>
+                        <span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">identifier</span><span class="p">,</span>
+                    <span class="p">)</span>
                 <span class="k">await</span> <span class="n">jobs_set_state</span><span class="p">(</span>
                     <span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">TaskInstanceState</span><span class="o">.</span><span class="n">FAILED</span><span class="p">,</span> <span class="n">task_instance_id</span><span class="o">=</span><span class="n">job</span><span class="o">.</span><span class="n">edge_job</span><span class="o">.</span><span class="n">task_instance_id</span>
                 <span class="p">)</span>
@@ -1834,7 +1847,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=bfa18cfb"></script>
+        <script src="../../../../../_static/documentation_options.js?v=1bd908e2"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

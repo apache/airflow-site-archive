@@ -750,7 +750,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.usage</span><span class="w"> </span><span class="kn">import</span> <span class="n">coerce_usage_limits</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.usage_budget</span><span class="w"> </span><span class="kn">import</span> <span class="n">copy_run_usage</span><span class="p">,</span> <span class="n">subtract_run_usage</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.notifier</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseNotifier</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span> <span class="n">BaseOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">,</span>
+    <span class="n">BaseOperator</span><span class="p">,</span>
+    <span class="n">SkipMixin</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_1_PLUS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HITLRejectException</span><span class="p">,</span> <span class="n">HITLTimeoutError</span>
 
@@ -782,7 +786,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># test in tests/unit/common/ai/mixins/test_cancellable_run.py.</span>
 <div class="viewcode-block" id="LLMOperator">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">LLMOperator</span><span class="p">(</span><span class="n">CancellableAgentRunMixin</span><span class="p">,</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">LLMApprovalMixin</span><span class="p">,</span> <span class="n">UsageBudgetMixin</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LLMOperator</span><span class="p">(</span><span class="n">CancellableAgentRunMixin</span><span class="p">,</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">LLMApprovalMixin</span><span class="p">,</span> <span class="n">UsageBudgetMixin</span><span class="p">,</span> <span class="n">SkipMixin</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Call an LLM with a prompt and return the output.</span>
 
@@ -893,6 +897,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        user id.  ``None`` (default) lets any user with the permission respond.</span>
 <span class="sd">        On Airflow 3.1 to 3.3 the list is fixed when the review is first</span>
 <span class="sd">        created; on 3.4+ a cleared or retried task replaces it.  Needs Airflow 3.1+.</span>
+<span class="sd">    :param fail_on_reject: If ``False``, a rejected review skips the direct</span>
+<span class="sd">        downstream tasks except teardowns and the task succeeds, as</span>
+<span class="sd">        :class:`~airflow.providers.standard.operators.hitl.ApprovalOperator`</span>
+<span class="sd">        does.  Only takes effect when a review is opened.  Default ``True``:</span>
+<span class="sd">        a rejection fails the task.</span>
+<span class="sd">    :param ignore_downstream_trigger_rules: If ``True``, a rejected review that</span>
+<span class="sd">        does not fail the task skips every downstream task except teardowns</span>
+<span class="sd">        rather than only the direct ones.  Only takes effect when a review is opened.</span>
+<span class="sd">        Default ``False``.</span>
 <span class="sd">    :param decision_policy: Experimental. A</span>
 <span class="sd">        :class:`~airflow.providers.common.ai.policies.decision.DecisionPolicy`</span>
 <span class="sd">        saying how confident the model has to be for the operator to return its answer by</span>
@@ -926,6 +939,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">supports_decision_policy</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span></div>
 
 
+    <span class="c1"># A mapped task reads this from the class, so it stays True there; __init__ narrows it per task.</span>
+    <span class="n">_can_skip_downstream</span> <span class="o">=</span> <span class="kc">True</span>
+
 <div class="viewcode-block" id="LLMOperator.template_fields">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator.template_fields">[docs]</a>
     <span class="n">template_fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
@@ -957,6 +973,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">allow_modifications</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">approval_notifiers</span><span class="p">:</span> <span class="n">BaseNotifier</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">BaseNotifier</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">approval_assigned_users</span><span class="p">:</span> <span class="n">HITLUser</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">HITLUser</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">fail_on_reject</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">ignore_downstream_trigger_rules</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">decision_policy</span><span class="p">:</span> <span class="n">DecisionPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">serialize_output</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
@@ -1055,6 +1073,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator.allow_modifications">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">allow_modifications</span> <span class="o">=</span> <span class="n">allow_modifications</span></div>
 
+<div class="viewcode-block" id="LLMOperator.fail_on_reject">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator.fail_on_reject">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_reject</span> <span class="o">=</span> <span class="n">fail_on_reject</span></div>
+
+<div class="viewcode-block" id="LLMOperator.ignore_downstream_trigger_rules">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator.ignore_downstream_trigger_rules">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ignore_downstream_trigger_rules</span> <span class="o">=</span> <span class="n">ignore_downstream_trigger_rules</span></div>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_can_skip_downstream</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_may_review</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">fail_on_reject</span>
         <span class="k">if</span> <span class="n">approval_notifiers</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">approval_notifiers</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">approval_notifiers</span><span class="p">,</span> <span class="n">BaseNotifier</span><span class="p">):</span>
@@ -1207,7 +1234,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="sd">        :raises ReviewedOutputValidationError: If a reviewer's edit does not validate against ``output_type``.</span>
 <span class="sd">        """</span>
-        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resume_after_review</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">generated_output</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">decision</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resume_after_review</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">generated_output</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">decision</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">HITLRejectException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_reject</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_skip_downstream_on_reject</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_decision</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">decision</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">rehydrate_pydantic_output</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">output_type</span><span class="p">,</span>
@@ -1353,6 +1386,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">except</span> <span class="p">(</span><span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">return</span> <span class="n">ti</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="s2">"xcom_push"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_skip_downstream_on_reject</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="n">HITLRejectException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> Skipping downstream tasks..."</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+        <span class="c1"># The record was finalized before the exception. On an unmapped task skip() hands the skip to</span>
+        <span class="c1"># the supervisor by raising; on a mapped one it records the skip in XCom and returns.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_clear_usage_budget</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task"</span><span class="p">]</span>
+        <span class="n">tasks</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">get_flat_relatives</span><span class="p">(</span><span class="n">upstream</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignore_downstream_trigger_rules</span>
+            <span class="k">else</span> <span class="n">task</span><span class="o">.</span><span class="n">get_direct_relatives</span><span class="p">(</span><span class="n">upstream</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="n">ti</span><span class="o">=</span><span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">],</span> <span class="n">tasks</span><span class="o">=</span><span class="p">(</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">t</span><span class="o">.</span><span class="n">is_teardown</span><span class="p">))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_push_xcom</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Push ``value`` under ``key`` on XCom, honoring ``do_xcom_push`` and a missing task instance."""</span>

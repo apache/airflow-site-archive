@@ -1,0 +1,55 @@
+airflow.providers.common.ai.utils.masking
+=========================================
+
+.. py:module:: airflow.providers.common.ai.utils.masking
+
+.. autoapi-nested-parse::
+
+   Apply Airflow's secret masker to what a tool hands back to a model.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.masking.mask_secrets
+   airflow.providers.common.ai.utils.masking.dumps_masked
+
+
+Module Contents
+---------------
+
+.. py:function:: mask_secrets(value: str) -> str
+                 mask_secrets(value: Any) -> Any
+
+   Return ``value`` with every secret Airflow has registered replaced by ``***``.
+
+   Strings are masked wherever they sit in nested dicts, lists, tuples, sets and dataclasses,
+   dict keys included, and the shape and types are kept. Bytes are masked as UTF-8 text. A
+   Pydantic model is turned into the JSON-compatible data the model would be shown. Images,
+   documents and other multimodal content, and any other object, pass through as they are.
+   Registered secrets are the ones Airflow knows about, such as connection passwords and
+   sensitive connection extras; a credential that only appears in the data itself is not
+   recognized.
+
+   ``redact()`` does part of this, but stops descending at a fixed depth, and it hides every
+   string under a key that looks sensitive: a model reading a query result needs
+   ``{"auth_type": "oauth"}`` as it is. Two dict keys that both mask to ``***`` collapse into
+   one.
+
+
+.. py:function:: dumps_masked(value, **kwargs)
+
+   Serialize ``value`` to JSON for a model, with registered secrets masked first.
+
+   Masking a JSON string afterwards is not enough: JSON escapes quotes, backslashes,
+   control characters and, by default, non-ASCII characters, so a password containing
+   any of them no longer matches the registered value once it is inside the document.
+   Bytes become their UTF-8 text and dataclasses their fields; any other object JSON
+   cannot represent is rendered with ``str()``, after the values inside it are masked.
+
+   :param kwargs: Passed to :func:`json.dumps`.
+
+

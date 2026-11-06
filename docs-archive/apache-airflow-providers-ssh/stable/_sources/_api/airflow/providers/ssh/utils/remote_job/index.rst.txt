@@ -173,15 +173,23 @@ Module Contents
 
 .. py:function:: build_windows_wrapper_command(command, paths, environment = None)
 
-   Build a PowerShell wrapper that runs the command detached via Start-Process.
+   Build a PowerShell wrapper that runs the command detached via ``Win32_Process.Create``.
 
    The wrapper:
 
-   - Creates the job directory
-   - Starts the command in a new detached PowerShell process
-   - Redirects stdout/stderr to the log file
-   - Writes the exit code atomically on completion
-   - Writes the PID for potential cancellation
+   - Creates the job directory and writes the command into it as ``cmd.ps1``, next to
+     the job script that runs it
+   - Starts the job script as a separate process that outlives the SSH session, in the
+     SSH session's working directory
+   - Appends everything the command writes, on every stream, to the log file as UTF-8
+   - Writes the exit code on completion, including when the command calls ``exit``,
+     throws, or fails to parse
+   - Writes the PID for potential cancellation, and fails the submission if the job
+     directory cannot be set up or the process cannot be started
+
+   The command runs as a script, so the host's execution policy applies to it with
+   ``-ExecutionPolicy Bypass`` for the process; a Group Policy that only allows signed
+   scripts fails the job with the policy error in its log.
 
    :param command: The command to execute (PowerShell script path or command)
    :param paths: RemoteJobPaths instance with all paths
@@ -202,6 +210,10 @@ Module Contents
 .. py:function:: build_windows_log_tail_command(log_file, offset, max_bytes)
 
    Build a PowerShell command to read log bytes from offset.
+
+   The chunk is written to stdout as UTF-8 bytes. Printing it as a PowerShell string would
+   re-encode it in the SSH session's console code page, which the trigger's strict UTF-8
+   decoding rejects for any non-ASCII character.
 
    :param log_file: Path to the log file
    :param offset: Byte offset to start reading from

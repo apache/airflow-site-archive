@@ -1,0 +1,205 @@
+airflow.providers.common.ai.mixins.approval
+===========================================
+
+.. py:module:: airflow.providers.common.ai.mixins.approval
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.approval.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.approval.DeferForApprovalProtocol
+   airflow.providers.common.ai.mixins.approval.LLMApprovalMixin
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.mixins.approval.normalize_assigned_users
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:function:: normalize_assigned_users(value, *, param)
+
+   Return *value* as a list of ``{'id': str, 'name': str}`` users.
+
+   Accepts ``None``, a single user dict, or an iterable of them, and raises ``TypeError``
+   naming *param* for anything else, so a malformed list fails when the Dag is parsed
+   rather than when the task first asks for a review.
+
+
+.. py:class:: DeferForApprovalProtocol
+
+   Bases: :py:obj:`Protocol`
+
+
+   Protocol for defer for approval mixin.
+
+
+   .. py:attribute:: approval_timeout
+      :type:  datetime.timedelta | None
+
+
+   .. py:attribute:: allow_modifications
+      :type:  bool
+
+
+   .. py:attribute:: on_approval_timeout
+      :type:  Literal['fail', 'approve', 'reject']
+
+
+   .. py:attribute:: approval_notifiers
+      :type:  collections.abc.Sequence[airflow.providers.common.compat.notifier.BaseNotifier]
+
+
+   .. py:attribute:: approval_assigned_users
+      :type:  list[airflow.sdk.execution_time.hitl.HITLUser]
+
+
+   .. py:attribute:: prompt
+      :type:  str
+
+
+   .. py:attribute:: task_id
+      :type:  str
+
+
+   .. py:attribute:: defer
+      :type:  Any
+
+
+   .. py:method:: validate_approval_prompt()
+
+
+.. py:class:: LLMApprovalMixin
+
+   Mixin that pauses an operator for human review before returning output.
+
+   When ``require_approval=True`` on the operator, the generated output is
+   presented to a human reviewer via the Airflow Human-in-the-Loop (HITL)
+   interface.  The task waits (``awaiting_input`` on Airflow 3.3+, deferred on
+   older versions) until the reviewer approves or rejects.
+
+   If ``allow_modifications=True``, the reviewer can also edit the output
+   before approving.  The (possibly modified) output is then returned as the
+   task result.
+
+   ``on_approval_timeout`` decides what happens when ``approval_timeout``
+   expires without a response: ``"fail"`` raises ``HITLTimeoutError``, while
+   ``"approve"`` and ``"reject"`` answer the review with that option so the
+   task resumes as if a reviewer had chosen it.  The chosen option is also
+   pre-highlighted for the reviewer in the HITL form.
+
+   ``approval_notifiers`` are called once the review is open, so a reviewer
+   learns about it without watching the Required Actions page, the way
+   :class:`~airflow.providers.standard.operators.hitl.HITLOperator` does with
+   ``notifiers``.  The review ``subject`` and ``body`` are exposed as
+   ``{{ task.subject }}`` and ``{{ task.body }}`` in notifier templates.  A
+   notifier whose delivery raises is logged without failing the task, while a
+   template error fails the task.  A retry re-runs the LLM and re-notifies
+   with the regenerated output, while the open review keeps the original
+   subject and body.
+
+   ``approval_assigned_users`` restricts the review to the named users, the way
+   :class:`~airflow.providers.standard.operators.hitl.HITLOperator` does with
+   ``assigned_users``.  Leaving it empty lets any user with the permission
+   respond.  The list is stored when the review is first created; clearing
+   the task re-runs it against the existing review row, so a changed list
+   does not take effect.
+
+   Operators that use this mixin must set the following attributes:
+
+   - ``require_approval`` (``bool``)
+   - ``allow_modifications`` (``bool``)
+   - ``approval_timeout`` (``timedelta | None``)
+   - ``on_approval_timeout`` (``Literal["fail", "approve", "reject"]``)
+   - ``approval_notifiers`` (``Sequence[BaseNotifier]``)
+   - ``approval_assigned_users`` (``list[HITLUser]``)
+   - ``prompt`` (``str``)
+
+
+   .. py:attribute:: APPROVE
+      :value: 'Approve'
+
+
+
+   .. py:attribute:: REJECT
+      :value: 'Reject'
+
+
+
+   .. py:attribute:: TIMEOUT_DEFAULTS
+      :type:  ClassVar[dict[str, list[str]]]
+
+
+   .. py:method:: validate_approval_prompt()
+
+      Fail fast when the prompt cannot be rendered as text in the approval review body.
+
+
+
+   .. py:method:: defer_for_approval(context, output, *, subject = None, body = None, modification_schema = None, decision = None)
+
+      Write HITL detail, then pause the task for human review.
+
+      On Airflow 3.3+ the task parks in the ``awaiting_input`` state (no trigger or triggerer
+      involved); on older versions it defers to :class:`HITLTrigger`. Either way it resumes in
+      ``execute_complete`` once a response (or timeout default) arrives. ``on_approval_timeout``
+      supplies that timeout default; ``"fail"`` supplies none, so the review times out as an error.
+
+      :param context: Airflow task context.
+      :param output: The generated output to present for review.
+      :param subject: Headline shown on the Required Actions page.
+          Defaults to ``"Review output for task `<task_id>`"``.
+      :param body: Markdown body shown below the headline.
+          Defaults to the prompt and output wrapped in a code block.
+      :param modification_schema: JSON schema for the editable ``output`` param
+          when ``allow_modifications=True``. Defaults to ``{"type": "string"}``.
+          Pass e.g. ``{"type": "string", "enum": [...]}`` to render a dropdown
+          of valid values in the review form, or ``{"type": "array", "items":
+          {"type": "string", "enum": [...]}, "examples": [...]}`` to render a
+          multi-select (JSON Schema forbids ``enum`` at the array level, so the
+          options come from ``examples``); a list submitted by the reviewer is
+          returned from ``execute_complete`` re-serialized as a compact JSON string.
+      :param decision: The pending decision record, when the operator wrote one. It is carried in
+          the continuation the task resumes from, next to ``generated_output``, so
+          ``execute_complete`` finalizes the record from what was checkpointed with the pause and
+          not from a copy a reader could have edited or deleted in the meantime.
+
+
+
+   .. py:method:: execute_complete(context, generated_output, event, decision = None)
+
+      Resume after human review.
+
+      Called automatically by Airflow when the HITL trigger fires.
+      Returns the original or reviewer-modified output on approval.
+
+      :param context: Airflow task context.
+      :param generated_output: The output that was deferred for review.
+      :param event: Trigger event payload containing ``chosen_options``,
+          ``params_input``, ``responded_by_user``, and ``timedout``.
+      :param decision: The pending decision record passed to ``defer_for_approval``, if any.
+          The mixin does not read it; an operator that writes a record finalizes it.
+      :raises HITLRejectException: If the reviewer, or the
+          ``on_approval_timeout="reject"`` default, rejected the output.
+      :raises HITLTriggerEventError: If the trigger reported an error.
+      :raises HITLTimeoutError: If the approval timed out.
+
+
+

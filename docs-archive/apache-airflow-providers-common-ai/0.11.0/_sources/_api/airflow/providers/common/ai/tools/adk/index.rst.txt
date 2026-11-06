@@ -1,0 +1,65 @@
+airflow.providers.common.ai.tools.adk
+=====================================
+
+.. py:module:: airflow.providers.common.ai.tools.adk
+
+.. autoapi-nested-parse::
+
+   Give Airflow tools to a `Google ADK <https://google.github.io/adk-docs/>`__ agent.
+
+   .. note:: Experimental; see :mod:`airflow.providers.common.ai.tools`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.adk.AirflowTools
+
+
+Module Contents
+---------------
+
+.. py:class:: AirflowTools(*sources)
+
+   Bases: :py:obj:`google.adk.tools.base_toolset.BaseToolset`
+
+
+   An ADK toolset that gives an agent Airflow's tools.
+
+   Pass toolsets that implement
+   :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``
+   and ``HookToolset``, or individual
+   :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. The agent, its
+   model and its runner stay plain ADK.
+
+   .. code-block:: python
+
+       from google.adk.agents import LlmAgent
+
+       from airflow.providers.common.ai.tools.adk import AirflowTools
+       from airflow.providers.common.ai.toolsets import SQLToolset
+
+       warehouse = SQLToolset("warehouse", allowed_tables=["orders"])
+       agent = LlmAgent(name="analyst", model=model, tools=[AirflowTools(warehouse)])
+
+   Each tool keeps the source tool's name, description and argument schema, and every
+   result passes through Airflow's secret masker first. A result reaches the model as
+   ``{"result": ...}``; a failure the model can correct, such as a query naming a
+   missing column, as ``{"error": ...}``, ADK's own convention for a failed tool. Such
+   failures count against the tool's retry limit afresh on every run of the agent. A tool
+   still failing once the limit is used up, or any other failure, raises
+   :class:`~airflow.providers.common.ai.tools.ToolCallError` out of the run, so the task
+   fails and Airflow retries it. Tools a toolset marks sequential, such as the sandbox's,
+   run one at a time in the order the model called them.
+
+   :param sources: Toolsets and tools to add, in order.
+
+
+   .. py:method:: get_tools(readonly_context = None)
+      :async:
+
+
+

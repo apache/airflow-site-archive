@@ -1,0 +1,133 @@
+airflow.providers.common.ai.toolsets.object_storage
+===================================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.object_storage
+
+.. autoapi-nested-parse::
+
+   Read-only toolset giving an agent the files under one object-storage path.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.object_storage.LIST_FILES
+   airflow.providers.common.ai.toolsets.object_storage.GET_FILE_INFO
+   airflow.providers.common.ai.toolsets.object_storage.READ_FILE
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.object_storage.ObjectStorageToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: LIST_FILES
+   :value: 'list_files'
+
+
+.. py:data:: GET_FILE_INFO
+   :value: 'get_file_info'
+
+
+.. py:data:: READ_FILE
+   :value: 'read_file'
+
+
+.. py:class:: ObjectStorageToolset(path, *, conn_id = None, max_files = 200, max_read_bytes = 10 * 1024 * 1024, max_output_bytes = 50 * 1024, tool_prefix = '', max_retries = None)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Give an agent read-only access to the files under one object-storage path.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   Exposes three tools, ``list_files``, ``get_file_info`` and ``read_file``, rooted at
+   ``path``, which is any location Airflow's
+   :class:`~airflow.sdk.ObjectStoragePath` can open: ``s3://``, ``gs://``, ``abfs://``,
+   ``file://`` and the rest, with credentials from ``conn_id``. The model names files by
+   paths relative to that root. It cannot write, delete or move anything, and a path that
+   is absolute, carries a scheme, or climbs out of the root with ``..`` is refused.
+
+   ``read_file`` returns a text file a window of lines at a time, like the sandbox's own
+   ``read_file``, and a Parquet or Avro file as its row count, schema and first rows. Compressed text
+   (``.gz``, ``.bz2``, ``.xz``) is decompressed. Images, PDFs and other binary files are
+   refused, as is any file larger than ``max_read_bytes``. So is a file that cannot be read,
+   such as a corrupt one, or one the connection may not open: the model is told why, and the
+   run goes on. On a local root, a symlink that leads out of the root is refused too.
+
+   :param path: Root the agent may read under. Templated when the toolset is passed to
+       ``AgentOperator`` / ``@task.agent``.
+   :param conn_id: Airflow connection for the storage, or ``None`` for the default
+       credentials of its protocol. Templated like ``path``.
+   :param max_files: Most entries one ``list_files`` result holds; the model pages through
+       a larger directory. The whole directory is still listed from storage on each call.
+       Default ``200``.
+   :param max_read_bytes: Largest file ``read_file`` will open, after decompression.
+       Default 10 MiB.
+   :param max_output_bytes: Most bytes one ``read_file`` result holds; the model reads on
+       from the offset it is given. Default 50 KiB.
+   :param tool_prefix: Prefix for the three tool names, e.g. ``"reports"`` gives
+       ``reports_read_file``. Set this when one agent has another toolset with the same tool
+       names, such as a second ``ObjectStorageToolset`` or a ``SandboxToolset``, whose
+       ``read_file`` would collide, since duplicate tool names are rejected.
+   :param max_retries: How many times the model may correct a call with invalid arguments
+       before the run fails. A failed read goes back to the model without using it.
+       ``None`` (the default) uses the agent's tool retry budget, its ``retries``, as
+       pydantic-ai's own toolsets do.
+
+
+   .. py:attribute:: agent_template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('_path', '_conn_id')
+
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+

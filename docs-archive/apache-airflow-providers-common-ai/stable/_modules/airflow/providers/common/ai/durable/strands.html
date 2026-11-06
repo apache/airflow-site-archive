@@ -723,7 +723,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
     <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.batch.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_identity_key</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.batch.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_identity_key_for_context</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.coroutines</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_coroutine_sync</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.task_logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_3_PLUS</span>
@@ -807,10 +807,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        twice when the saved state is from a different prompt.</span>
 <span class="sd">    :param prompt: The prompt for the agent; ignored when resuming.</span>
 <span class="sd">    :param session_id: Names the agent's saved state. Defaults to an id derived from the</span>
-<span class="sd">        task instance (Dag id, run id, task id and map index), the same on every try. Pass</span>
-<span class="sd">        a distinct one for each agent when a task runs more than one; it must stay the same</span>
-<span class="sd">        across tries, and when ``storage`` is shared across Dag runs it must differ between</span>
-<span class="sd">        them.</span>
+<span class="sd">        task instance (Dag id, run id, task id and map index, plus the loop trajectory and</span>
+<span class="sd">        iteration inside a task loop), the same on every try. Pass a distinct one for each</span>
+<span class="sd">        agent when a task runs more than one; it must stay the same across tries, and when</span>
+<span class="sd">        ``storage`` is shared across Dag runs or loop iterations it must differ between</span>
+<span class="sd">        them, for example by including ``context["loop"].region_id`` and</span>
+<span class="sd">        ``context["loop"].index`` inside a task loop.</span>
 <span class="sd">    :param storage: Where the agent's state is saved. Defaults to the task instance's task</span>
 <span class="sd">        state store, on Airflow 3.3 and later; on older versions pass a Strands storage such</span>
 <span class="sd">        as ``S3Storage``.</span>
@@ -829,15 +831,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="n">storage</span> <span class="o">=</span> <span class="n">TaskStateStoreStorage</span><span class="p">(</span><span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">session_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span>
         <span class="c1"># A hash: short (task state store keys are at most 512 characters) and free of the</span>
         <span class="c1"># characters Strands refuses in a session id, whatever the Dag, run and task ids hold.</span>
-        <span class="n">session_id</span> <span class="o">=</span> <span class="n">compute_identity_key</span><span class="p">(</span>
-            <span class="n">dag_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
-            <span class="n">task_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
-            <span class="n">run_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span>
-            <span class="n">map_index</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span> <span class="k">if</span> <span class="n">ti</span><span class="o">.</span><span class="n">map_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="n">compute_identity_key_for_context</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
     <span class="n">prompt_fingerprint</span> <span class="o">=</span> <span class="n">_build_fingerprint</span><span class="p">(</span><span class="n">prompt</span><span class="p">)</span>
 
     <span class="n">session_manager</span><span class="p">,</span> <span class="n">agent</span> <span class="o">=</span> <span class="n">_build_agent</span><span class="p">(</span><span class="n">agent_factory</span><span class="p">,</span> <span class="n">session_id</span><span class="p">,</span> <span class="n">storage</span><span class="p">)</span>

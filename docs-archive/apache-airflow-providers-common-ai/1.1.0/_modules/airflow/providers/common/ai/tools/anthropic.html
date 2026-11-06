@@ -736,7 +736,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolRunnerMaxIterationsError</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTool</span><span class="p">,</span> <span class="n">ToolCallError</span><span class="p">,</span> <span class="n">collect_tools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTool</span><span class="p">,</span> <span class="n">ToolCallError</span><span class="p">,</span> <span class="n">_collect_tools</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools._from_toolset</span><span class="w"> </span><span class="kn">import</span> <span class="n">tool_call_scope</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.coroutines</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_coroutine_sync</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_definition</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_for_llm</span>
@@ -751,6 +751,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"AirflowTools"</span><span class="p">,</span> <span class="s2">"AsyncAirflowTools"</span><span class="p">]</span>
+
+<span class="n">_ASYNC_MCP_HINT</span> <span class="o">=</span> <span class="s2">"Convert the server's tools with anthropic.lib.tools.mcp.async_mcp_tool() instead."</span>
+<span class="c1"># The SDK's sync mcp_tool() needs an AnyIO worker thread with the session open on its loop,</span>
+<span class="c1"># which a sync task does not have.</span>
+<span class="n">_MCP_HINT</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"Run the agent with AsyncAnthropic and AsyncAirflowTools, and convert the server's tools "</span>
+    <span class="s2">"with anthropic.lib.tools.mcp.async_mcp_tool(), instead."</span>
+<span class="p">)</span>
 
 <span class="c1"># The ``output_format`` a runner parses its final message into.</span>
 <span class="n">_OutputT</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"_OutputT"</span><span class="p">)</span>
@@ -812,7 +820,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="AirflowTools.tools">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/tools/anthropic/index.html#airflow.providers.common.ai.tools.anthropic.AirflowTools.tools">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BetaFunctionTool</span><span class="p">[</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">_sync_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span>
+            <span class="n">_sync_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">_collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">mcp_hint</span><span class="o">=</span><span class="n">_MCP_HINT</span><span class="p">)</span>
         <span class="p">]</span></div>
 
 
@@ -862,7 +870,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="AsyncAirflowTools.tools">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/tools/anthropic/index.html#airflow.providers.common.ai.tools.anthropic.AsyncAirflowTools.tools">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BetaAsyncFunctionTool</span><span class="p">[</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Coroutine</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]]</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">_async_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span>
+            <span class="n">_async_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">_collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">mcp_hint</span><span class="o">=</span><span class="n">_ASYNC_MCP_HINT</span><span class="p">)</span>
         <span class="p">]</span></div>
 
 

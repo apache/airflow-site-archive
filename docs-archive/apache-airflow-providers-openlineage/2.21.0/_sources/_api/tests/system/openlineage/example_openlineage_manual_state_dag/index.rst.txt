@@ -1,0 +1,108 @@
+tests.system.openlineage.example_openlineage_manual_state_dag
+=============================================================
+
+.. py:module:: tests.system.openlineage.example_openlineage_manual_state_dag
+
+.. autoapi-nested-parse::
+
+   Dags whose task and Dag run states this Dag changes through the REST API, like a user does in the UI.
+
+   It triggers a child Dag with a chain of tasks per scenario and changes the state of each chain on its own:
+       - a running task marked as success, failed or skipped, and a running map index marked as success or failed
+       - a task that hasn't started marked as failed with its upstream, and a running task marked as success with
+         its downstream, so some of the marked tasks never started
+       - a finished task marked with the other state, success to failed and failed to success
+       - a task group marked as failed while its first task runs
+       - a deferred task and a sensor waiting to be rescheduled marked as success, a task awaiting input as failed
+         (Airflow 3.1+, as the human-in-the-loop operators are)
+
+   It also triggers two child Dags with a running task, a running map index and a deferred task, and marks the Dag
+   runs as success and as failed.
+   It needs a deployment with an API server (the OpenLineage e2e tests).
+
+   It checks:
+       - the API server emits the COMPLETE or FAIL of every marked task, with the `runId` of the START the worker
+         emitted for it, if it started (the `runId` check of OpenLineageTestOperator)
+       - a marked task that never started gets a COMPLETE or FAIL and no START
+       - a finished task marked with the other state gets the event of its new state, with the `runId` of its
+         first outcome
+       - tasks the scheduler skips or fails because of the change, and map indexes that never start, emit nothing
+       - the Dag run events of the child Dags, whoever emitted them
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_manual_state_dag.DAG_ID
+   tests.system.openlineage.example_openlineage_manual_state_dag.TASKS_DAG_ID
+   tests.system.openlineage.example_openlineage_manual_state_dag.HAS_HITL
+   tests.system.openlineage.example_openlineage_manual_state_dag.DAG_RUN_STATES
+   tests.system.openlineage.example_openlineage_manual_state_dag.TASK_CHANGES
+   tests.system.openlineage.example_openlineage_manual_state_dag.check_events
+   tests.system.openlineage.example_openlineage_manual_state_dag.test_run
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_manual_state_dag.get_dag_run_dag_id
+   tests.system.openlineage.example_openlineage_manual_state_dag.sleep_long
+   tests.system.openlineage.example_openlineage_manual_state_dag.do_nothing
+   tests.system.openlineage.example_openlineage_manual_state_dag.fail
+   tests.system.openlineage.example_openlineage_manual_state_dag.never_ready
+   tests.system.openlineage.example_openlineage_manual_state_dag.sleeper_then_after
+   tests.system.openlineage.example_openlineage_manual_state_dag.mapped_sleeper_then_after
+   tests.system.openlineage.example_openlineage_manual_state_dag.deferred_waiter
+   tests.system.openlineage.example_openlineage_manual_state_dag.change_tasks
+   tests.system.openlineage.example_openlineage_manual_state_dag.change_dag_run
+
+
+Module Contents
+---------------
+
+.. py:data:: DAG_ID
+   :value: 'openlineage_manual_state_dag'
+
+
+.. py:data:: TASKS_DAG_ID
+   :value: 'openlineage_manual_state_dag_tasks__notrigger'
+
+
+.. py:data:: HAS_HITL
+
+.. py:data:: DAG_RUN_STATES
+   :value: ('success', 'failed')
+
+
+.. py:function:: get_dag_run_dag_id(state)
+
+.. py:function:: sleep_long()
+
+.. py:function:: do_nothing()
+
+.. py:function:: fail()
+
+.. py:function:: never_ready()
+
+.. py:function:: sleeper_then_after(name)
+
+.. py:function:: mapped_sleeper_then_after(name)
+
+.. py:function:: deferred_waiter(name)
+
+.. py:data:: TASK_CHANGES
+   :type:  list[dict]
+
+.. py:function:: change_tasks(child_run_id)
+
+.. py:function:: change_dag_run(child_dag_id, child_run_id, state)
+
+.. py:data:: check_events
+
+.. py:data:: test_run
+

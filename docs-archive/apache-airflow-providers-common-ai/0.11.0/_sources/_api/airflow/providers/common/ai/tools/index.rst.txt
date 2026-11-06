@@ -1,0 +1,175 @@
+airflow.providers.common.ai.tools
+=================================
+
+.. py:module:: airflow.providers.common.ai.tools
+
+.. autoapi-nested-parse::
+
+   Framework-neutral tools backed by Airflow connections.
+
+   An :class:`AirflowTool` is one operation an agent can call: a name, a
+   description, a JSON Schema for its arguments, and an async function. Nothing in
+   it belongs to a particular agent framework, so the same tool can be handed to
+   Strands Agents, Google ADK or LangChain through a small adapter, while the agent
+   itself stays native to that framework.
+
+   The toolsets this provider ships, such as
+   :class:`~airflow.providers.common.ai.toolsets.sql.SQLToolset` and
+   :class:`~airflow.providers.common.ai.toolsets.hook.HookToolset`, implement
+   :class:`ToolProvider` and expose their tools through
+   :meth:`ToolProvider.airflow_tools`.
+
+   .. note::
+
+       Experimental: this interface can change or be removed in a minor release of this
+       provider.
+       See :ref:`howto/stability`.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /_api/airflow/providers/common/ai/tools/adk/index
+   /_api/airflow/providers/common/ai/tools/strands/index
+   /_api/airflow/providers/common/ai/tools/tracing/index
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.ToolCallError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.ToolResult
+   airflow.providers.common.ai.tools.AirflowTool
+   airflow.providers.common.ai.tools.ToolProvider
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.collect_tools
+
+
+Package Contents
+----------------
+
+.. py:exception:: ToolCallError
+
+   Bases: :py:obj:`Exception`
+
+
+   A tool call failed in a way the model cannot fix by changing its arguments.
+
+   The message has already been through Airflow's secret masker. Adapters let it
+   propagate so the agent run, and with it the task, fails and Airflow's retry
+   handles it, the same way an unhandled tool error fails an ``AgentOperator`` run.
+
+
+.. py:class:: ToolResult
+
+   The outcome of one tool call, as the agent framework receives it.
+
+   :param content: What the model sees. A string or any JSON-compatible value.
+   :param is_error: Whether the call failed in a way the model can correct, such as
+       a query naming a column that does not exist. Adapters map this to the
+       framework's own error status, so a failure is never inferred from the text of
+       ``content``.
+
+
+   .. py:attribute:: content
+      :type:  pydantic.JsonValue
+
+
+   .. py:attribute:: is_error
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: AirflowTool
+
+   One operation an agent can call, independent of any agent framework.
+
+   Call it through :meth:`call`, never ``function`` directly: :meth:`call` is the
+   one path every adapter shares, and it is where Airflow's secret masker runs on
+   everything returned to the model.
+
+   :param name: Tool name shown to the model.
+   :param description: What the tool does, shown to the model.
+   :param parameters: JSON Schema (``"type": "object"``) for the tool's arguments.
+   :param function: Async function that performs the operation. It receives the
+       arguments the model supplied and returns a :class:`ToolResult`. It returns an
+       error result for a failure the model can correct, and raises for anything else.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: description
+      :type:  str
+
+
+   .. py:attribute:: parameters
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: function
+      :type:  collections.abc.Callable[[dict[str, Any]], collections.abc.Awaitable[ToolResult]]
+
+
+   .. py:method:: call(arguments)
+      :async:
+
+
+      Run the tool and return a result that is safe to hand back to the model.
+
+      The content of the result, including error text, passes through Airflow's
+      secret masker, so a connection password that ends up in a result is replaced
+      with ``***`` before it reaches the model, the model provider, or anything the
+      framework records. The masker only knows secrets Airflow has registered, such
+      as connection passwords and sensitive connection extras.
+
+      :raises ToolCallError: when ``function`` raises. The original exception is
+          logged to the task log, which masks it; only the masked message travels
+          on, because frameworks record a failed call's exception, cause included,
+          in their traces.
+
+
+
+.. py:class:: ToolProvider
+
+   Bases: :py:obj:`Protocol`
+
+
+   A source of :class:`AirflowTool` objects, such as a toolset bound to one connection.
+
+
+   .. py:method:: airflow_tools()
+
+      Return the tools this provider exposes.
+
+
+
+.. py:function:: collect_tools(sources)
+
+   Flatten toolsets and individual tools, as a framework adapter receives them, into tools.
+
+   :raises ValueError: when two tools share a name. Frameworks route a call by name, so one
+       of them would silently never run; give one toolset a tool name prefix.
+
+

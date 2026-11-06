@@ -15,8 +15,53 @@ Classes
    airflow.providers.standard.operators.hitl.HITLEntryOperator
 
 
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.standard.operators.hitl.request_input
+
+
 Module Contents
 ---------------
+
+.. py:function:: request_input(*, subject, options, body = None, defaults = None, multiple = False, params = None, notifiers = None, assigned_users = None, timeout = None, key = None)
+
+   Ask a person for input from inside a running Python task, and return their answer.
+
+   The first time a question is asked, the request appears on the Required Actions page, the same
+   as one from :class:`HITLOperator`, and the task stops there: it waits in the ``awaiting_input``
+   state without holding a worker slot. Once the request is answered, the task runs again from the
+   start of its callable, and this call returns the answer instead of asking again. Save anything
+   the second run should not redo (for example an agent framework's run state) to
+   ``task_state_store`` before calling this.
+
+   It works in ``@task`` and ``PythonOperator`` callables (sync or async), including ``@task.branch``
+   and ``@task.short_circuit``. It can't pause tasks that run their callable in another process, such
+   as ``@task.virtualenv``, ``@task.external_python``, ``@task.docker`` or ``@task.kubernetes``.
+   Ask one question at a time from the task's own code, not from worker threads or from several
+   ``async`` calls running at once: a task instance has a single Required Actions request.
+
+   Needs Airflow 3.4+. Earlier versions keep the first request's subject, body and options when a
+   task asks again, after a resume or on a retry, so the reviewer would answer a question they were
+   not shown.
+
+   :param subject: Headline shown to the reviewer.
+   :param options: Options the reviewer chooses from.
+   :param body: Details the reviewer needs to decide (Markdown).
+   :param defaults: Options applied if ``timeout`` passes without an answer. Without defaults, the
+       task fails with :class:`~airflow.providers.standard.exceptions.HITLTimeoutError` at the timeout.
+   :param multiple: Whether the reviewer can choose more than one option.
+   :param params: Form fields for the reviewer to fill in, defined like Dag params.
+   :param notifiers: Notifiers called with the task context once the request is written.
+   :param assigned_users: Users allowed to answer. Anyone with access can answer if not set.
+   :param timeout: How long to wait for an answer. Waits indefinitely if not set.
+   :param key: Which question this is, so a resumed task gets each answer back at the right call.
+       Defaults to ``subject``. Each key is asked at most once per try. Set it when the subject can
+       change between runs, or when the task can ask the same subject more than once, for example
+       one approval per agent tool call (use the call's id).
+
 
 .. py:class:: HITLOperator(*, subject, options, body = None, defaults = None, multiple = False, params = None, notifiers = None, assigned_users = None, response_timeout = None, **kwargs)
 

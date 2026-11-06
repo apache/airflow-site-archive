@@ -1,0 +1,110 @@
+airflow.providers.snowflake.hooks.cortex_model
+==============================================
+
+.. py:module:: airflow.providers.snowflake.hooks.cortex_model
+
+.. autoapi-nested-parse::
+
+   Expose Snowflake Cortex's OpenAI-compatible chat endpoint as a pydantic-ai model hook.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.snowflake.hooks.cortex_model.CORTEX_CHAT_COMPLETIONS_PATH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.snowflake.hooks.cortex_model.PydanticAISnowflakeHook
+
+
+Module Contents
+---------------
+
+.. py:data:: CORTEX_CHAT_COMPLETIONS_PATH
+   :value: '/api/v2/cortex/v1'
+
+
+.. py:class:: PydanticAISnowflakeHook(llm_conn_id = None, model_id = None, fallback_conn_ids = None, *, snowflake_conn_id = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook`
+
+
+   Hook for Snowflake Cortex's OpenAI-compatible chat endpoint via pydantic-ai.
+
+   Unlike the other ``PydanticAI*`` hooks, credentials do not live on this connection: they are
+   read from an existing ``snowflake`` connection (OAuth, PAT, or key-pair JWT -- whichever that
+   connection is configured for), refreshed on every request the same way as
+   ``SnowflakeCortexAgentHook`` and ``SnowflakeSqlApiHook``. See
+   ``SnowflakeRestTokenProvider``. The underlying ``httpx2.AsyncClient`` is built once and lives as
+   long as this hook instance; nothing currently closes it (``SnowflakeProvider`` only owns and
+   closes a client it built itself, not one passed in).
+
+   Connection fields:
+       - **extra** JSON: ``{"model": "snowflake:claude-4-sonnet",
+         "snowflake_conn_id": "snowflake_default"}``
+
+   Model family support (pydantic-ai-slim's ``SnowflakeProvider.model_profile``): Claude
+   (``claude*``) and OpenAI (``openai-*``) models support tools and structured output;
+   other families (``llama*``, ``snowflake-llama*``, ``mistral*``, ``mixtral*``,
+   ``deepseek*``, and any unlisted family) do not support tools, and structured output
+   falls back to prompted mode. Use a Claude or OpenAI family model for a tool-using agent.
+
+   :param llm_conn_id: Airflow connection ID for this ``pydanticai_snowflake`` connection.
+   :param model_id: Model identifier, e.g. ``"snowflake:claude-4-sonnet"``. A bare name (no
+       recognized platform prefix) is qualified with ``snowflake:``.
+   :param fallback_conn_ids: See :class:`~airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook`.
+   :param snowflake_conn_id: Connection ID of an existing Snowflake connection to source
+       credentials, account, and host from. Takes precedence over the connection extra's
+       ``snowflake_conn_id``; one of the two is required.
+
+
+   .. py:attribute:: conn_type
+      :value: 'pydanticai_snowflake'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'pydanticai_snowflake_default'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'Pydantic AI (Snowflake Cortex)'
+
+
+
+   .. py:attribute:: model_provider
+      :value: 'snowflake'
+
+
+
+   .. py:attribute:: snowflake_conn_id
+      :value: None
+
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+   .. py:method:: test_connection()
+
+      Test connection by resolving the model and fetching a Snowflake token.
+
+      Calls Snowflake's token endpoint, so a bad credential is reported here. Does NOT call
+      the LLM API.
+
+
+

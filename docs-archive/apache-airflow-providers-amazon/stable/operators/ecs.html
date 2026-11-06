@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
             <link rel="next" title="Amazon Elastic Kubernetes Service (EKS)" href="eks.html" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -695,7 +695,7 @@ scale containerized applications.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">'apache-airflow[amazon]'</span>
 </pre></div>
 </div>
-<p>Detailed information is available <a class="reference external" href="/docs/apache-airflow/stable/installation/index.html" title="(in apache-airflow v3.4.0)"><span>Installation of Airflow®</span></a></p>
+<p>Detailed information is available <a class="reference external" href="/docs/apache-airflow/stable/installation/index.html" title="(in apache-airflow v3.5.0)"><span>Installation of Airflow®</span></a></p>
 </li>
 <li><p><a class="reference internal" href="../connections/aws.html"><span class="doc">Setup Connection</span></a>.</p></li>
 </ul>
@@ -936,6 +936,37 @@ all replace the task definition’s value rather than adding to it. See
 <a class="reference external" href="https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerOverride.html">ContainerOverride</a>
 in the Amazon ECS API reference for the full list of fields.</p>
 </section>
+<section id="control-retries-for-container-exit-codes">
+<h4>Control retries for container exit codes<a class="headerlink" href="#control-retries-for-container-exit-codes" title="Link to this heading">¶</a></h4>
+<p>Use <code class="docutils literal notranslate"><span class="pre">fail_on_exit_code</span></code> when a known application failure should fail the Airflow task
+without consuming its remaining retries. Other failures continue to use the task’s
+normal retry settings. For example, if your application uses exit code <code class="docutils literal notranslate"><span class="pre">2</span></code> for an
+invalid input that will not succeed on retry:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">EcsRunTaskOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"run_application"</span><span class="p">,</span>
+    <span class="n">cluster</span><span class="o">=</span><span class="s2">"application_cluster"</span><span class="p">,</span>
+    <span class="n">task_definition</span><span class="o">=</span><span class="s2">"application_task"</span><span class="p">,</span>
+    <span class="n">overrides</span><span class="o">=</span><span class="p">{},</span>
+    <span class="n">retries</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">fail_on_exit_code</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>The option accepts an integer or a container of integers. Its default is <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+which preserves the existing retry behavior. Exit code <code class="docutils literal notranslate"><span class="pre">0</span></code> remains successful;
+a missing exit code does not match this option.</p>
+<p>If any stopped container explicitly reports a matching non-zero code, the task fails
+without retrying, even if another container reports a different failure or a code in
+<code class="docutils literal notranslate"><span class="pre">skip_on_exit_code</span></code>. This result does not depend on container order. When the same
+code appears in both options, <code class="docutils literal notranslate"><span class="pre">fail_on_exit_code</span></code> takes precedence. Task-level
+startup failures, host termination checks, and AWS API errors retain their existing
+handling.</p>
+<p>This behavior applies to synchronous execution and resumed deferrable execution.
+The option has no effect when <code class="docutils literal notranslate"><span class="pre">wait_for_completion=False</span></code> and <code class="docutils literal notranslate"><span class="pre">deferrable=False</span></code>:
+the operator returns before checking exit codes. On Airflow versions supporting
+<code class="docutils literal notranslate"><span class="pre">retry_policy</span></code>, a matching code raises <code class="docutils literal notranslate"><span class="pre">AirflowFailException</span></code>, which bypasses
+retry policies, including a policy that would otherwise retry the task.</p>
+</section>
 <section id="stream-logs-to-aws-cloudwatch">
 <h4>Stream logs to AWS CloudWatch<a class="headerlink" href="#stream-logs-to-aws-cloudwatch" title="Link to this heading">¶</a></h4>
 <p>To stream logs to AWS CloudWatch, you need to define the parameters below.
@@ -1162,6 +1193,7 @@ before the target state.</p>
 <li><a class="reference internal" href="#deregister-a-task-definition">Deregister a Task Definition</a></li>
 <li><a class="reference internal" href="#run-a-task-definition">Run a Task Definition</a><ul>
 <li><a class="reference internal" href="#overriding-the-task-definition">Overriding the task definition</a></li>
+<li><a class="reference internal" href="#control-retries-for-container-exit-codes">Control retries for container exit codes</a></li>
 <li><a class="reference internal" href="#stream-logs-to-aws-cloudwatch">Stream logs to AWS CloudWatch</a></li>
 <li><a class="reference internal" href="#iam-permissions">IAM Permissions</a></li>
 </ul>
@@ -1394,7 +1426,7 @@ before the target state.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

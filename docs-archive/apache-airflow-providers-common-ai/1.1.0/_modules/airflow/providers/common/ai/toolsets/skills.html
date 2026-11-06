@@ -720,11 +720,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">Counter</span><span class="p">,</span> <span class="n">defaultdict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">importlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">metadata</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span><span class="p">,</span> <span class="n">PurePosixPath</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.skills</span><span class="w"> </span><span class="kn">import</span> <span class="n">SkillSource</span><span class="p">,</span> <span class="n">_materialize_skills</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolCallPart</span><span class="p">,</span> <span class="n">ToolReturnPart</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.skills</span><span class="w"> </span><span class="kn">import</span> <span class="n">SkillSource</span><span class="p">,</span> <span class="n">_materialize_skills</span><span class="p">,</span> <span class="n">_SkillsLocation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">SKILLS_XCOM_KEY</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_max_retries</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_context</span>
 
 <span class="c1"># pydantic-ai-skills 2.0 removed SkillsToolset, leaving only SkillsCapability, so the</span>
 <span class="c1"># ``skills`` extra caps it below 2.</span>
@@ -742,8 +750,55 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Sequence</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai._run_context</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunContext</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstructionPart</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstructionPart</span><span class="p">,</span> <span class="n">ModelMessage</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets.abstract</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolsetTool</span>
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/skills/index.html#airflow.providers.common.ai.toolsets.skills.log">[docs]</a>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
+
+
+<span class="c1"># The pydantic-ai-skills tools that act on one skill, named by their ``skill_name`` argument.</span>
+<span class="n">_PER_SKILL_TOOLS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"load_skill"</span><span class="p">,</span> <span class="s2">"read_skill_resource"</span><span class="p">,</span> <span class="s2">"run_skill_script"</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_describe_skill_source</span><span class="p">(</span><span class="n">skill_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">locations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_SkillsLocation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Name where a discovered skill came from: its local path, or its repository, path and commit."""</span>
+    <span class="n">skill_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="n">skill_uri</span><span class="p">)</span>
+    <span class="c1"># Nested sources can both contain the skill; the deepest one is where it came from.</span>
+    <span class="n">owner</span><span class="p">,</span> <span class="n">owner_root</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">""</span>
+    <span class="k">for</span> <span class="n">location</span> <span class="ow">in</span> <span class="n">locations</span><span class="p">:</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="n">location</span><span class="o">.</span><span class="n">directory</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">commonpath</span><span class="p">([</span><span class="n">skill_dir</span><span class="p">,</span> <span class="n">root</span><span class="p">])</span> <span class="o">==</span> <span class="n">root</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">root</span><span class="p">)</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">owner_root</span><span class="p">):</span>
+            <span class="n">owner</span><span class="p">,</span> <span class="n">owner_root</span> <span class="o">=</span> <span class="n">location</span><span class="p">,</span> <span class="n">root</span>
+    <span class="k">if</span> <span class="n">owner</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">owner</span><span class="o">.</span><span class="n">git</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"path"</span><span class="p">:</span> <span class="n">skill_dir</span><span class="p">}</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="c1"># GitSkills rejects a repo_url carrying credentials, so it is safe to publish.</span>
+        <span class="s2">"repo_url"</span><span class="p">:</span> <span class="n">owner</span><span class="o">.</span><span class="n">git</span><span class="o">.</span><span class="n">repo_url</span><span class="p">,</span>
+        <span class="s2">"path"</span><span class="p">:</span> <span class="n">PurePosixPath</span><span class="p">(</span><span class="n">owner</span><span class="o">.</span><span class="n">git</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">Path</span><span class="p">(</span><span class="n">skill_dir</span><span class="p">)</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">owner_root</span><span class="p">)</span><span class="o">.</span><span class="n">as_posix</span><span class="p">())</span><span class="o">.</span><span class="n">as_posix</span><span class="p">(),</span>
+        <span class="s2">"branch"</span><span class="p">:</span> <span class="n">owner</span><span class="o">.</span><span class="n">git</span><span class="o">.</span><span class="n">branch</span><span class="p">,</span>
+        <span class="s2">"commit"</span><span class="p">:</span> <span class="n">owner</span><span class="o">.</span><span class="n">commit</span><span class="p">,</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_count_skill_calls</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ModelMessage</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Count, per skill, the calls to each per-skill tool that returned a result."""</span>
+    <span class="n">calls</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ToolCallPart</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">counts</span><span class="p">:</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="n">Counter</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">message</span><span class="o">.</span><span class="n">parts</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">ToolCallPart</span><span class="p">):</span>
+                <span class="n">calls</span><span class="p">[</span><span class="n">part</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">part</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">ToolReturnPart</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">call</span> <span class="o">:=</span> <span class="n">calls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">part</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">)):</span>
+                <span class="c1"># Two skills toolsets on one agent need ``prefixed()`` to keep their tool names apart.</span>
+                <span class="n">tool</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">_PER_SKILL_TOOLS</span> <span class="k">if</span> <span class="n">call</span><span class="o">.</span><span class="n">tool_name</span> <span class="o">==</span> <span class="n">t</span> <span class="ow">or</span> <span class="n">call</span><span class="o">.</span><span class="n">tool_name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">"_</span><span class="si">{</span><span class="n">t</span><span class="si">}</span><span class="s2">"</span><span class="p">)),</span>
+                    <span class="kc">None</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">tool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">skill_name</span> <span class="o">:=</span> <span class="n">call</span><span class="o">.</span><span class="n">args_as_dict</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"skill_name"</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
+                    <span class="n">counts</span><span class="p">[</span><span class="n">skill_name</span><span class="p">][</span><span class="n">tool</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">counts</span>
 
 
 <div class="viewcode-block" id="AgentSkillsToolset">
@@ -795,6 +850,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span> <span class="o">=</span> <span class="n">validate_max_retries</span><span class="p">(</span><span class="n">max_retries</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_locations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_SkillsLocation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># The run's messages, prior history included. Calls made before an approval pause or</span>
+        <span class="c1"># replayed on a durable retry never reach call_tool, so the skills XCom counts these.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ModelMessage</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
 
     <span class="nd">@property</span>
 <div class="viewcode-block" id="AgentSkillsToolset.id">
@@ -838,10 +897,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="n">SkillsToolset</span> <span class="o">=</span> <span class="n">pydantic_ai_skills</span><span class="o">.</span><span class="n">SkillsToolset</span>
 
-        <span class="n">directories</span><span class="p">,</span> <span class="n">cleanup</span> <span class="o">=</span> <span class="n">_materialize_skills</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sources</span><span class="p">)</span>
+        <span class="n">locations</span><span class="p">,</span> <span class="n">cleanup</span> <span class="o">=</span> <span class="n">_materialize_skills</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sources</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span> <span class="o">=</span> <span class="n">cleanup</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_locations</span> <span class="o">=</span> <span class="n">locations</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"directories"</span><span class="p">:</span> <span class="n">directories</span><span class="p">}</span>
+            <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"directories"</span><span class="p">:</span> <span class="p">[</span><span class="n">location</span><span class="o">.</span><span class="n">directory</span> <span class="k">for</span> <span class="n">location</span> <span class="ow">in</span> <span class="n">locations</span><span class="p">]}</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exclude_tools</span><span class="p">:</span>
                 <span class="n">kwargs</span><span class="p">[</span><span class="s2">"exclude_tools"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exclude_tools</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exclude_resources</span><span class="p">:</span>
@@ -861,6 +921,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="fm">__aexit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_push_skills_xcom</span><span class="p">()</span>
                 <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="o">.</span><span class="fm">__aexit__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">finally</span><span class="p">:</span>
@@ -869,6 +930,36 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span> <span class="o">=</span> <span class="kc">None</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_push_skills_xcom</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Publish the skills offered to the agent and the skill tools it called, for the AI Model tab."""</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">context</span> <span class="o">=</span> <span class="n">get_current_context</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>
+            <span class="c1"># Used outside an Airflow task: there is no task instance to publish on.</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="c1"># Telemetry only: a failure here must not fail the run or skip the clean-up after it.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">counts</span> <span class="o">=</span> <span class="n">_count_skill_calls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_messages</span><span class="p">)</span>
+            <span class="n">skills</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">name</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"name"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                    <span class="s2">"description"</span><span class="p">:</span> <span class="n">skill</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+                    <span class="s2">"source"</span><span class="p">:</span> <span class="n">_describe_skill_source</span><span class="p">(</span><span class="n">skill</span><span class="o">.</span><span class="n">uri</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_locations</span><span class="p">),</span>
+                    <span class="s2">"calls"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">{})),</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">skill</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="o">.</span><span class="n">skills</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">}</span>
+            <span class="c1"># Another skills toolset on the agent, or this run before it paused for approval, may</span>
+            <span class="c1"># have published already. XComs from an earlier try are cleared before this one starts.</span>
+            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span>
+            <span class="n">stored</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">SKILLS_XCOM_KEY</span><span class="p">,</span> <span class="n">task_ids</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="n">map_indexes</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="n">merged</span> <span class="o">=</span> <span class="p">{</span><span class="n">entry</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]:</span> <span class="n">entry</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">stored</span><span class="p">}</span> <span class="o">|</span> <span class="n">skills</span>
+            <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">SKILLS_XCOM_KEY</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">[</span><span class="n">merged</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">merged</span><span class="p">)])</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to push the skills XCom"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_require_inner</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -884,6 +975,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="c1"># pydantic-ai-skills fixes its tools' budget at one correction, whatever the agent's</span>
         <span class="c1"># retries say; resolve it the way the provider's other toolsets do instead.</span>
         <span class="n">max_retries</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">max_retries</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_messages</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">messages</span>
         <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_require_inner</span><span class="p">()</span><span class="o">.</span><span class="n">get_tools</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">max_retries</span><span class="o">=</span><span class="n">max_retries</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div>
 

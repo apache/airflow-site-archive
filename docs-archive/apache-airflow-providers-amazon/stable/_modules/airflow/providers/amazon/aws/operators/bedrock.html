@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -713,17 +713,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">BedrockAgentRuntimeDeletedTrigger</span><span class="p">,</span>
     <span class="n">BedrockAgentRuntimeReadyTrigger</span><span class="p">,</span>
     <span class="n">BedrockBatchInferenceCompletedTrigger</span><span class="p">,</span>
+    <span class="n">BedrockBatchInferenceScheduledTrigger</span><span class="p">,</span>
     <span class="n">BedrockCustomizeModelCompletedTrigger</span><span class="p">,</span>
     <span class="n">BedrockIngestionJobTrigger</span><span class="p">,</span>
     <span class="n">BedrockKnowledgeBaseActiveTrigger</span><span class="p">,</span>
     <span class="n">BedrockProvisionModelThroughputCompletedTrigger</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_execute_complete_event</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.deferral</span><span class="w"> </span><span class="kn">import</span> <span class="n">should_defer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.mixins</span><span class="w"> </span><span class="kn">import</span> <span class="n">aws_template_fields</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">timezone</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">prune_dict</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.triggers.bedrock</span><span class="w"> </span><span class="kn">import</span> <span class="n">BedrockBaseBatchInferenceTrigger</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
@@ -835,8 +838,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for runtime readiness. (default: 20)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the AgentCore Runtime</span>
-<span class="sd">        to reach READY. This implies waiting for completion. This mode requires aiobotocore</span>
-<span class="sd">        module to be installed. (default: False)</span>
+<span class="sd">        to reach READY. This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -942,7 +946,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">agent_runtime_id</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"agentRuntimeId"</span><span class="p">]</span>
         <span class="n">agent_runtime_version</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"agentRuntimeVersion"</span><span class="p">]</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring until AgentCore Runtime </span><span class="si">%s</span><span class="s2"> reaches READY."</span><span class="p">,</span> <span class="n">agent_runtime_arn</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockAgentRuntimeReadyTrigger</span><span class="p">(</span>
@@ -1115,8 +1119,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for runtime deletion. (default: 20)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the AgentCore Runtime</span>
-<span class="sd">        deletion to complete. This implies waiting for completion. This mode requires aiobotocore</span>
-<span class="sd">        module to be installed. (default: False)</span>
+<span class="sd">        deletion to complete. This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -1186,7 +1191,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">delete_agent_runtime</span><span class="p">(</span><span class="n">agentRuntimeId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">agent_runtime_id</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring until AgentCore Runtime </span><span class="si">%s</span><span class="s2"> is deleted."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">agent_runtime_id</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockAgentRuntimeDeletedTrigger</span><span class="p">(</span>
@@ -1239,8 +1244,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 120)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 75)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the cluster to stop.</span>
-<span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
-<span class="sd">        (default: False)</span>
+<span class="sd">        This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -1398,7 +1404,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Bedrock model customization job creation failed: </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="n">task_description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Bedrock model customization job </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="si">}</span><span class="s2"> to complete."</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring for </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">task_description</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockCustomizeModelCompletedTrigger</span><span class="p">(</span>
@@ -1443,8 +1449,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 20)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the cluster to stop.</span>
-<span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
-<span class="sd">        (default: False)</span>
+<span class="sd">        This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -1526,7 +1533,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">create_throughput_kwargs</span><span class="p">,</span>
         <span class="p">)[</span><span class="s2">"provisionedModelArn"</span><span class="p">]</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring for provisioned throughput."</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockProvisionModelThroughputCompletedTrigger</span><span class="p">(</span>
@@ -1593,8 +1600,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 20)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the cluster to stop.</span>
-<span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
-<span class="sd">        (default: False)</span>
+<span class="sd">        This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -1756,7 +1764,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating Amazon Bedrock Knowledge Base </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="n">knowledge_base_id</span> <span class="o">=</span> <span class="n">_create_kb</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring for Knowledge base creation."</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockKnowledgeBaseActiveTrigger</span><span class="p">(</span>
@@ -1885,8 +1893,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 10)</span>
 <span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the cluster to stop.</span>
-<span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
-<span class="sd">        (default: False)</span>
+<span class="sd">        This mode requires aiobotocore module to be installed. (default: False)</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -2010,7 +2019,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="n">ingestion_job_id</span> <span class="o">=</span> <span class="n">start_ingestion_job</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring for ingestion job."</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockIngestionJobTrigger</span><span class="p">(</span>
@@ -2320,14 +2329,18 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param output_uri: The S3 location of the output data. (templated)</span>
 <span class="sd">    :param invoke_kwargs: Additional keyword arguments to pass to the  API call. (templated)</span>
 
-<span class="sd">    :param wait_for_completion: Whether to wait for cluster to stop. (default: True)</span>
+<span class="sd">    :param wait_for_completion: Whether to wait for the job to reach ``success_state``. (default: True)</span>
 <span class="sd">        NOTE:  The way batch inference jobs work, your jobs are added to a queue and done "eventually"</span>
 <span class="sd">        so using deferrable mode is much more practical than using wait_for_completion.</span>
+<span class="sd">    :param success_state: The job state to wait for, either ``"completed"`` or ``"scheduled"``. Use</span>
+<span class="sd">        ``"scheduled"`` to stop waiting once Bedrock has queued the job. Accepts the</span>
+<span class="sd">        ``BedrockBatchInferenceSensor.SuccessState`` values. (default: "completed")</span>
 <span class="sd">    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 20)</span>
-<span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the cluster to stop.</span>
-<span class="sd">        This implies waiting for completion. This mode requires aiobotocore module to be installed.</span>
-<span class="sd">        (default: False)</span>
+<span class="sd">    :param deferrable: If True, the operator will wait asynchronously for the job to reach ``success_state``.</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
+<span class="sd">        This mode requires aiobotocore module to be installed. (default: False)</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials.</span>
 <span class="sd">        If this is ``None`` or empty then the default boto3 behaviour is used. If</span>
 <span class="sd">        running Airflow in a distributed manner and aws_conn_id is None or</span>
@@ -2355,6 +2368,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="s2">"invoke_kwargs"</span><span class="p">,</span>
     <span class="p">)</span></div>
 
+    <span class="n">_WAITERS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">type</span><span class="p">[</span><span class="n">BedrockBaseBatchInferenceTrigger</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"completed"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"batch_inference_complete"</span><span class="p">,</span> <span class="n">BedrockBatchInferenceCompletedTrigger</span><span class="p">),</span>
+        <span class="s2">"scheduled"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"batch_inference_scheduled"</span><span class="p">,</span> <span class="n">BedrockBatchInferenceScheduledTrigger</span><span class="p">),</span>
+    <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -2365,6 +2382,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">output_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">invoke_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">wait_for_completion</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">success_state</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"completed"</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
@@ -2396,9 +2414,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">invoke_kwargs</span> <span class="o">=</span> <span class="n">invoke_kwargs</span> <span class="ow">or</span> <span class="p">{}</span></div>
 
 
+        <span class="k">if</span> <span class="n">success_state</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_WAITERS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"success_state must be one of </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_WAITERS</span><span class="p">)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">success_state</span><span class="si">!r}</span><span class="s2">."</span><span class="p">)</span>
+
 <div class="viewcode-block" id="BedrockBatchInferenceOperator.wait_for_completion">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/bedrock/index.html#airflow.providers.amazon.aws.operators.bedrock.BedrockBatchInferenceOperator.wait_for_completion">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span> <span class="o">=</span> <span class="n">wait_for_completion</span></div>
+
+<div class="viewcode-block" id="BedrockBatchInferenceOperator.success_state">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/bedrock/index.html#airflow.providers.amazon.aws.operators.bedrock.BedrockBatchInferenceOperator.success_state">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">success_state</span> <span class="o">=</span> <span class="n">success_state</span></div>
 
 <div class="viewcode-block" id="BedrockBatchInferenceOperator.waiter_delay">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/bedrock/index.html#airflow.providers.amazon.aws.operators.bedrock.BedrockBatchInferenceOperator.waiter_delay">[docs]</a>
@@ -2426,7 +2451,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"success"</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error while running </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">validated_event</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> '</span><span class="si">%s</span><span class="s2">' complete."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="p">,</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_arn"</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> '</span><span class="si">%s</span><span class="s2">' is </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="p">,</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_arn"</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">success_state</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_arn"</span><span class="p">]</span></div>
 
@@ -2445,11 +2470,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">job_arn</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"jobArn"</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> '</span><span class="si">%s</span><span class="s2">' started with ARN: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">,</span> <span class="n">job_arn</span><span class="p">)</span>
 
-        <span class="n">task_description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="si">}</span><span class="s2"> '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="si">}</span><span class="s2">' to complete."</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="n">waiter_name</span><span class="p">,</span> <span class="n">trigger_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_WAITERS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">success_state</span><span class="p">]</span>
+        <span class="n">task_description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">activity</span><span class="si">}</span><span class="s2"> '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="si">}</span><span class="s2">' to be </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">success_state</span><span class="si">}</span><span class="s2">."</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Deferring </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">task_description</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
-                <span class="n">trigger</span><span class="o">=</span><span class="n">BedrockBatchInferenceCompletedTrigger</span><span class="p">(</span>
+                <span class="n">trigger</span><span class="o">=</span><span class="n">trigger_class</span><span class="p">(</span>
                     <span class="n">job_arn</span><span class="o">=</span><span class="n">job_arn</span><span class="p">,</span>
                     <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">,</span>
                     <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="p">,</span>
@@ -2462,7 +2488,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Waiting </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">task_description</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="n">waiter_name</span><span class="o">=</span><span class="s2">"batch_inference_complete"</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="n">waiter_name</span><span class="o">=</span><span class="n">waiter_name</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span>
                 <span class="n">jobIdentifier</span><span class="o">=</span><span class="n">job_arn</span><span class="p">,</span>
                 <span class="n">WaiterConfig</span><span class="o">=</span><span class="p">{</span><span class="s2">"Delay"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">,</span> <span class="s2">"MaxAttempts"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="p">},</span>
             <span class="p">)</span>
@@ -3201,7 +3227,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

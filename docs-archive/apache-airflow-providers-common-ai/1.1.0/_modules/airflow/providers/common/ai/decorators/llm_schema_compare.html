@@ -717,6 +717,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.operators.llm_schema_compare</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMSchemaCompareOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">call_arguments</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.validation</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_prompt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">SET_DURING_EXECUTION</span><span class="p">,</span>
@@ -779,7 +780,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="n">validate_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">decorator_name</span><span class="o">=</span><span class="s2">"@task.llm_schema_compare"</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">render_template_fields</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="c1"># Render only the prompt the callable returned. The other template fields were already</span>
+        <span class="c1"># rendered before execute().</span>
+        <span class="c1"># The arguments of the call, positional ones too, can be referenced by name in the prompt.</span>
+        <span class="n">context_merge</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">call_arguments</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">python_callable</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_kwargs</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_template</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">LLMSchemaCompareOperator</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
 
 

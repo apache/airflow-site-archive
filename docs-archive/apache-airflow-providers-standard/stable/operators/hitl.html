@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
             <link rel="next" title="LatestOnlyOperator" href="latest_only.html" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.21.0</span>
+        <span class="version-label">Version: </span><span class="version">2.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -478,7 +478,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.21.0</span>
+        <span class="version-label">Version: </span><span class="version">2.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -662,6 +662,83 @@ recommended patterns, see the HITL tutorial:</p>
 <li><p><a class="reference external" href="https://airflow.apache.org/docs/apache-airflow/stable/tutorial/hitl.html">HITL tutorial</a></p></li>
 </ul>
 </section>
+<section id="asking-for-input-from-inside-a-python-task">
+<span id="howto-operator-request-input"></span><h2>Asking for input from inside a Python task<a class="headerlink" href="#asking-for-input-from-inside-a-python-task" title="Link to this heading">¶</a></h2>
+<p>Sometimes the question only comes up halfway through a task. An agent built with the OpenAI
+Agents SDK, Strands or Google ADK, for example, stops in front of a tool call and needs a person
+to approve it. <a class="reference internal" href="../_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.request_input" title="airflow.providers.standard.operators.hitl.request_input"><code class="xref py py-func docutils literal notranslate"><span class="pre">request_input()</span></code></a> asks the question
+and returns the answer:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/standard/example_dags/example_hitl_request_input.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/providers/standard/example_dags/example_hitl_request_input.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">refund</span><span class="p">(</span><span class="n">order_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">answer</span> <span class="o">=</span> <span class="n">request_input</span><span class="p">(</span>
+            <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Refund order </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">?"</span><span class="p">,</span>
+            <span class="n">options</span><span class="o">=</span><span class="p">[</span><span class="s2">"Approve"</span><span class="p">,</span> <span class="s2">"Reject"</span><span class="p">],</span>
+            <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">"reason"</span><span class="p">:</span> <span class="n">Param</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span> <span class="s2">"null"</span><span class="p">])},</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">4</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">answer</span><span class="p">[</span><span class="s2">"chosen_options"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"Approve"</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"Refunded order </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"Refund for </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2"> rejected: </span><span class="si">{</span><span class="n">answer</span><span class="p">[</span><span class="s1">'params_input'</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'reason'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+
+</pre></div>
+</div>
+</div>
+<p>The first time the task reaches <code class="docutils literal notranslate"><span class="pre">request_input()</span></code>, the question appears on the Required Actions
+page and the task stops there. It waits in the <code class="docutils literal notranslate"><span class="pre">awaiting_input</span></code> state without holding a worker
+slot. When the reviewer answers, the task runs again from the start of its callable, and this
+time the same call returns the answer: a dict with <code class="docutils literal notranslate"><span class="pre">chosen_options</span></code>, <code class="docutils literal notranslate"><span class="pre">params_input</span></code>,
+<code class="docutils literal notranslate"><span class="pre">responded_at</span></code> (a <code class="docutils literal notranslate"><span class="pre">datetime</span></code>), <code class="docutils literal notranslate"><span class="pre">responded_by_user</span></code> and <code class="docutils literal notranslate"><span class="pre">timedout</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">request_input()</span></code> takes the same request fields as
+<a class="reference internal" href="../_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.HITLOperator" title="airflow.providers.standard.operators.hitl.HITLOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLOperator</span></code></a> (<code class="docutils literal notranslate"><span class="pre">subject</span></code>, <code class="docutils literal notranslate"><span class="pre">options</span></code>, <code class="docutils literal notranslate"><span class="pre">body</span></code>,
+<code class="docutils literal notranslate"><span class="pre">defaults</span></code>, <code class="docutils literal notranslate"><span class="pre">multiple</span></code>, <code class="docutils literal notranslate"><span class="pre">params</span></code>, <code class="docutils literal notranslate"><span class="pre">notifiers</span></code>, <code class="docutils literal notranslate"><span class="pre">assigned_users</span></code>), a <code class="docutils literal notranslate"><span class="pre">timeout</span></code>, and a
+<code class="docutils literal notranslate"><span class="pre">key</span></code>. A task can ask several questions; each run returns every answer it already has and stops
+at the first question that has none.</p>
+<p>Things to know:</p>
+<ul>
+<li><p>Code before <code class="docutils literal notranslate"><span class="pre">request_input()</span></code> runs again on every run. Keep anything expensive, such as an
+agent framework’s saved run state, in <code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> so the next run restores it instead of
+redoing it.</p></li>
+<li><p>Each answer goes back to the call with the same <code class="docutils literal notranslate"><span class="pre">key</span></code>, which defaults to <code class="docutils literal notranslate"><span class="pre">subject</span></code>, and each
+key is asked at most once per try. Pass <code class="docutils literal notranslate"><span class="pre">key</span></code> when the subject can change between runs (for
+example when it includes a value computed fresh each run), or when the task can ask the same
+subject more than once, such as one approval per agent tool call: key on the call’s id.</p></li>
+<li><p>The task fails instead of guessing when the keys don’t line up: when it asks a key whose answer
+it has already read, and when a run that resumed with an answer asks a new question, or finishes,
+before reading that answer.</p></li>
+<li><p>Every pause carries the answers the task has received so far in this try, including their
+<code class="docutils literal notranslate"><span class="pre">params_input</span></code>, so keep the number of questions per try small (a handful, not hundreds) and the
+form fields short.</p></li>
+<li><p>A side effect between two questions, such as issuing a refund before asking whether to email the
+customer, runs again when the task resumes after the second answer. Record it in
+<code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> and skip it when the record is there:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">task_state_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"refund_id"</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">task_state_store</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">"refund_id"</span><span class="p">,</span> <span class="n">issue_refund</span><span class="p">(</span><span class="n">order_id</span><span class="p">))</span>
+</pre></div>
+</div>
+</li>
+<li><p>A retry asks every question again, but <code class="docutils literal notranslate"><span class="pre">task_state_store</span></code> keeps its values across retries, so
+the retry still sees what the failed try saved. Delete those values when you no longer need them.</p></li>
+<li><p>Without <code class="docutils literal notranslate"><span class="pre">defaults</span></code>, the task fails with
+<a class="reference internal" href="../_api/airflow/providers/standard/exceptions/index.html#airflow.providers.standard.exceptions.HITLTimeoutError" title="airflow.providers.standard.exceptions.HITLTimeoutError"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLTimeoutError</span></code></a> when <code class="docutils literal notranslate"><span class="pre">timeout</span></code> passes. With
+<code class="docutils literal notranslate"><span class="pre">defaults</span></code>, it resumes with <code class="docutils literal notranslate"><span class="pre">timedout</span></code> set to <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">responded_by_user</span></code> set to
+<code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p>It works in <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.branch</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.short_circuit</span></code> and <code class="docutils literal notranslate"><span class="pre">PythonOperator</span></code> callables,
+sync or async. It can’t pause tasks that run their callable in another process
+(<code class="docutils literal notranslate"><span class="pre">&#64;task.virtualenv</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.external_python</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.docker</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.kubernetes</span></code>).</p></li>
+<li><p>Ask one question at a time, from the task’s own code. A task instance has a single Required
+Actions request, so two questions asked at once (<code class="docutils literal notranslate"><span class="pre">asyncio.gather</span></code>, <code class="docutils literal notranslate"><span class="pre">asyncio.TaskGroup</span></code>, or
+threads) overwrite each other, and a call from a worker thread doesn’t see the answers the task
+resumed with. Don’t call it inside code that turns exceptions into a result, such as an agent
+framework’s tool-error handler: the errors above only fail the task if they reach it.</p></li>
+<li><p>It needs Airflow 3.4+.</p></li>
+<li><p>The Required Actions page refuses an answer to a request that the task has since replaced. A
+client answering through the REST API gets the same protection only if it sends the request’s
+<code class="docutils literal notranslate"><span class="pre">created_at</span></code> (from the GET) as <code class="docutils literal notranslate"><span class="pre">request_created_at</span></code>; without it, the answer is applied to
+whatever request is waiting.</p></li>
+</ul>
+</section>
 </section>
 
 
@@ -742,6 +819,7 @@ recommended patterns, see the HITL tutorial:</p>
 <li><a class="reference internal" href="#">Human in the Loop (HITL) Operators</a><ul>
 <li><a class="reference internal" href="#available-hitl-operators">Available HITL operators</a></li>
 <li><a class="reference internal" href="#usage-guide">Usage guide</a></li>
+<li><a class="reference internal" href="#asking-for-input-from-inside-a-python-task">Asking for input from inside a Python task</a></li>
 </ul>
 </li>
 </ul>
@@ -961,7 +1039,7 @@ recommended patterns, see the HITL tutorial:</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=5bbbbfae"></script>
+        <script src="../_static/documentation_options.js?v=51b770b3"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

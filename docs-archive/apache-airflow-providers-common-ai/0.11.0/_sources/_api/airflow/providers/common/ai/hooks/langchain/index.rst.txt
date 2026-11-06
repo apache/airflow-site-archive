@@ -1,0 +1,162 @@
+airflow.providers.common.ai.hooks.langchain
+===========================================
+
+.. py:module:: airflow.providers.common.ai.hooks.langchain
+
+.. autoapi-nested-parse::
+
+   Hook for LangChain integration with Airflow connections.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.hooks.langchain.LangChainHook
+
+
+Module Contents
+---------------
+
+.. py:class:: LangChainHook(llm_conn_id = None, embed_conn_id = None, llm_model = None, embed_model = None, *, embedding_kwargs = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseHook`
+
+
+   Bridge an Airflow connection to LangChain chat and embedding models.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   The hook resolves credentials (API key, optional base URL) from the Airflow
+   connection and returns LangChain model objects via two universal entry-point
+   functions:
+
+   * :func:`langchain.chat_models.init_chat_model` dispatches to the right
+     chat-model vendor based on the model identifier.
+   * :func:`langchain.embeddings.init_embeddings` dispatches to the right
+     embedding-model vendor based on the model identifier.
+
+   Both identifiers use the ``provider:name`` format
+   (e.g. ``"openai:gpt-5"``, ``"openai:text-embedding-3-small"``). The hook
+   forwards the connection's password as ``api_key`` and its host as
+   ``base_url``, so any provider whose LangChain class accepts those two
+   keyword arguments works (OpenAI, Anthropic, Groq, Mistral AI, Ollama,
+   DeepSeek, ...). Providers with bespoke auth (AWS Bedrock, Google Vertex AI /
+   GenAI, Azure OpenAI, Cohere, HuggingFace) reject these kwargs.
+
+   Connection fields:
+
+   * **password**: API key passed as ``api_key=`` to the model constructor.
+   * **host**: Optional base URL passed as ``base_url=`` (custom endpoints, Ollama, vLLM).
+   * **extra** JSON: ``{"model": "openai:gpt-5", "embed_model": "openai:text-embedding-3-small"}``
+     -- default chat and embedding model identifiers.
+
+   :param llm_conn_id: Airflow connection ID for the LLM provider. Falls back
+       to :attr:`default_conn_name` (``"langchain_default"``) if not provided.
+   :param embed_conn_id: Optional separate Airflow connection ID for the
+       embedding provider. Falls back to ``llm_conn_id`` when not provided --
+       the common case of one provider for both chat and embeddings stays a
+       single hook instance.
+   :param llm_model: Chat model identifier in ``provider:name`` format
+       (e.g. ``"openai:gpt-5"``, ``"anthropic:claude-sonnet-5"``).
+       Overrides ``extra["model"]`` on the connection.
+   :param embed_model: Embedding model identifier in ``provider:name`` format
+       (e.g. ``"openai:text-embedding-3-small"``). Overrides
+       ``extra["embed_model"]`` on the connection. When ``embedding_kwargs``
+       supplies ``provider`` explicitly, use a model name without the provider
+       prefix.
+   :param embedding_kwargs: Additional keyword arguments to pass to the embedding
+       model constructor without filtering. Values can override hook-provided
+       settings, including the endpoint and credentials. In particular,
+       ``provider`` takes precedence over the provider inferred from
+       ``embed_model``. When ``provider`` is set, LangChain treats the entire
+       ``embed_model`` value as the model name rather than parsing a
+       ``provider:name`` identifier. The hook logs a warning when both forms are
+       supplied. Connection ``api_key`` and ``base_url`` values take precedence
+       over the same top-level keys, but the underlying integration may accept
+       alternative or nested options that take precedence. Only pass trusted
+       values.
+
+
+   .. py:attribute:: conn_name_attr
+      :value: 'llm_conn_id'
+
+
+
+   .. py:attribute:: default_conn_name
+      :value: 'langchain_default'
+
+
+
+   .. py:attribute:: conn_type
+      :value: 'langchain'
+
+
+
+   .. py:attribute:: hook_name
+      :value: 'LangChain'
+
+
+
+   .. py:attribute:: llm_conn_id
+
+
+   .. py:attribute:: embed_conn_id
+
+
+   .. py:attribute:: llm_model
+      :value: None
+
+
+
+   .. py:attribute:: embed_model
+      :value: None
+
+
+
+   .. py:attribute:: embedding_kwargs
+
+
+   .. py:method:: get_ui_field_behaviour()
+      :staticmethod:
+
+
+      Return custom field behaviour for the Airflow connection form.
+
+
+
+   .. py:method:: get_chat_model()
+
+      Return a LangChain chat model configured from the Airflow connection.
+
+      Dispatch is delegated to ``init_chat_model``, which picks the right
+      vendor class based on the ``provider:name`` prefix in the model id.
+
+
+
+   .. py:method:: get_embedding_model()
+
+      Return a LangChain embedding model configured from the Airflow connection.
+
+      Dispatch is delegated to ``init_embeddings``, which picks the right
+      vendor class based on the ``provider:name`` prefix in the model id.
+      Uses ``embed_conn_id`` if set (falls back to ``llm_conn_id``).
+
+
+
+   .. py:method:: test_connection()
+
+      Test connection by resolving the chat model.
+
+      Validates that the model identifier is valid and the provider can be
+      instantiated with the supplied credentials. Does NOT make an LLM API
+      call -- that would be expensive and fail for reasons unrelated to
+      connectivity (quotas, billing, rate limits).
+
+
+

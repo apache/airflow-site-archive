@@ -1,0 +1,121 @@
+airflow.providers.databricks.hooks.agent
+========================================
+
+.. py:module:: airflow.providers.databricks.hooks.agent
+
+.. autoapi-nested-parse::
+
+   Invoke agents served by Databricks DurableAgentServer.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.hooks.agent.DatabricksAgentHook
+
+
+Module Contents
+---------------
+
+.. py:class:: DatabricksAgentHook(databricks_conn_id = 'databricks_default', timeout_seconds = 180, retry_limit = 3, retry_delay = 1, caller = 'Unknown')
+
+   Bases: :py:obj:`airflow.providers.databricks.hooks.databricks_base.BaseDatabricksHook`, :py:obj:`airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
+
+
+   Invoke a DurableAgentServer deployed on Databricks Apps.
+
+   With the ``common.ai`` extra installed, ``hook.agent(app_url)`` exposes the synchronous
+   invocation API through the managed-agent contract. Background invocations remain available
+   through ``create_invocation`` and ``get_invocation`` without that extra.
+
+   :param databricks_conn_id: Databricks workspace connection configured with service principal
+       OAuth credentials or OAuth token federation.
+       Defaults to ``databricks_default``.
+   :param timeout_seconds: HTTP request timeout in seconds. Defaults to ``180``.
+   :param retry_limit: Maximum number of attempts for transient HTTP failures. Defaults to ``3``.
+   :param retry_delay: Minimum delay between HTTP retries in seconds. Defaults to ``1``.
+   :param caller: Name of the operator or trigger calling the hook. Defaults to ``Unknown``.
+
+
+   .. py:attribute:: agent_platform
+      :value: 'databricks.agent_runtime'
+
+
+      The ``platform`` every :class:`ManagedAgentRef` from this hook carries.
+
+
+
+   .. py:method:: resolve_agent(agent)
+
+      Resolve an app's HTTPS base URL without contacting Databricks.
+
+      :param agent: HTTPS base URL of the deployed app.
+      :return: Platform-qualified app URL with its trailing slash removed.
+
+
+
+   .. py:method:: get_agent_capabilities(agent)
+
+      Report session, structured-output and invocation-ID support.
+
+      :param agent: HTTPS base URL of the deployed app.
+      :return: Capabilities of the synchronous invocation API.
+
+
+
+   .. py:method:: invoke_agent(agent, request)
+
+      Invoke an agent synchronously through the Common AI contract.
+
+      :param agent: HTTPS base URL of the deployed app.
+      :param request: Prompt or messages, optional session and request timeout. Vendor options
+          accept ``input_key`` to send a prompt under an agent-specific key and ``invocation_id``
+          to reuse a caller-provided UUID. By default, prompts are converted to messages and
+          a new UUID is generated for each call. Without a session, the invocation UUID
+          is also used as a one-shot session ID.
+      :return: Answer text, full invocation response, structured output, session and invocation ID.
+
+
+
+   .. py:method:: create_invocation(invocation_id, input, session_id = None, *, app_url)
+
+      Start a background invocation; retrying the same UUID and input is idempotent.
+
+      :param invocation_id: UUID identifying the invocation.
+      :param input: JSON-serializable input whose schema is defined by the agent.
+      :param session_id: Conversation ID, also sent as the routing key. Defaults to ``None``.
+      :param app_url: HTTPS base URL of the deployed app.
+      :return: Complete JSON submission response returned by the agent server.
+
+
+
+   .. py:method:: get_invocation(invocation_id, session_id = None, *, app_url, timeout_seconds = None)
+
+      Get the status and output of an invocation.
+
+      :param invocation_id: UUID identifying the invocation.
+      :param session_id: Conversation ID sent as the routing key. Defaults to ``None``.
+      :param app_url: HTTPS base URL of the deployed app.
+      :param timeout_seconds: Optional polling request/retry budget in seconds. Defaults to ``None``,
+          which uses the hook's HTTP timeout and retry settings. OAuth refresh uses the base hook's
+          token timeout; if it exhausts this budget, no invocation request is sent.
+      :return: Complete JSON invocation response, including output when available.
+
+
+
+   .. py:method:: a_get_invocation(invocation_id, session_id = None, *, app_url)
+      :async:
+
+
+      Asynchronously get an invocation inside the hook's async context manager.
+
+      :param invocation_id: UUID identifying the invocation.
+      :param session_id: Conversation ID sent as the routing key. Defaults to ``None``.
+      :param app_url: HTTPS base URL of the deployed app.
+      :return: Complete JSON invocation response, including output when available.
+
+
+

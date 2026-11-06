@@ -717,8 +717,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.operators.agent</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">call_arguments</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.validation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">reject_sequence_with_unsupported_feature</span><span class="p">,</span>
     <span class="n">validate_prompt</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -780,14 +780,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">python_callable</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">op_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="n">validate_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">decorator_name</span><span class="o">=</span><span class="s2">"@task.agent"</span><span class="p">)</span>
-        <span class="n">reject_sequence_with_unsupported_feature</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
-            <span class="n">decorator_name</span><span class="o">=</span><span class="s2">"@task.agent"</span><span class="p">,</span>
-            <span class="n">feature_name</span><span class="o">=</span><span class="s2">"enable_hitl_review"</span><span class="p">,</span>
-            <span class="n">feature_enabled</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">enable_hitl_review</span><span class="p">,</span>
-        <span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">render_template_fields</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="c1"># Render only the prompt the callable returned. The other template fields were already</span>
+        <span class="c1"># rendered before execute().</span>
+        <span class="c1"># The arguments of the call, positional ones too, can be referenced by name in the prompt.</span>
+        <span class="n">context_merge</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">call_arguments</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">python_callable</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_kwargs</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prompt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_template</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">AgentOperator</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
 
 
@@ -812,7 +810,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">            toolsets=[SQLToolset(db_conn_id="postgres_default")],</span>
 <span class="sd">        )</span>
 <span class="sd">        def analyze(question: str):</span>
-<span class="sd">            return f"Answer: {question}"</span>
+<span class="sd">            return "Answer: {{ question }}"</span>
 
 <span class="sd">    :param python_callable: Function to decorate.</span>
 <span class="sd">    """</span>

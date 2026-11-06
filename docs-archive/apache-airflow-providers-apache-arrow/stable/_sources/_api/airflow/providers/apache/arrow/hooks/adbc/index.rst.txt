@@ -47,7 +47,8 @@ Module Contents
        - Handles dialect-specific connection URIs and driver entrypoints.
        - Integrates with Airflow's connection system (conn_id, extras, etc.).
        - Provides custom placeholder replacement for parameterized SQL queries.
-       - Supports both native Arrow binding and DBAPI ``executemany`` for inserts.
+       - Loads rows with the driver's bulk ingest (``adbc_ingest``, e.g. ``COPY`` on PostgreSQL)
+         by default, or binds them with DBAPI ``executemany`` (``fast_executemany=False``).
        - Exposes configuration via connection extras: driver, entrypoint, db_kwargs, conn_kwargs, dialect.
 
    Connection Extras:
@@ -114,6 +115,15 @@ Module Contents
       :type: str
 
 
+      Return the URI handed to the driver.
+
+      A host that already is a URI or a path (``postgresql://user:pass@host:5432/db``,
+      ``file::memory:``, ``:memory:``, ``/data/app.db``) is passed through unchanged. Otherwise the
+      URI is built as ``<dialect>://login:password@host:port/schema`` from the connection's fields.
+      Airflow's own connection URI is of no use here: its query string carries the extras, which
+      drivers such as libpq refuse as unknown parameters.
+
+
 
    .. py:property:: driver
       :type: str
@@ -167,24 +177,28 @@ Module Contents
 
 
 
-   .. py:method:: insert_rows(table, rows, target_fields=None, commit_every=1000, replace=False, *, executemany=False, fast_executemany=False, autocommit=False, **kwargs)
+   .. py:method:: insert_rows(table, rows, target_fields=None, commit_every=1000, replace=False, *, executemany=False, fast_executemany=True, autocommit=False, **kwargs)
 
       Insert a collection of tuples into a table.
 
-      Rows are inserted in chunks, each chunk (of size ``commit_every``) is
-      done in a new transaction.
+      Rows are converted to Arrow ``RecordBatch`` objects and inserted in chunks;
+      each chunk (of size ``commit_every``) is done in a new transaction.
 
-      :param table: Name of the target table
+      :param table: Name of the target table, optionally prefixed with its schema
+          (``schema.table``).
       :param rows: The rows to insert into the table
       :param target_fields: The names of the columns to fill in the table
       :param commit_every: The maximum number of rows to insert in one
           transaction. Set to 0 to insert all rows in one transaction.
-      :param replace: Whether to replace instead of insert
-      :param executemany: If True, all rows are inserted at once in
-          chunks defined by the commit_every parameter. This only works if all rows
-          have same number of column names, but leads to better performance.
-      :param fast_executemany: If True, the `fast_executemany` parameter will be set on the
-          cursor used by `executemany` which leads to better performance, if supported by driver.
+      :param replace: Whether to replace instead of insert. Replacing always binds
+          the rows to the generated statement, because bulk ingest cannot express it.
+      :param executemany: Kept for signature compatibility with
+          :meth:`~airflow.providers.common.sql.hooks.sql.DbApiHook.insert_rows`;
+          rows are always sent as one Arrow batch per chunk.
+      :param fast_executemany: If True (default), load each batch with the driver's
+          bulk ingest (``cursor.adbc_ingest``, ``COPY`` on PostgreSQL). If the driver
+          does not implement bulk ingest, falls back to binding. If False, bind
+          each batch to the ``INSERT`` statement with ``cursor.executemany``.
       :param autocommit: What to set the connection's autocommit setting to
           before executing the query.
 

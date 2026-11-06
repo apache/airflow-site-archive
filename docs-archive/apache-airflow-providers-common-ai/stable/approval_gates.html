@@ -868,6 +868,12 @@ and later the reopened review shows the new subject, body and output. On Airflow
 earlier output: with <code class="docutils literal notranslate"><span class="pre">allow_modifications=True</span></code>, Approve returns that earlier text
 unless the reviewer edits it; without it, Approve returns the regenerated output, which
 the reviewer did not see. With <code class="docutils literal notranslate"><span class="pre">retries=0</span></code>, the default, a rejection is final.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">fail_on_reject=False</span></code>, the default on <code class="docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code>, a rejection, including
+a timeout with <code class="docutils literal notranslate"><span class="pre">&quot;reject&quot;</span></code>, succeeds the task instead and <strong>skips the direct downstream
+tasks except teardowns</strong>, matching
+<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.ApprovalOperator" title="(in apache-airflow-providers-standard v2.0.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ApprovalOperator</span></code></a>. Set
+<code class="docutils literal notranslate"><span class="pre">ignore_downstream_trigger_rules=True</span></code> to skip every downstream task rather than only the
+direct ones. A timeout with <code class="docutils literal notranslate"><span class="pre">&quot;fail&quot;</span></code> still fails the task.</p>
 </section>
 <section id="editing-structured-output">
 <h2>Editing structured output<a class="headerlink" href="#editing-structured-output" title="Link to this heading">¶</a></h2>
@@ -900,9 +906,8 @@ accepts.</p>
 <code class="docutils literal notranslate"><span class="pre">[scheduler]</span> <span class="pre">trigger_timeout_check_interval</span></code> seconds (15 by default), so a review can
 stay open that long past its deadline. On Airflow 3.1 and 3.2 the triggerer enforces the
 deadline. <code class="docutils literal notranslate"><span class="pre">on_approval_timeout=&quot;approve&quot;</span></code> returns the generated output when the
-timeout expires. <code class="docutils literal notranslate"><span class="pre">&quot;reject&quot;</span></code> still fails this operator; only
-<a class="reference internal" href="_api/airflow/providers/common/ai/operators/llm_branch/index.html#airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator" title="airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMBranchOperator</span></code></a> turns a
-rejection into a downstream skip. The chosen option is also pre-highlighted as the
+timeout expires. <code class="docutils literal notranslate"><span class="pre">&quot;reject&quot;</span></code> answers the review with a rejection, which fails the task
+unless <code class="docutils literal notranslate"><span class="pre">fail_on_reject=False</span></code>. The chosen option is also pre-highlighted as the
 default in the review form, so <code class="docutils literal notranslate"><span class="pre">&quot;reject&quot;</span></code> makes Reject the primary button.</p>
 <p>This example approves the output if nobody answers within 24 hours, and logs each new
 review through a notifier:</p>
@@ -945,7 +950,7 @@ review through a notifier:</p>
 <p>Airflow sends no notification when a review opens.  Pass
 <code class="docutils literal notranslate"><span class="pre">approval_notifiers</span></code> to tell the reviewers about it through any Airflow
 notifier (Slack, email, …), the way
-<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.HITLOperator" title="(in apache-airflow-providers-standard v1.21.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLOperator</span></code></a> does with
+<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.HITLOperator" title="(in apache-airflow-providers-standard v2.0.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLOperator</span></code></a> does with
 <code class="docutils literal notranslate"><span class="pre">notifiers</span></code>.  The notifiers run once the review is open and can reference
 the review <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">task.subject</span> <span class="pre">}}</span></code> and <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">task.body</span> <span class="pre">}}</span></code> in their templates,
 as the example under <a class="reference internal" href="#timeouts">Timeouts</a> does: its notifier writes the subject and body to the
@@ -969,7 +974,7 @@ review; under the FAB auth manager that is the <code class="docutils literal not
 which the User role and every role above it have.  Pass
 <code class="docutils literal notranslate"><span class="pre">approval_assigned_users=[{&quot;id&quot;:</span> <span class="pre">&quot;&lt;auth-manager-user-id&gt;&quot;,</span> <span class="pre">&quot;name&quot;:</span> <span class="pre">&quot;&lt;user-name&gt;&quot;}]</span></code>
 to restrict it to named reviewers, the way
-<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.HITLOperator" title="(in apache-airflow-providers-standard v1.21.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLOperator</span></code></a> does with
+<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.HITLOperator" title="(in apache-airflow-providers-standard v2.0.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">HITLOperator</span></code></a> does with
 <code class="docutils literal notranslate"><span class="pre">assigned_users</span></code>.  <code class="docutils literal notranslate"><span class="pre">id</span></code> is the user id reported by the auth manager: with
 the default <code class="docutils literal notranslate"><span class="pre">SimpleAuthManager</span></code> it is the username from
 <code class="docutils literal notranslate"><span class="pre">simple_auth_manager_users</span></code>; under the FAB auth manager it is the numeric

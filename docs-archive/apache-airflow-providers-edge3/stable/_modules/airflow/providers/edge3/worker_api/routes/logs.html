@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">5.1.0</span>
+        <span class="version-label">Version: </span><span class="version">5.1.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -489,7 +489,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">5.1.0</span>
+        <span class="version-label">Version: </span><span class="version">5.1.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -684,12 +684,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Annotated</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">UUID</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Body</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">Query</span><span class="p">,</span> <span class="n">status</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Body</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Query</span><span class="p">,</span> <span class="n">status</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.common.db.common</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionDep</span>  <span class="c1"># noqa: TC001</span>
@@ -699,10 +700,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">conf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.models.edge_job</span><span class="w"> </span><span class="kn">import</span> <span class="n">EdgeJobModel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.models.edge_logs</span><span class="w"> </span><span class="kn">import</span> <span class="n">EdgeLogsModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.models.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_callback_job</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.worker_api.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">jwt_token_authorization_rest</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.edge3.worker_api.datamodels</span><span class="w"> </span><span class="kn">import</span> <span class="n">PushLogsBody</span><span class="p">,</span> <span class="n">WorkerApiDocs</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.log.file_task_handler</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileTaskHandler</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEW_SESSION</span><span class="p">,</span> <span class="n">provide_session</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
 
 <div class="viewcode-block" id="logs_router">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/edge3/worker_api/routes/logs/index.html#airflow.providers.edge3.worker_api.routes.logs.logs_router">[docs]</a>
@@ -714,6 +719,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="nd">@provide_session</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_logfile_path</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="n">task_instance_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="o">=</span><span class="n">NEW_SESSION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Elaborate the (relative) path and filename to expect from task execution."""</span>
+    <span class="k">if</span> <span class="n">is_callback_job</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">map_index</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_get_callback_logfile_path</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">task_instance_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">stored_id</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span>
             <span class="n">select</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_instance_id</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
@@ -744,6 +751,30 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">FileTaskHandler</span><span class="p">(</span><span class="s2">"."</span><span class="p">)</span><span class="o">.</span><span class="n">_render_filename</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">try_number</span><span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_callback_logfile_path</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">TaskInstanceKey</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return a callback's ``log_path`` from the workload JSON in the callback's ``edge_job`` row.</span>
+
+<span class="sd">    Executor callbacks have no task instance row, so their log path cannot be rendered from a task</span>
+<span class="sd">    instance. When queuing this callback, the scheduler stored the workload JSON in the ``command``</span>
+<span class="sd">    column of the callback's ``edge_job`` row. The ``log_path`` in that JSON is a path relative to the</span>
+<span class="sd">    log folder, and the callback supervisor process writes the callback log at that path on the Edge</span>
+<span class="sd">    worker. Raise HTTP 404 if the ``edge_job`` row is missing or the JSON has no ``log_path``.</span>
+<span class="sd">    """</span>
+    <span class="n">command</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span>
+        <span class="n">select</span><span class="p">(</span><span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">command</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">dag_id</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">task_id</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">run_id</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">map_index</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
+            <span class="n">EdgeJobModel</span><span class="o">.</span><span class="n">try_number</span> <span class="o">==</span> <span class="n">task</span><span class="o">.</span><span class="n">try_number</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">command</span> <span class="ow">and</span> <span class="p">(</span><span class="n">log_path</span> <span class="o">:=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">command</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"log_path"</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">log_path</span>
+    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_404_NOT_FOUND</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"No log path found for callback </span><span class="si">{</span><span class="n">task</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+
 <span class="nd">@logs_router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
     <span class="s2">"/logfile_path/</span><span class="si">{dag_id}</span><span class="s2">/</span><span class="si">{task_id}</span><span class="s2">/</span><span class="si">{run_id}</span><span class="s2">/</span><span class="si">{try_number}</span><span class="s2">/</span><span class="si">{map_index}</span><span class="s2">"</span><span class="p">,</span>
     <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">jwt_token_authorization_rest</span><span class="p">)],</span>
@@ -751,6 +782,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">[</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_400_BAD_REQUEST</span><span class="p">,</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_403_FORBIDDEN</span><span class="p">,</span>
+            <span class="n">status</span><span class="o">.</span><span class="n">HTTP_404_NOT_FOUND</span><span class="p">,</span>
         <span class="p">]</span>
     <span class="p">),</span>
 <span class="p">)</span>
@@ -781,6 +813,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">[</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_400_BAD_REQUEST</span><span class="p">,</span>
             <span class="n">status</span><span class="o">.</span><span class="n">HTTP_403_FORBIDDEN</span><span class="p">,</span>
+            <span class="n">status</span><span class="o">.</span><span class="n">HTTP_404_NOT_FOUND</span><span class="p">,</span>
         <span class="p">]</span>
     <span class="p">),</span>
 <span class="p">)</span>
@@ -1085,7 +1118,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=bfa18cfb"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=1bd908e2"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

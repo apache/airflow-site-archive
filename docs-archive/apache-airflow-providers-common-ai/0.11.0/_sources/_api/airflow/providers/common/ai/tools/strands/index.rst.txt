@@ -1,0 +1,73 @@
+airflow.providers.common.ai.tools.strands
+=========================================
+
+.. py:module:: airflow.providers.common.ai.tools.strands
+
+.. autoapi-nested-parse::
+
+   Give Airflow tools to a `Strands Agents <https://strandsagents.com/>`__ agent.
+
+   .. note:: Experimental; see :mod:`airflow.providers.common.ai.tools`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.strands.AirflowTools
+
+
+Module Contents
+---------------
+
+.. py:class:: AirflowTools(*sources)
+
+   Bases: :py:obj:`strands.plugins.Plugin`
+
+
+   A Strands plugin that gives an agent Airflow's tools.
+
+   Pass toolsets that implement
+   :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``
+   and ``HookToolset``, or individual
+   :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. The agent, its
+   model and its loop stay plain Strands.
+
+   .. code-block:: python
+
+       from strands import Agent
+
+       from airflow.providers.common.ai.tools.strands import AirflowTools
+       from airflow.providers.common.ai.toolsets import SQLToolset
+
+       warehouse = SQLToolset("warehouse", allowed_tables=["orders"])
+       agent = Agent(model=model, plugins=[AirflowTools(warehouse)])
+
+   Pass it in ``plugins=``, not ``tools=``: Strands ignores a plugin given as a tool, and
+   handing over only its ``tools`` leaves out the hook that ends the run on a failure.
+
+   Each tool keeps the source tool's name, description and argument schema, and every
+   result passes through Airflow's secret masker first. A failure the model can
+   correct, such as a query naming a missing column, reaches it as a Strands result
+   with ``status="error"``, counted against the tool's retry limit once per model turn
+   and afresh on every run of the agent. A tool that is still failing once the limit is
+   used up, or a failure the model cannot fix, such as a hook raising, fails the agent
+   run, so the task fails and Airflow retries it. Strands on its own would hand that
+   failure to the model and carry on. Tools a toolset marks sequential, such as the
+   sandbox's, run one at a time in the order the model called them.
+
+   :param sources: Toolsets and tools to add, in order.
+
+
+   .. py:property:: name
+      :type: str
+
+
+
+   .. py:property:: tools
+      :type: list[strands.types.tools.AgentTool]
+
+
+
