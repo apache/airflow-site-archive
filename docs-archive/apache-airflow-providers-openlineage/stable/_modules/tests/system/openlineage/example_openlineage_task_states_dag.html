@@ -684,6 +684,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">    - a task that raises AirflowFailException with retries left emits START with `state` running, and FAIL</span>
 <span class="sd">      with `state` failed at `try_number` 1 and `max_tries` 2: it isn't retried although</span>
 <span class="sd">      `try_number &lt;= max_tries`</span>
+<span class="sd">    - a task whose upstream failed emits nothing, as it never runs</span>
 <span class="sd">    - taskInstance's `dag_version_id` of every event, from Airflow 3.1 on</span>
 <span class="sd">    - every task event's identity, as `system.openlineage.expected_events` describes it, and each task in the Dag's job facet</span>
 <span class="sd">"""</span>
@@ -725,13 +726,18 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">fail_without_retry</span><span class="p">():</span>
         <span class="k">raise</span> <span class="n">AirflowFailException</span><span class="p">(</span><span class="s2">"Intentional failure that skips the retries left"</span><span class="p">)</span>
 
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">after_failure</span><span class="p">():</span>
+        <span class="k">pass</span>
+
     <span class="n">check_events</span> <span class="o">=</span> <span class="n">OpenLineageTestOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">"check_events"</span><span class="p">,</span>
         <span class="n">file_path</span><span class="o">=</span><span class="n">get_expected_event_file_path</span><span class="p">(</span><span class="n">DAG_ID</span><span class="p">),</span>
         <span class="n">trigger_rule</span><span class="o">=</span><span class="s2">"all_done"</span><span class="p">,</span>
     <span class="p">)</span>
 
-    <span class="p">[</span><span class="n">skip_itself</span><span class="p">(),</span> <span class="n">fail_without_retry</span><span class="p">()]</span> <span class="o">&gt;&gt;</span> <span class="n">check_events</span>
+    <span class="c1"># check_events stays the only leaf, so the Dag run succeeds when the events match</span>
+    <span class="p">[</span><span class="n">skip_itself</span><span class="p">(),</span> <span class="n">fail_without_retry</span><span class="p">()</span> <span class="o">&gt;&gt;</span> <span class="n">after_failure</span><span class="p">()]</span> <span class="o">&gt;&gt;</span> <span class="n">check_events</span>
 
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">tests_common.test_utils.system_tests</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_test_run</span>  <span class="c1"># noqa: E402</span>

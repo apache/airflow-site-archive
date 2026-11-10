@@ -728,6 +728,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Protocol</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPToolsetNotSupportedError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">calling_framework</span><span class="p">,</span> <span class="n">current_framework</span>
 
@@ -737,6 +738,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"AirflowTool"</span><span class="p">,</span> <span class="s2">"ToolCallError"</span><span class="p">,</span> <span class="s2">"ToolProvider"</span><span class="p">,</span> <span class="s2">"ToolResult"</span><span class="p">,</span> <span class="s2">"collect_tools"</span><span class="p">]</span>
+
+<span class="c1"># The first sentence of the error for an MCPToolset handed to an adapter; the second says what</span>
+<span class="c1"># to use instead.</span>
+<span class="n">_MCP_TOOLSET_NOT_SUPPORTED</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"MCPToolset works in Pydantic AI agents and through the LangChain bridge, not through AirflowTools."</span>
+<span class="p">)</span>
 
 
 <div class="viewcode-block" id="ToolCallError">
@@ -875,24 +882,43 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Flatten toolsets and individual tools, as a framework adapter receives them, into tools.</span>
 
+<span class="sd">    :raises MCPToolsetNotSupportedError: when a source is an ``MCPToolset``. Connect the</span>
+<span class="sd">        framework's own MCP client to the server instead.</span>
 <span class="sd">    :raises ValueError: when two tools share a name. Frameworks route a call by name, so one</span>
 <span class="sd">        of them would silently never run; give the toolsets different ``tool_prefix`` values,</span>
 <span class="sd">        where they take one.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">_collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_collect_tools</span><span class="p">(</span>
+    <span class="n">sources</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ToolProvider</span> <span class="o">|</span> <span class="n">AirflowTool</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">mcp_hint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AirflowTool</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    :func:`collect_tools` for the adapters this provider ships.</span>
+
+<span class="sd">    :param mcp_hint: How the adapter's framework connects to an MCP server, as a sentence. It</span>
+<span class="sd">        replaces the generic advice in the error raised for an ``MCPToolset``.</span>
 <span class="sd">    """</span>
     <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AirflowTool</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="n">sources</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">AirflowTool</span><span class="p">):</span>
             <span class="n">tools</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">try</span><span class="p">:</span>
             <span class="n">tools</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">airflow_tools</span><span class="p">())</span>
+        <span class="k">except</span> <span class="n">MCPToolsetNotSupportedError</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">mcp_hint</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="k">raise</span> <span class="n">MCPToolsetNotSupportedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_MCP_TOOLSET_NOT_SUPPORTED</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">mcp_hint</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
     <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">duplicates</span> <span class="o">:=</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">names</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">}):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"More than one tool is named </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">duplicates</span><span class="p">)</span><span class="si">}</span><span class="s2">. "</span>
             <span class="s2">"Give the toolsets different tool_prefix values, where they take one, so the model can call each of them."</span>
         <span class="p">)</span>
-    <span class="k">return</span> <span class="n">tools</span></div>
-
+    <span class="k">return</span> <span class="n">tools</span>
 </pre></div>
 
     <div class="pager" role="navigation" aria-label="related navigation"><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Previous</button><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Next</button>

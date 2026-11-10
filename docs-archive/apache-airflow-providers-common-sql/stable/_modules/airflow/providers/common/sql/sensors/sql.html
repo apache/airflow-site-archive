@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.4.0</span>
+        <span class="version-label">Version: </span><span class="version">3.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -484,7 +484,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.4.0</span>
+        <span class="version-label">Version: </span><span class="version">3.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -674,14 +674,43 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">operator</span><span class="w"> </span><span class="kn">import</span> <span class="n">itemgetter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span><span class="p">,</span> <span class="n">BaseSensorOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span><span class="p">,</span> <span class="n">BaseSensorOperator</span><span class="p">,</span> <span class="n">conf</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.hooks.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">DbApiHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.triggers.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">NO_ROWS_MESSAGE</span><span class="p">,</span> <span class="n">SqlSensorTrigger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.sql.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">,</span> <span class="n">AIRFLOW_V_3_2_2_PLUS</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+
+<span class="n">_first_cell</span> <span class="o">=</span> <span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1"># Values that survive Airflow 2's JSON storage of trigger arguments unchanged.</span>
+<span class="n">_JSON_SCALARS</span> <span class="o">=</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_first_cell</span><span class="p">(</span><span class="n">selector</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># Compare by value rather than identity: a deep copy of the sensor, or an explicit</span>
+    <span class="c1"># ``selector=itemgetter(0)``, must still count as the default condition.</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">selector</span><span class="p">,</span> <span class="n">itemgetter</span><span class="p">)</span> <span class="ow">and</span> <span class="n">selector</span><span class="o">.</span><span class="n">__reduce__</span><span class="p">()</span> <span class="o">==</span> <span class="n">_first_cell</span><span class="o">.</span><span class="n">__reduce__</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_survives_json</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_survives_json</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="nb">all</span><span class="p">(</span><span class="n">_survives_json</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">_JSON_SCALARS</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SqlSensorTriggerError">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensorTriggerError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SqlSensorTriggerError</span><span class="p">(</span><span class="n">AirflowException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Raised when the deferred ``SqlSensor`` trigger reports a failure."""</span></div>
+
 
 
 <div class="viewcode-block" id="SqlSensor">
@@ -714,6 +743,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param fail_on_empty: Explicitly fail on no rows returned.</span>
 <span class="sd">    :param hook_params: Extra config params to be passed to the underlying hook.</span>
 <span class="sd">            Should match the desired hook constructor params.</span>
+<span class="sd">    :param deferrable: Wait in the triggerer instead of on a worker. The triggerer only</span>
+<span class="sd">        checks the default condition (the first cell is truthy), so the sensor logs a</span>
+<span class="sd">        warning and runs in its usual ``mode`` instead when ``success``, ``failure``,</span>
+<span class="sd">        ``selector``, ``silent_fail``, ``never_fail`` or ``exponential_backoff`` is set,</span>
+<span class="sd">        when a subclass overrides ``poke`` or ``_get_hook``, on Airflow 3 before 3.2.2, or</span>
+<span class="sd">        on Airflow 2 when ``parameters`` holds values JSON cannot keep, such as dates.</span>
 <span class="sd">    """</span>
 
 <div class="viewcode-block" id="SqlSensor.template_fields">
@@ -737,9 +772,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">parameters</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">success</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">failure</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">selector</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="n">selector</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">_first_cell</span><span class="p">,</span>
         <span class="n">fail_on_empty</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">hook_params</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <div class="viewcode-block" id="SqlSensor.conn_id">
@@ -774,6 +810,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensor.hook_params">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span> <span class="o">=</span> <span class="n">hook_params</span></div>
 
+<div class="viewcode-block" id="SqlSensor.deferrable">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensor.deferrable">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
+
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DbApiHook</span><span class="p">:</span>
@@ -795,8 +835,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">records</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_records</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">records</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_empty</span><span class="p">:</span>
-                <span class="n">message</span> <span class="o">=</span> <span class="s2">"No rows returned, raising as per fail_on_empty flag"</span>
-                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="n">NO_ROWS_MESSAGE</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
 
         <span class="n">condition</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
@@ -815,6 +854,57 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"self.success is present, but not callable -&gt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">success</span><span class="si">}</span><span class="s2">"</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SqlSensor.execute">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensor.execute">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reason</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reason_not_to_defer</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Cannot defer because </span><span class="si">%s</span><span class="s2">; running in </span><span class="si">%s</span><span class="s2"> mode instead."</span><span class="p">,</span> <span class="n">reason</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="c1"># silent_fail and never_fail fall back above, so an error here propagates exactly as</span>
+        <span class="c1"># it would from the first poke of super().execute().</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">poke</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Success criteria met. Exiting."</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
+            <span class="n">trigger</span><span class="o">=</span><span class="n">SqlSensorTrigger</span><span class="p">(</span>
+                <span class="n">sql</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">,</span>
+                <span class="n">conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn_id</span><span class="p">,</span>
+                <span class="n">poke_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">poke_interval</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">,</span>
+                <span class="n">hook_params</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook_params</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">fail_on_empty</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fail_on_empty</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">method_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">execute_complete</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reason_not_to_defer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_2_2_PLUS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">"the triggerer before Airflow 3.2.2 cannot look up connections from a thread safely"</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">success</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">failure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">_is_first_cell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="p">):</span>
+            <span class="k">return</span> <span class="s2">"success, failure and selector only run on a worker"</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">poke</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">SqlSensor</span><span class="o">.</span><span class="n">poke</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_get_hook</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">SqlSensor</span><span class="o">.</span><span class="n">_get_hook</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> overrides poke or _get_hook, which the triggerer does not run"</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">silent_fail</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">never_fail</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">exponential_backoff</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">"silent_fail, never_fail and exponential_backoff only apply when poking on a worker"</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_0_PLUS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_survives_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="s2">"Airflow 2 stores trigger arguments as JSON, which would hand the triggerer "</span>
+                <span class="s2">"date, datetime or Decimal parameters as strings"</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="SqlSensor.execute_complete">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensor.execute_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"failure"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">SqlSensorTriggerError</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Success criteria met. Exiting."</span><span class="p">)</span></div>
 </div>
 
 </pre></div>
@@ -1076,7 +1166,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=4d935f96"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=acc74ff5"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

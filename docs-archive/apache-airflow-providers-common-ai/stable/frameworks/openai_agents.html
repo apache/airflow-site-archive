@@ -708,21 +708,89 @@ window.PAGEFIND_PATH = '../_pagefind/pagefind.js';
 <section id="openai-agents-sdk">
 <span id="howto-frameworks-openai-agents"></span><h1 data-pagefind-weight="9.0">OpenAI Agents SDK<a class="headerlink" href="#openai-agents-sdk" title="Link to this heading">¶</a></h1>
 <p>You have an agent built with the <a class="reference external" href="https://openai.github.io/openai-agents-python/">OpenAI Agents SDK</a> and you want it to run as an Airflow
-task, reading data through connections your deployment already manages. Keep the agent
-as it is, and add Airflow’s toolsets to its tools with
-<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/openai_agents/index.html#airflow.providers.common.ai.tools.openai_agents.AirflowTools" title="airflow.providers.common.ai.tools.openai_agents.AirflowTools"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTools</span></code></a>.</p>
+task: on a schedule, after an upstream task, or when an asset updates, reading data
+through connections your deployment already manages. The agent, its runner, handoffs,
+guardrails and your own function tools stay plain OpenAI Agents SDK. Airflow adds these,
+each of which you can use without the others:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="../_api/airflow/providers/common/ai/durable/openai_agents/index.html#airflow.providers.common.ai.durable.openai_agents.run_durably_sync" title="airflow.providers.common.ai.durable.openai_agents.run_durably_sync"><code class="xref py py-func docutils literal notranslate"><span class="pre">run_durably_sync()</span></code></a> runs the
+agent so that a task retry replays the model and tool calls the failed try completed,
+instead of paying for them again.</p></li>
+<li><p><a class="reference internal" href="../_api/airflow/providers/common/ai/tools/openai_agents/index.html#airflow.providers.common.ai.tools.openai_agents.AirflowTools" title="airflow.providers.common.ai.tools.openai_agents.AirflowTools"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTools</span></code></a> gives the agent
+access to your warehouse, object storage and other systems through Airflow
+connections, limited by each toolset, with Airflow’s secret masker applied to every
+result.</p></li>
+<li><p><a class="reference internal" href="../_api/airflow/providers/common/ai/tools/openai_agents/index.html#airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor" title="airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code></a>
+records the SDK’s traces as OpenTelemetry spans under the task’s span instead of
+sending them to OpenAI.</p></li>
+</ul>
+<p>If you are not tied to the SDK,
+<a class="reference internal" href="../_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a> runs a Pydantic AI
+agent with the same toolsets, and adds a human review step and durable execution
+switched on with one argument. See <a class="reference internal" href="../operators/agent.html#howto-operator-agent"><span class="std std-ref">Agents with tools: AgentOperator and &#64;task.agent</span></a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is experimental: it may change in a minor release of this provider.
-The framework-neutral tool interface it builds on is stable.
-See <a class="reference internal" href="../stability.html#howto-stability"><span class="std std-ref">Stable and experimental features</span></a>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>, <code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> and <code class="docutils literal notranslate"><span class="pre">run_durably</span></code> are experimental:
+they may change in a minor release of this provider. The tool interface they build
+on, <a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.AirflowTool" title="airflow.providers.common.ai.tools.AirflowTool"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTool</span></code></a> and
+<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolProvider" title="airflow.providers.common.ai.tools.ToolProvider"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolProvider</span></code></a>, is stable. See <a class="reference internal" href="../stability.html#howto-stability"><span class="std std-ref">Stable and experimental features</span></a>.</p>
 </div>
-<section id="run-an-openai-agents-sdk-agent-in-a-task">
-<h2>Run an OpenAI Agents SDK agent in a task<a class="headerlink" href="#run-an-openai-agents-sdk-agent-in-a-task" title="Link to this heading">¶</a></h2>
-<p>The agent below answers a question about a database with a
-<a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset" title="airflow.providers.common.ai.toolsets.sql.SQLToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SQLToolset</span></code></a>. Its model’s API key, and
-optionally the base URL of another OpenAI-compatible endpoint, come from an Airflow
-connection:</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>Install the provider with the <code class="docutils literal notranslate"><span class="pre">sql</span></code> extra, which the examples’ SQL toolset needs, and
+the SDK:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"apache-airflow-providers-common-ai[sql]&gt;=1.0.0"</span><span class="w"> </span><span class="s2">"openai-agents&gt;=0.20.0"</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">openai-agents</span></code> 0.21 and later require <code class="docutils literal notranslate"><span class="pre">openai</span></code> 3. Where <code class="docutils literal notranslate"><span class="pre">openai</span></code> is held below 3,
+the resolver picks <code class="docutils literal notranslate"><span class="pre">openai-agents</span></code> 0.20, the last release that accepts <code class="docutils literal notranslate"><span class="pre">openai</span></code> 2.
+<code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>, <code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> and <code class="docutils literal notranslate"><span class="pre">run_durably</span></code> work with both.</p>
+</section>
+<section id="try-the-tools-from-a-script">
+<h2>Try the tools from a script<a class="headerlink" href="#try-the-tools-from-a-script" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> needs no Dag, scheduler or metadata database. A Python script that can
+see an Airflow connection can give an agent a toolset’s tools, so you can try an agent
+on your machine before you put it in a task. Define the connection in an environment
+variable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">AIRFLOW_CONN_CRM</span><span class="o">=</span><span class="s1">'{"conn_type": "sqlite", "host": "/tmp/crm.db"}'</span>
+</pre></div>
+</div>
+<p>Then build the agent as you would without Airflow, with the toolset’s tools in
+<code class="docutils literal notranslate"><span class="pre">tools</span></code>. This one uses the SDK’s default OpenAI client, which reads
+<code class="docutils literal notranslate"><span class="pre">OPENAI_API_KEY</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">Runner</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.toolsets.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLToolset</span>
+
+<span class="n">agent</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"analyst"</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"gpt-5-mini"</span><span class="p">,</span>
+    <span class="n">instructions</span><span class="o">=</span><span class="s2">"Use list_tables, get_schema and query to answer."</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"crm"</span><span class="p">)),</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">Runner</span><span class="o">.</span><span class="n">run_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="s2">"Which customer has the highest ARR?"</span><span class="p">)</span><span class="o">.</span><span class="n">final_output</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The script expects <code class="docutils literal notranslate"><span class="pre">/tmp/crm.db</span></code> to be a SQLite database the agent can explore, such as
+one with a <code class="docutils literal notranslate"><span class="pre">customers</span></code> table.</p>
+<p>On Airflow 3, a script reads connections from environment variables and from a
+configured secrets backend. It does not see a connection that exists only in the
+metadata database, such as one created with <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">connections</span> <span class="pre">add</span></code>. <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>
+hands that failure to the model like any other database error, so the model sees this
+for a connection ID the script cannot find, and the run fails once the tool’s retry limit
+is used up:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{"error": "The list_tables tool failed: The conn_id `crm_missing` isn't defined\nUse the list_tables and get_schema tools to inspect the database, then fix the query and try again."}
+</pre></div>
+</div>
+<p>Inside a task, every connection your deployment defines is available.</p>
+</section>
+<section id="run-the-agent-in-a-task">
+<h2>Run the agent in a task<a class="headerlink" href="#run-the-agent-in-a-task" title="Link to this heading">¶</a></h2>
+<p>In a Dag, build the agent inside the <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> function, so connections are read when
+the task runs rather than when the Dag file is parsed. Here the model’s API key, and
+optionally the base URL of another OpenAI-compatible endpoint such as a gateway or a
+self-hosted server, come from an Airflow connection too:</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_openai_agents_agent.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/providers/common/ai/example_dags/example_openai_agents_agent.html"><span class="viewcode-link">[source]</span></a></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dag</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
@@ -763,68 +831,392 @@ connection:</p>
 </pre></div>
 </div>
 </div>
-<p>Everything except <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is plain OpenAI Agents SDK: the agent, its runner,
-handoffs, guardrails and your own function tools work as the SDK documentation
-describes. <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is a list of <code class="docutils literal notranslate"><span class="pre">FunctionTool</span></code> objects, so add your own tools
-next to them with <code class="docutils literal notranslate"><span class="pre">tools=[*AirflowTools(warehouse),</span> <span class="pre">my_tool]</span></code>.</p>
+<p>The example reads two connections: <code class="docutils literal notranslate"><span class="pre">openai_default</span></code>, whose password is the API key and
+whose host, if set, is the base URL, and <code class="docutils literal notranslate"><span class="pre">sql_default</span></code>, a database connection. Set the
+<code class="docutils literal notranslate"><span class="pre">LLM_CONN_ID</span></code> and <code class="docutils literal notranslate"><span class="pre">DB_CONN_ID</span></code> environment variables to use others.</p>
+<p>The example uses <code class="docutils literal notranslate"><span class="pre">OpenAIChatCompletionsModel</span></code>, so the connection’s host can point at
+a server that implements only the Chat Completions API. Against OpenAI itself,
+<code class="docutils literal notranslate"><span class="pre">OpenAIResponsesModel</span></code> with the same client uses the Responses API, the SDK’s default.</p>
+<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is a list of <code class="docutils literal notranslate"><span class="pre">FunctionTool</span></code> objects, so your own tools go next to it:
+<code class="docutils literal notranslate"><span class="pre">tools=[*AirflowTools(SQLToolset(db_conn_id=&quot;crm&quot;)),</span> <span class="pre">my_tool]</span></code>.</p>
 </section>
-<section id="what-the-tools-give-the-agent">
-<h2>What the tools give the agent<a class="headerlink" href="#what-the-tools-give-the-agent" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> takes the same arguments as the Strands plugin (see <a class="reference internal" href="strands.html"><span class="doc">Strands Agents</span></a>):
-toolsets that implement <a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolProvider" title="airflow.providers.common.ai.tools.ToolProvider"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolProvider</span></code></a>, such
-as <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> and <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code>, and individual
-<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.AirflowTool" title="airflow.providers.common.ai.tools.AirflowTool"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTool</span></code></a> objects. <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> is the
-exception: attach an MCP server with the SDK’s own <code class="docutils literal notranslate"><span class="pre">mcp_servers=</span></code>. Each tool keeps the
-toolset tool’s name, description and argument schema, runs through the toolset, and
-passes its result through Airflow’s secret masker.</p>
+<section id="give-the-agent-access-to-your-data">
+<span id="howto-frameworks-openai-agents-data-access"></span><h2>Give the agent access to your data<a class="headerlink" href="#give-the-agent-access-to-your-data" title="Link to this heading">¶</a></h2>
+<p>An agent in a data pipeline needs the warehouse, the buckets and the internal APIs your
+other tasks already reach. Give it those through Airflow toolsets rather than tools you
+write yourself. Each toolset logs in through an Airflow connection resolved in the
+worker, so the credential is not part of the prompt or the tool schema. If a tool result
+echoes it anyway, the secret masker replaces it with <code class="docutils literal notranslate"><span class="pre">***</span></code>, as it does for every secret
+Airflow has registered. Each toolset also limits what the agent can do with its
+connection.</p>
+<p>This agent answers a revenue question from two tables of a warehouse and one prefix of a
+bucket:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_openai_agents_data_access.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/providers/common/ai/example_dags/example_openai_agents_data_access.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dag</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">example_openai_agents_data_access</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""Answer a revenue question from the warehouse and the finance reports."""</span>
+
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">explain_revenue</span><span class="p">(</span><span class="n">question</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_QUESTION</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># The SDK is an optional dependency, so it is imported when the task runs, not at parse time.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">OpenAIChatCompletionsModel</span><span class="p">,</span> <span class="n">RunConfig</span><span class="p">,</span> <span class="n">Runner</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncOpenAI</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTools</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">ObjectStorageToolset</span><span class="p">,</span> <span class="n">SQLToolset</span>
+
+        <span class="n">warehouse</span> <span class="o">=</span> <span class="n">SQLToolset</span><span class="p">(</span>
+            <span class="c1"># A role granted SELECT on these two tables only.</span>
+            <span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"warehouse_agent_reader"</span><span class="p">,</span>
+            <span class="c1"># Refuse a query that reaches any other table.</span>
+            <span class="n">allowed_tables</span><span class="o">=</span><span class="p">[</span><span class="s2">"orders"</span><span class="p">,</span> <span class="s2">"customers"</span><span class="p">],</span>
+            <span class="n">max_rows</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">reports</span> <span class="o">=</span> <span class="n">ObjectStorageToolset</span><span class="p">(</span>
+            <span class="c1"># Every path the model asks for is relative to this prefix.</span>
+            <span class="s2">"s3://acme-reports/finance/"</span><span class="p">,</span>
+            <span class="n">conn_id</span><span class="o">=</span><span class="s2">"aws_reports_reader"</span><span class="p">,</span>
+            <span class="n">max_read_bytes</span><span class="o">=</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">llm</span> <span class="o">=</span> <span class="n">BaseHook</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="n">LLM_CONN_ID</span><span class="p">)</span>
+        <span class="n">agent</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">"revenue_analyst"</span><span class="p">,</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">OpenAIChatCompletionsModel</span><span class="p">(</span>
+                <span class="n">model</span><span class="o">=</span><span class="n">LLM_MODEL</span><span class="p">,</span>
+                <span class="n">openai_client</span><span class="o">=</span><span class="n">AsyncOpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="n">llm</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="n">llm</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="p">),</span>
+            <span class="n">instructions</span><span class="o">=</span><span class="p">(</span>
+                <span class="s2">"Answer revenue questions. Query the warehouse for the numbers, and read "</span>
+                <span class="s2">"the finance reports for context."</span>
+            <span class="p">),</span>
+            <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">warehouse</span><span class="p">,</span> <span class="n">reports</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="c1"># The SDK sends traces to OpenAI by default; see the guide's tracing section.</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">question</span><span class="p">,</span> <span class="n">run_config</span><span class="o">=</span><span class="n">RunConfig</span><span class="p">(</span><span class="n">tracing_disabled</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">final_output</span>
+
+    <span class="n">explain_revenue</span><span class="p">()</span>
+
+
+</pre></div>
+</div>
+</div>
+<p>To run it, install <code class="docutils literal notranslate"><span class="pre">apache-airflow-providers-amazon[s3fs]</span></code> for the <code class="docutils literal notranslate"><span class="pre">s3://</span></code> path, and
+create three connections: <code class="docutils literal notranslate"><span class="pre">openai_default</span></code> for the model, <code class="docutils literal notranslate"><span class="pre">warehouse_agent_reader</span></code>
+for a <code class="docutils literal notranslate"><span class="pre">DbApiHook</span></code> database such as Postgres, and <code class="docutils literal notranslate"><span class="pre">aws_reports_reader</span></code> for AWS.</p>
+<p>What each toolset gives the agent, and what limits it:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 22.0%" />
+<col style="width: 40.0%" />
+<col style="width: 38.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Toolset</p></th>
+<th class="head"><p>Tools the model gets</p></th>
+<th class="head"><p>What you limit it with</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset" title="airflow.providers.common.ai.toolsets.sql.SQLToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SQLToolset</span></code></a></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">list_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schema</span></code>, <code class="docutils literal notranslate"><span class="pre">query</span></code> and <code class="docutils literal notranslate"><span class="pre">check_query</span></code> against any
+database with a <code class="docutils literal notranslate"><span class="pre">DbApiHook</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">allow_writes</span></code> (off by default), <code class="docutils literal notranslate"><span class="pre">max_rows</span></code>,
+<code class="docutils literal notranslate"><span class="pre">max_result_bytes</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/object_storage/index.html#airflow.providers.common.ai.toolsets.object_storage.ObjectStorageToolset" title="airflow.providers.common.ai.toolsets.object_storage.ObjectStorageToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">ObjectStorageToolset</span></code></a></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">list_files</span></code>, <code class="docutils literal notranslate"><span class="pre">get_file_info</span></code> and <code class="docutils literal notranslate"><span class="pre">read_file</span></code> under one path in S3, GCS,
+Azure Blob Storage or any store <code class="docutils literal notranslate"><span class="pre">ObjectStoragePath</span></code> opens. It cannot write.</p></td>
+<td><p>The root path, <code class="docutils literal notranslate"><span class="pre">max_files</span></code>, <code class="docutils literal notranslate"><span class="pre">max_read_bytes</span></code>, <code class="docutils literal notranslate"><span class="pre">max_output_bytes</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/datafusion/index.html#airflow.providers.common.ai.toolsets.datafusion.DataFusionToolset" title="airflow.providers.common.ai.toolsets.datafusion.DataFusionToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataFusionToolset</span></code></a>
+(experimental)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">list_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schema</span></code> and <code class="docutils literal notranslate"><span class="pre">query</span></code>: SQL over Parquet, CSV and Avro
+files and Iceberg tables, run in the worker</p></td>
+<td><p>The tables you register, <code class="docutils literal notranslate"><span class="pre">allow_writes</span></code> (off by default), <code class="docutils literal notranslate"><span class="pre">max_rows</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/hook/index.html#airflow.providers.common.ai.toolsets.hook.HookToolset" title="airflow.providers.common.ai.toolsets.hook.HookToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">HookToolset</span></code></a></p></td>
+<td><p>The methods you list from any Airflow hook, one tool per method</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">allowed_methods</span></code> (required), <code class="docutils literal notranslate"><span class="pre">pinned_arguments</span></code>; see
+<a class="reference internal" href="#howto-frameworks-openai-agents-hooks"><span class="std std-ref">Other systems through their hooks</span></a></p></td>
+</tr>
+</tbody>
+</table>
+<p>A query that names a table outside <code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code>, or a path outside the storage
+root, never reaches the database or the store. The model gets the reason back, and can
+try again. Limits such as <code class="docutils literal notranslate"><span class="pre">max_rows</span></code> and <code class="docutils literal notranslate"><span class="pre">max_read_bytes</span></code> work differently: the query
+or read still runs, and the result is cut to fit. With the example’s two toolsets over a
+SQLite database that also holds a <code class="docutils literal notranslate"><span class="pre">salaries</span></code> table, and a local directory with a
+<code class="docutils literal notranslate"><span class="pre">payroll</span></code> folder beside <code class="docutils literal notranslate"><span class="pre">finance</span></code>, these calls were refused with these messages:</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">query</span></code> with <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">employee,</span> <span class="pre">salary</span> <span class="pre">FROM</span> <span class="pre">salaries</span></code></dt><dd><div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{"error": "The query tool failed: Query references tables that are not in the allowed tables list: salaries. Use list_tables to see the allowed tables.\nUse the list_tables and get_schema tools to inspect the database, then fix the query and try again."}
+</pre></div>
+</div>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">read_file</span></code> with <code class="docutils literal notranslate"><span class="pre">../payroll/salaries.csv</span></code></dt><dd><div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{"error": "'../payroll/salaries.csv' leaves the storage root; '..' is not allowed."}
+</pre></div>
+</div>
+</dd>
+</dl>
+<p>The SQL refusal counts against the tool’s retry limit, one correction in a row by
+default, so a model that sends a second refused query in a row fails the task (see
+<a class="reference internal" href="#howto-frameworks-openai-agents-failures"><span class="std std-ref">What the model sees when a call fails</span></a>). The object storage refusal does not count,
+so bound repeated refused reads with <code class="docutils literal notranslate"><span class="pre">max_turns</span></code>.</p>
+<p>Back each check with the connection’s own permissions: a database role granted
+<code class="docutils literal notranslate"><span class="pre">SELECT</span></code> on the two tables, and credentials that can read only the reports prefix. The
+database and the store enforce those themselves, including for a query or path that a
+toolset’s check lets through.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> and <code class="docutils literal notranslate"><span class="pre">DataFusionToolset</span></code> refuse statements that change data unless you
+pass <code class="docutils literal notranslate"><span class="pre">allow_writes=True</span></code>, and <code class="docutils literal notranslate"><span class="pre">ObjectStorageToolset</span></code> cannot write at all. To store what
+the agent produced, write it from your own task code, ideally in the next task, as
+<a class="reference internal" href="#howto-frameworks-openai-agents-durable"><span class="std std-ref">Durable execution</span></a> shows.</p>
+<section id="other-systems-through-their-hooks">
+<span id="howto-frameworks-openai-agents-hooks"></span><h3>Other systems through their hooks<a class="headerlink" href="#other-systems-through-their-hooks" title="Link to this heading">¶</a></h3>
+<p>For a system no toolset covers, <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code> turns methods of its Airflow hook into
+tools. It is only as narrow as the methods you list, so check each one before you expose
+it:</p>
 <ul class="simple">
-<li><p>The schema goes to the model as it is, with <code class="docutils literal notranslate"><span class="pre">strict_json_schema=False</span></code>. The SDK’s
-strict mode would mark every argument required, including the ones a toolset leaves
-optional.</p></li>
-<li><p>A failure the model can correct, such as a rejected SQL statement or an invalid
-argument, reaches it as <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code>. The tool’s retry limit bounds how many
-times in a row the model can try again, counted afresh on every run of the agent.</p></li>
-<li><p>A refusal the tool reports as final, such as a file that does not exist, also comes
-back as <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> without counting against that limit, and so do arguments
-that are not a JSON object. The <code class="docutils literal notranslate"><span class="pre">max_turns</span></code> argument of <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> bounds how
-long a model can keep asking.</p></li>
-<li><p>Any other failure raises
-<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolCallError" title="airflow.providers.common.ai.tools.ToolCallError"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolCallError</span></code></a> out of <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> and
-<code class="docutils literal notranslate"><span class="pre">Runner.run_sync</span></code>, with the message masked. The task fails and Airflow’s own retry
-takes over.</p></li>
+<li><p>What it does. A <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code> can do whatever its listed methods do, writes and
+deletes included; nothing in it is read-only by default.</p></li>
+<li><p>Which of its arguments choose the resource. Pin those with <code class="docutils literal notranslate"><span class="pre">pinned_arguments</span></code>, so the
+model never sees them and a call that sets one is refused. Then check that no argument
+you leave open can widen the call again. <code class="docutils literal notranslate"><span class="pre">HttpHook.run</span></code> fails this test: pinning
+<code class="docutils literal notranslate"><span class="pre">endpoint</span></code> still leaves <code class="docutils literal notranslate"><span class="pre">extra_options</span></code>, which can set a proxy or turn off TLS
+verification for the request.</p></li>
+<li><p>What it returns. The model sees the result serialized as JSON, or as <code class="docutils literal notranslate"><span class="pre">str()</span></code> of an
+object that is not JSON-compatible. <code class="docutils literal notranslate"><span class="pre">HttpHook.run</span></code> returns a <code class="docutils literal notranslate"><span class="pre">requests.Response</span></code>,
+which the model would see as <code class="docutils literal notranslate"><span class="pre">&lt;Response</span> <span class="pre">[200]&gt;</span></code>.</p></li>
 </ul>
-<p>Outside <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code>, a toolset’s connection ID is used as written: it is not
-rendered as a template.</p>
+<p><a class="reference internal" href="../toolsets/hook.html#hook-toolset-restricted"><span class="std std-ref">Restricting the agent</span></a> shows a hook that passes these checks: <code class="docutils literal notranslate"><span class="pre">S3Hook</span></code> with
+<code class="docutils literal notranslate"><span class="pre">list_keys</span></code> and <code class="docutils literal notranslate"><span class="pre">read_key</span></code> and the bucket pinned. The same toolset works in
+<code class="docutils literal notranslate"><span class="pre">AirflowTools(...)</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.filtered()</span></code> and <code class="docutils literal notranslate"><span class="pre">.approval_required()</span></code>, which pydantic-ai toolsets offer, do not
+reach the SDK through <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>. They return wrappers that <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> cannot
+read, and building it fails:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>AttributeError: 'FilteredToolset' object has no attribute 'airflow_tools'
+</pre></div>
+</div>
+<p>Choose the tools with <code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">allowed_methods</span></code> and <code class="docutils literal notranslate"><span class="pre">pinned_arguments</span></code>
+instead. There is no per-call approval on this path; see
+<a class="reference internal" href="#howto-frameworks-openai-agents-limits"><span class="std std-ref">Sessions, approvals and streaming</span></a>. Each toolset’s page covers the rest of its
+options: <a class="reference internal" href="../toolsets/index.html#howto-toolsets"><span class="std std-ref">Toolsets</span></a>.</p>
 </section>
-<section id="an-agent-used-as-a-tool">
-<h2>An agent used as a tool<a class="headerlink" href="#an-agent-used-as-a-tool" title="Link to this heading">¶</a></h2>
+</section>
+<section id="tools">
+<h2>Tools<a class="headerlink" href="#tools" title="Link to this heading">¶</a></h2>
+<p>Where an agent’s tools come from decides how they behave in a task:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 20.0%" />
+<col style="width: 30.0%" />
+<col style="width: 25.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Result masked</p></th>
+<th class="head"><p>A failure the model can correct</p></th>
+<th class="head"><p>Replayed on a durable retry</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Returned to the model as <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code>; for a toolset’s tools, up to a retry limit</p></td>
+<td><p>Yes, an <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> result too; a call that raised runs again</p></td>
+</tr>
+<tr class="row-odd"><td><p>Your own <code class="docutils literal notranslate"><span class="pre">&#64;function_tool</span></code></p></td>
+<td><p>No</p></td>
+<td><p>As its <code class="docutils literal notranslate"><span class="pre">failure_error_function</span></code> decides</p></td>
+<td><p>Yes, unless it raised, even when <code class="docutils literal notranslate"><span class="pre">failure_error_function</span></code> turned the
+exception into text</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code></p></td>
+<td><p>No</p></td>
+<td><p>As the SDK handles it</p></td>
+<td><p>No, runs live</p></td>
+</tr>
+<tr class="row-odd"><td><p>Hosted tools (web search, file search), shell and computer tools</p></td>
+<td><p>No</p></td>
+<td><p>As the SDK handles it</p></td>
+<td><p>No, runs live</p></td>
+</tr>
+</tbody>
+</table>
+<section id="toolsets-for-airflowtools">
+<h3>Toolsets for <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code><a class="headerlink" href="#toolsets-for-airflowtools" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> accepts any toolset that implements
+<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolProvider" title="airflow.providers.common.ai.tools.ToolProvider"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolProvider</span></code></a>, such as
+<a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset" title="airflow.providers.common.ai.toolsets.sql.SQLToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SQLToolset</span></code></a>,
+<a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/hook/index.html#airflow.providers.common.ai.toolsets.hook.HookToolset" title="airflow.providers.common.ai.toolsets.hook.HookToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">HookToolset</span></code></a> and
+<a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/object_storage/index.html#airflow.providers.common.ai.toolsets.object_storage.ObjectStorageToolset" title="airflow.providers.common.ai.toolsets.object_storage.ObjectStorageToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">ObjectStorageToolset</span></code></a>, and
+adds one function tool per toolset tool. Each tool:</p>
+<ul class="simple">
+<li><p>Keeps the toolset tool’s name, description and argument schema. The schema goes to
+the model as it is, with <code class="docutils literal notranslate"><span class="pre">strict_json_schema=False</span></code>: the SDK’s strict mode would
+mark every argument required, including the ones a toolset leaves optional.</p></li>
+<li><p>Runs through the toolset itself, so connection resolution, SQL validation,
+<code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">allowed_methods</span></code> and result bounds behave as each toolset’s
+page describes. See <a class="reference internal" href="../toolsets/index.html#howto-toolsets"><span class="std std-ref">Toolsets</span></a>.</p></li>
+<li><p>Passes every result through Airflow’s secret masker before it goes back to the
+model.</p></li>
+<li><p>Writes a <code class="docutils literal notranslate"><span class="pre">Tool</span> <span class="pre">call:</span> <span class="pre">&lt;name&gt;</span></code> group to the task log with the call’s duration.</p></li>
+</ul>
+<p>A toolset’s connection ID is used as written: it is not rendered as a Jinja template,
+so pass the value itself.</p>
+<p>A <a class="reference internal" href="../_api/airflow/providers/common/ai/toolsets/sandbox/index.html#airflow.providers.common.ai.toolsets.sandbox.SandboxToolset" title="airflow.providers.common.ai.toolsets.sandbox.SandboxToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SandboxToolset</span></code></a> gives the agent
+a sandbox to run code in, and its tools work only inside <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">sandbox:</span></code>, which
+destroys the sandbox when the block ends. A call outside the block fails with
+<code class="docutils literal notranslate"><span class="pre">SandboxToolset</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">open</span></code>. Build and run the agent inside it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">Runner</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.sandbox.modal</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModalSandboxBackend</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">SandboxToolset</span>
+
+<span class="k">with</span> <span class="n">SandboxToolset</span><span class="p">(</span><span class="n">ModalSandboxBackend</span><span class="p">())</span> <span class="k">as</span> <span class="n">sandbox</span><span class="p">:</span>
+    <span class="n">agent</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"coder"</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s2">"gpt-5-mini"</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">sandbox</span><span class="p">))</span>
+    <span class="n">answer</span> <span class="o">=</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="s2">"Plot last month's signups."</span><span class="p">)</span><span class="o">.</span><span class="n">final_output</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="../sandbox/index.html#sandbox-other-frameworks"><span class="std std-ref">With another agent framework</span></a> for the backends and what the sandbox contains.</p>
+<p>The SDK routes a call by tool name, so two toolsets that define the same name raise
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when you build <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: More than one tool is named check_query, get_schema, list_tables, query. Give the toolsets different tool_prefix values, where they take one, so the model can call each of them.
+</pre></div>
+</div>
+</section>
+<section id="what-the-model-sees-when-a-call-fails">
+<span id="howto-frameworks-openai-agents-failures"></span><h3>What the model sees when a call fails<a class="headerlink" href="#what-the-model-sees-when-a-call-fails" title="Link to this heading">¶</a></h3>
+<p>A failure the model can correct, such as a query that names a column the table does not
+have, reaches it as <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> with the database’s message, and the model can
+try again. This is what the model received for a query against a <code class="docutils literal notranslate"><span class="pre">customers</span></code> table
+that has an <code class="docutils literal notranslate"><span class="pre">arr</span></code> column but no <code class="docutils literal notranslate"><span class="pre">revenue</span></code> column:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{"error": "The query tool failed: no such column: revenue\nUse the list_tables and get_schema tools to inspect the database, then fix the query and try again."}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> refuses statements that change data unless it was built with
+<code class="docutils literal notranslate"><span class="pre">allow_writes=True</span></code>, and the refusal goes back to the model the same way:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>{"error": "The query tool failed: Statement type 'Delete' is not allowed. Allowed types: Select, Union, Intersect, Except, Describe, Show\nUse the list_tables and get_schema tools to inspect the database, then fix the query and try again."}
+</pre></div>
+</div>
+<p>A toolset’s tool may fail this way once in a row by default; pass <code class="docutils literal notranslate"><span class="pre">max_retries</span></code> to the
+toolset to allow more. The count starts over after a call that succeeds and on every run
+of the agent. A tool still failing after that raises
+<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolCallError" title="airflow.providers.common.ai.tools.ToolCallError"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolCallError</span></code></a> out of <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> and
+<code class="docutils literal notranslate"><span class="pre">Runner.run_sync</span></code>, so the task fails and Airflow’s own retry takes over. Catch it as
+<code class="docutils literal notranslate"><span class="pre">ToolCallError</span></code>; the traceback names a private subclass of it. For the same query sent
+twice in a row, the message is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>query kept failing after 1 correction(s): The query tool failed: no such column: revenue
+Use the list_tables and get_schema tools to inspect the database, then fix the query and try again.
+</pre></div>
+</div>
+<p>A refusal the tool reports as final, such as a file that does not exist, comes back as
+<code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> without counting against that limit, and so do arguments that are not
+a JSON object. Bound those with the <code class="docutils literal notranslate"><span class="pre">max_turns</span></code> argument of <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code>. Any other
+failure, such as a hook method raising, also raises <code class="docutils literal notranslate"><span class="pre">ToolCallError</span></code> with its message
+masked, and the task fails.</p>
+<p>A function tool you write yourself is handled by the SDK instead. When it raises,
+<code class="docutils literal notranslate"><span class="pre">openai-agents</span></code> releases before 0.23 send the exception’s text to the model unmasked.
+From 0.23.1 they send <code class="docutils literal notranslate"><span class="pre">An</span> <span class="pre">error</span> <span class="pre">occurred</span> <span class="pre">while</span> <span class="pre">running</span> <span class="pre">the</span> <span class="pre">tool.</span> <span class="pre">Please</span> <span class="pre">try</span> <span class="pre">again.</span></code>
+with no detail, which gives the model nothing to correct.</p>
+</section>
+<section id="your-own-functions-as-airflow-tools">
+<h3>Your own functions as Airflow tools<a class="headerlink" href="#your-own-functions-as-airflow-tools" title="Link to this heading">¶</a></h3>
+<p>Results of a tool you write with the SDK’s <code class="docutils literal notranslate"><span class="pre">&#64;function_tool</span></code> do not pass through the
+masker. A result that carries a registered secret, such as an API response that echoes a
+connection’s token, would then send it to the model, the model provider, the SDK’s
+traces, and possibly the final answer, even though the task log shows <code class="docutils literal notranslate"><span class="pre">***</span></code>. To give
+one of your own functions the same treatment as a toolset, wrap it as an
+<a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.AirflowTool" title="airflow.providers.common.ai.tools.AirflowTool"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTool</span></code></a> and pass it to <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>
+next to the toolsets:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTool</span><span class="p">,</span> <span class="n">ToolResult</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTools</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.toolsets.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLToolset</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lookup_customer</span><span class="p">(</span><span class="n">arguments</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolResult</span><span class="p">:</span>
+    <span class="c1"># crm_client is your own client; its get() blocks, so run it off the event loop.</span>
+    <span class="n">customer</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">to_thread</span><span class="p">(</span><span class="n">crm_client</span><span class="o">.</span><span class="n">get</span><span class="p">,</span> <span class="n">arguments</span><span class="p">[</span><span class="s2">"customer_id"</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">ToolResult</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">customer</span><span class="p">)</span>
+
+
+<span class="n">lookup</span> <span class="o">=</span> <span class="n">AirflowTool</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"lookup_customer"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"Look up one customer in the CRM by id."</span><span class="p">,</span>
+    <span class="n">parameters</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+        <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"customer_id"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"integer"</span><span class="p">}},</span>
+        <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"customer_id"</span><span class="p">],</span>
+    <span class="p">},</span>
+    <span class="n">function</span><span class="o">=</span><span class="n">lookup_customer</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">warehouse</span> <span class="o">=</span> <span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"warehouse"</span><span class="p">)</span>
+<span class="n">agent</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"support"</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s2">"gpt-5-mini"</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">warehouse</span><span class="p">,</span> <span class="n">lookup</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Return <code class="docutils literal notranslate"><span class="pre">ToolResult(content=...,</span> <span class="pre">is_error=True)</span></code> for a failure the model can correct,
+and raise for anything else. An <code class="docutils literal notranslate"><span class="pre">AirflowTool</span></code> you build has no retry limit of its own,
+so only <code class="docutils literal notranslate"><span class="pre">max_turns</span></code> bounds how often the model retries it. The masker knows the
+secrets Airflow has registered, such as connection passwords and sensitive connection
+extras. It does not recognize a credential that exists only in the data a tool returns,
+such as an API key stored in a table row. To keep one from the agent, deny the
+connection’s database role or cloud identity access to it.</p>
+</section>
+</section>
+<section id="agents-as-tools-and-handoffs">
+<h2>Agents as tools and handoffs<a class="headerlink" href="#agents-as-tools-and-handoffs" title="Link to this heading">¶</a></h2>
+<p>Give each agent the <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> it needs. An agent that takes over through a
+handoff runs its own tools, and they behave as described above.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Agent.as_tool()</span></code> turns any exception from the inner agent’s run into text for the
-outer model by default, so a tool failure that should fail the task would only reach the
-orchestrating model as a message. When the inner agent holds <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>, pass
-<code class="docutils literal notranslate"><span class="pre">failure_error_function=None</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">analyst</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"analyst"</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">warehouse</span><span class="p">))</span>
+outer model by default, so a tool failure that should fail the task would reach the
+orchestrating model only as a message. When the inner agent holds <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>,
+pass <code class="docutils literal notranslate"><span class="pre">failure_error_function=None</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">analyst</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"analyst"</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"gpt-5-mini"</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="n">AirflowTools</span><span class="p">(</span><span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"warehouse"</span><span class="p">)),</span>
+<span class="p">)</span>
 <span class="n">lead</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"lead"</span><span class="p">,</span>
-    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"gpt-5-mini"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">analyst</span><span class="o">.</span><span class="n">as_tool</span><span class="p">(</span><span class="s2">"ask_analyst"</span><span class="p">,</span> <span class="s2">"Ask the SQL analyst."</span><span class="p">,</span> <span class="n">failure_error_function</span><span class="o">=</span><span class="kc">None</span><span class="p">)],</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">ToolCallError</span></code> then fails the outer run, and with it the task. The same applies to
-a function tool of your own that runs another agent: let the exception propagate. A
-nested run shares the outer run’s retry count for each tool.</p>
+a function tool of your own that runs another agent: let the exception propagate.</p>
+</section>
+<section id="mcp-servers">
+<h2>MCP servers<a class="headerlink" href="#mcp-servers" title="Link to this heading">¶</a></h2>
+<p>Connect an MCP server with the SDK’s own <code class="docutils literal notranslate"><span class="pre">mcp_servers=</span></code> and one of its <code class="docutils literal notranslate"><span class="pre">MCPServer</span></code>
+classes, such as <code class="docutils literal notranslate"><span class="pre">MCPServerStreamableHttp</span></code>. <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> does not work through
+<code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>, because an MCP session belongs to the event loop that opened it.
+<code class="docutils literal notranslate"><span class="pre">AirflowTools(MCPToolset(...))</span></code> raises:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>airflow.providers.common.ai.exceptions.MCPToolsetNotSupportedError: MCPToolset works in Pydantic AI agents and through the LangChain bridge, not through AirflowTools. Pass the server to the agent's mcp_servers with one of the SDK's MCPServer classes, such as MCPServerStreamableHttp, instead.
+</pre></div>
+</div>
+<p>Results from <code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code> do not pass through Airflow’s secret masker, and under
+<code class="docutils literal notranslate"><span class="pre">run_durably</span></code> their calls run again on every retry.</p>
 </section>
 <section id="tracing">
 <h2>Tracing<a class="headerlink" href="#tracing" title="Link to this heading">¶</a></h2>
 <p>The SDK has a tracing system of its own rather than OpenTelemetry. By default it sends
 every run’s traces to OpenAI’s Traces backend using <code class="docutils literal notranslate"><span class="pre">OPENAI_API_KEY</span></code> from the
-environment, whatever model the agent runs, including a self-hosted one, and the traces
-hold the prompts and model output. Tool results are masked before the model sees them;
-nothing else in those traces is.</p>
-<p><a class="reference internal" href="../_api/airflow/providers/common/ai/tools/openai_agents/index.html#airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor" title="airflow.providers.common.ai.tools.openai_agents.AirflowTraceProcessor"><code class="xref py py-class docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code></a> is a trace
-processor for the SDK that records each trace as OpenTelemetry spans under the task’s
-span instead. The example replaces the SDK’s processors with it, so nothing goes to
-OpenAI, and runs the agent inside
+environment, whatever model the agent runs, including a self-hosted one. The traces
+hold the prompts and the model’s output. When the worker has no <code class="docutils literal notranslate"><span class="pre">OPENAI_API_KEY</span></code>, as
+when the key comes from a connection, the SDK logs <code class="docutils literal notranslate"><span class="pre">OPENAI_API_KEY</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">set,</span> <span class="pre">skipping</span>
+<span class="pre">trace</span> <span class="pre">export</span></code> instead. Tool results from <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> are masked
+before the model sees them; nothing else in those traces is.</p>
+<p><code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> records each trace as OpenTelemetry spans under the task’s
+span instead. Replace the SDK’s processors with it, so nothing goes to OpenAI, and run
+the agent inside
 <a class="reference internal" href="../_api/airflow/providers/common/ai/tools/tracing/index.html#airflow.providers.common.ai.tools.tracing.agent_framework_tracing" title="airflow.providers.common.ai.tools.tracing.agent_framework_tracing"><code class="xref py py-func docutils literal notranslate"><span class="pre">agent_framework_tracing()</span></code></a>, so the spans
 carry the task’s identity:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span><span class="p">,</span> <span class="n">set_trace_processors</span>
@@ -839,27 +1231,30 @@ carry the task’s identity:</p>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">set_trace_processors</span></code> replaces every processor registered with the SDK. To keep the
 export to OpenAI, or a processor another instrumentation registered, add this one with
-<code class="docutils literal notranslate"><span class="pre">agents.add_trace_processor</span></code> instead. The spans use the names of the OpenTelemetry GenAI
-conventions (<code class="docutils literal notranslate"><span class="pre">invoke_agent</span></code>, <code class="docutils literal notranslate"><span class="pre">chat</span></code> with the model and token counts,
-<code class="docutils literal notranslate"><span class="pre">execute_tool</span></code>), and the SDK’s other spans are named <code class="docutils literal notranslate"><span class="pre">openai_agents.&lt;kind&gt;</span></code>. Prompts, completions, and tool arguments and results are left
-out unless <code class="docutils literal notranslate"><span class="pre">[common.ai]</span> <span class="pre">otel_export_enabled</span></code> and <code class="docutils literal notranslate"><span class="pre">capture_content</span></code> are both on, and pass
-through Airflow’s secret masker when they are recorded; see <a class="reference internal" href="../observability.html"><span class="doc">Observability (OpenTelemetry tracing)</span></a>.</p>
-<p>Use <code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> when span content should follow <code class="docutils literal notranslate"><span class="pre">[common.ai]</span> <span class="pre">capture_content</span></code>
-and Airflow’s secret masker.</p>
-<p>To turn the SDK’s tracing off altogether, call <code class="docutils literal notranslate"><span class="pre">agents.set_tracing_disabled(True)</span></code> or set
-<code class="docutils literal notranslate"><span class="pre">OPENAI_AGENTS_DISABLE_TRACING=1</span></code> in the worker’s environment. That stops
-<code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> from receiving anything too.</p>
+<code class="docutils literal notranslate"><span class="pre">agents.add_trace_processor</span></code> instead.</p>
+<p>The spans use the names of the OpenTelemetry GenAI conventions: <code class="docutils literal notranslate"><span class="pre">invoke_agent</span></code> for an
+agent, <code class="docutils literal notranslate"><span class="pre">chat</span></code> for a model call with its model and token counts, and <code class="docutils literal notranslate"><span class="pre">execute_tool</span></code>
+for a tool call. The SDK’s other spans, such as one per turn of the agent loop or one per
+handoff, are named <code class="docutils literal notranslate"><span class="pre">openai_agents.&lt;kind&gt;</span></code>. Prompts, completions, and tool arguments and
+results are left out unless <code class="docutils literal notranslate"><span class="pre">[common.ai]</span> <span class="pre">otel_export_enabled</span></code> and <code class="docutils literal notranslate"><span class="pre">capture_content</span></code>
+are both on, and pass through Airflow’s secret masker when they are recorded; see
+<a class="reference internal" href="../observability.html"><span class="doc">Observability (OpenTelemetry tracing)</span></a>.</p>
+<p>To turn the SDK’s tracing off altogether, call <code class="docutils literal notranslate"><span class="pre">agents.set_tracing_disabled(True)</span></code> or
+set <code class="docutils literal notranslate"><span class="pre">OPENAI_AGENTS_DISABLE_TRACING=1</span></code> in the worker’s environment, and
+<code class="docutils literal notranslate"><span class="pre">AirflowTraceProcessor</span></code> then receives nothing either. To turn it off for one run, pass
+<code class="docutils literal notranslate"><span class="pre">run_config=RunConfig(tracing_disabled=True)</span></code>, as the durable example below does.</p>
 </section>
 <section id="durable-execution">
 <span id="howto-frameworks-openai-agents-durable"></span><h2>Durable execution<a class="headerlink" href="#durable-execution" title="Link to this heading">¶</a></h2>
 <p>When a task that calls <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> fails and Airflow retries it, the agent starts
 again from the prompt: every model call is paid for again, and every tool call happens
-again. On a task with <code class="docutils literal notranslate"><span class="pre">retries</span></code>, run the agent with
-<a class="reference internal" href="../_api/airflow/providers/common/ai/durable/openai_agents/index.html#airflow.providers.common.ai.durable.openai_agents.run_durably_sync" title="airflow.providers.common.ai.durable.openai_agents.run_durably_sync"><code class="xref py py-func docutils literal notranslate"><span class="pre">run_durably_sync()</span></code></a>, or
+again. On a task with <code class="docutils literal notranslate"><span class="pre">retries</span></code>, run the agent with <code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code>, or
 <a class="reference internal" href="../_api/airflow/providers/common/ai/durable/openai_agents/index.html#airflow.providers.common.ai.durable.openai_agents.run_durably" title="airflow.providers.common.ai.durable.openai_agents.run_durably"><code class="xref py py-func docutils literal notranslate"><span class="pre">run_durably()</span></code></a> from async code,
 instead. They take the same arguments as <code class="docutils literal notranslate"><span class="pre">Runner.run_sync</span></code> and <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code>, except
-<code class="docutils literal notranslate"><span class="pre">previous_response_id</span></code>, <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code> and <code class="docutils literal notranslate"><span class="pre">auto_previous_response_id</span></code>, which they
-refuse: with them OpenAI keeps the conversation, and a replayed call never reaches it.</p>
+<code class="docutils literal notranslate"><span class="pre">previous_response_id</span></code>, <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code> and <code class="docutils literal notranslate"><span class="pre">auto_previous_response_id</span></code>, which
+they refuse with <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> inside a task: with them OpenAI keeps the conversation,
+and a replayed call never reaches it. This Dag runs the agent from the task example
+with <code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code>:</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_openai_agents_durable.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/providers/common/ai/example_dags/example_openai_agents_durable.html"><span class="viewcode-link">[source]</span></a></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dag</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
@@ -899,20 +1294,43 @@ refuse: with them OpenAI keeps the conversation, and a replayed call never reach
 </div>
 </div>
 <p>Each model call and function tool call is recorded in the task instance’s durable
-journal as it completes, the journal <code class="docutils literal notranslate"><span class="pre">AgentOperator(durable=True)</span></code> uses (see
-<a class="reference internal" href="../durable_execution.html"><span class="doc">Durable execution</span></a>). On Airflow 3.3 and later the journal is kept in the task
-state store; on earlier versions, set <code class="docutils literal notranslate"><span class="pre">[common.ai]</span> <span class="pre">durable_cache_path</span></code> to where it is
-kept. Once the run succeeds, what was recorded is deleted, so clearing the task later
-starts over. Outside a task there is nothing to replay into, and the agent runs as
-<code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> runs it.</p>
+journal as it completes (see <a class="reference internal" href="../durable_execution.html"><span class="doc">Durable execution</span></a>). On Airflow 3.3 and later the
+journal is kept in the task state store. On earlier versions, set <code class="docutils literal notranslate"><span class="pre">[common.ai]</span>
+<span class="pre">durable_cache_path</span></code> to where it is kept; without it the call raises <code class="docutils literal notranslate"><span class="pre">ValueError:</span>
+<span class="pre">Durable</span> <span class="pre">execution</span> <span class="pre">on</span> <span class="pre">Airflow</span> <span class="pre">before</span> <span class="pre">3.3</span> <span class="pre">needs</span> <span class="pre">[common.ai]</span> <span class="pre">durable_cache_path</span> <span class="pre">to</span> <span class="pre">be</span> <span class="pre">set</span></code>.
+Outside a task there is nothing to replay into, and the agent runs as <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> runs
+it.</p>
+<p>What was recorded is deleted when the agent’s run succeeds, so clearing the task later
+starts over. That happens when <code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code> returns, not when the task
+succeeds: if the task fails after the agent has answered, for example while writing the
+answer somewhere, the retry runs the whole agent again. Write the answer in a
+downstream task, so that a failed write retries on its own. Here <code class="docutils literal notranslate"><span class="pre">build_agent()</span></code>
+stands for building the agent as the task example does:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_durably_sync</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">ObjectStoragePath</span><span class="p">,</span> <span class="n">task</span>
+
+
+<span class="nd">@task</span><span class="p">(</span><span class="n">retries</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">answer</span><span class="p">(</span><span class="n">question</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">run_durably_sync</span><span class="p">(</span><span class="n">build_agent</span><span class="p">(),</span> <span class="n">question</span><span class="p">)</span><span class="o">.</span><span class="n">final_output</span>
+
+
+<span class="nd">@task</span><span class="p">(</span><span class="n">retries</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">publish</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">ObjectStoragePath</span><span class="p">(</span><span class="s2">"s3://reports/answer.md"</span><span class="p">,</span> <span class="n">conn_id</span><span class="o">=</span><span class="s2">"aws_default"</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+
+<span class="n">publish</span><span class="p">(</span><span class="n">answer</span><span class="p">(</span><span class="s2">"Which customer has the highest ARR?"</span><span class="p">))</span>
+</pre></div>
+</div>
 <section id="what-a-retry-replays">
 <h3>What a retry replays<a class="headerlink" href="#what-a-retry-replays" title="Link to this heading">¶</a></h3>
 <p>On a retry the agent runs again from the start, and each call that asks what the failed
-try asked, in the same order, returns what it returned then: the calls of every model
-given by name or in <code class="docutils literal notranslate"><span class="pre">run_config</span></code>, the model and function tools of the starting agent
-and of the agents in its <code class="docutils literal notranslate"><span class="pre">handoffs</span></code> list, and an agent used through <code class="docutils literal notranslate"><span class="pre">as_tool</span></code>, as one
-call. Recorded tool results pass through Airflow’s secret masker before they are saved,
-and a replayed model call reports no token usage.</p>
+try asked, in the same order, returns what it returned then. That covers the calls of
+every model given by name or in <code class="docutils literal notranslate"><span class="pre">run_config</span></code>, the model and function tools of the
+starting agent and of the agents in its <code class="docutils literal notranslate"><span class="pre">handoffs</span></code> list, and an agent used through
+<code class="docutils literal notranslate"><span class="pre">as_tool</span></code>, which replays as one call. Recorded tool results pass through Airflow’s
+secret masker before they are saved, and a replayed model call reports no token usage.</p>
 <p>From the first call that differs, that call and every call after it run live:</p>
 <ul class="simple">
 <li><p>A retry whose prompt, instructions, model settings or tools differ from the failed
@@ -928,41 +1346,40 @@ from its last request.</p></li>
 <ul class="simple">
 <li><p>A call that was running when the try failed, so tools that change data must still be
 safe to repeat.</p></li>
-<li><p>A tool call that failed, including one whose exception <code class="docutils literal notranslate"><span class="pre">failure_error_function</span></code> turned
-into text for the model. A <code class="docutils literal notranslate"><span class="pre">ModelBehaviorError</span></code> that a tool raises, such as arguments
-that fail validation with <code class="docutils literal notranslate"><span class="pre">failure_error_function=None</span></code>, counts as the tool’s failure:
-the tool call runs again, but the answer that asked for it replays.</p></li>
-<li><p>Tools other than function tools: hosted tools such as web search, the tools of
-<code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code>, and shell and computer tools.</p></li>
-<li><p>A function tool whose <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is a function, since the SDK checks the
-arguments it approved only through its own invoker.</p></li>
+<li><p>A tool call that raised, including one whose exception <code class="docutils literal notranslate"><span class="pre">failure_error_function</span></code>
+turned into text for the model. An <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> result from <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is
+not a raise: it is recorded, and the retry replays it. A <code class="docutils literal notranslate"><span class="pre">ModelBehaviorError</span></code> that a tool raises, such as
+arguments that fail validation with <code class="docutils literal notranslate"><span class="pre">failure_error_function=None</span></code>, counts as the
+tool’s failure: the tool call runs again, but the answer that asked for it replays.</p></li>
+<li><p>Tools other than function tools: hosted tools, the tools of <code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code>, and shell
+and computer tools.</p></li>
+<li><p>A function tool whose <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is a function: the SDK checks that the
+arguments a call runs with are the ones it approved, and a replayed result would skip
+that check.</p></li>
 <li><p>The function tools of an agent reached through <code class="docutils literal notranslate"><span class="pre">handoff()</span></code>, and its model too unless
 the agent’s <code class="docutils literal notranslate"><span class="pre">model</span></code> is a model name or not set.</p></li>
-<li><p>A streamed run.</p></li>
+<li><p>A streamed run (<code class="docutils literal notranslate"><span class="pre">Runner.run_streamed</span></code>).</p></li>
 <li><p>Every call, when the run has a <code class="docutils literal notranslate"><span class="pre">session</span></code>: the SDK adds the failed try’s prompt to it
 before the first model call, so that call no longer asks what it asked then.</p></li>
 </ul>
-<p>A <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code> without <code class="docutils literal notranslate"><span class="pre">attach_to</span></code> is destroyed when the try ends, so the retry
-starts with a new, empty sandbox that the replayed conversation does not describe.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code> without <code class="docutils literal notranslate"><span class="pre">attach_to</span></code> is destroyed when its <code class="docutils literal notranslate"><span class="pre">with</span></code> block ends,
+which a failed try also ends, so the retry starts with a new, empty sandbox that the
+replayed conversation does not describe.</p>
 </section>
 </section>
-<section id="differences-from-agentoperator">
-<h2>Differences from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code><a class="headerlink" href="#differences-from-agentoperator" title="Link to this heading">¶</a></h2>
+<section id="sessions-approvals-and-streaming">
+<span id="howto-frameworks-openai-agents-limits"></span><h2>Sessions, approvals and streaming<a class="headerlink" href="#sessions-approvals-and-streaming" title="Link to this heading">¶</a></h2>
+<p>These SDK features interact with Airflow in ways the SDK documentation does not cover:</p>
 <ul class="simple">
-<li><p>A task retry runs the agent again from the start unless it runs through
-<code class="docutils literal notranslate"><span class="pre">run_durably</span></code>; see <a class="reference internal" href="#howto-frameworks-openai-agents-durable"><span class="std std-ref">Durable execution</span></a>.</p></li>
-<li><p>There is no human review step like <code class="docutils literal notranslate"><span class="pre">AgentOperator(enable_hitl_review=True)</span></code>, and the
-SDK’s own <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> interruptions are not connected to Airflow’s approval UI.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">session</span></code> works, but under <code class="docutils literal notranslate"><span class="pre">run_durably</span></code> it makes every retry run live, as
+above.</p></li>
+<li><p>A tool’s <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is not connected to Airflow’s approval UI. The run stops
+at the first call that needs approval and returns with <code class="docutils literal notranslate"><span class="pre">final_output</span></code> set to
+<code class="docutils literal notranslate"><span class="pre">None</span></code> and the pending call in <code class="docutils literal notranslate"><span class="pre">result.interruptions</span></code>, and nothing in Airflow
+resumes it. To have a person approve the agent’s answer, add the standard
+provider’s <code class="docutils literal notranslate"><span class="pre">ApprovalOperator</span></code> as the next task.</p></li>
+<li><p>A streamed run (<code class="docutils literal notranslate"><span class="pre">Runner.run_streamed</span></code>) is not recorded for durable retries.</p></li>
 </ul>
-</section>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"apache-airflow-providers-common-ai[sql]"</span><span class="w"> </span><span class="s2">"openai-agents&gt;=0.20.0"</span>
-</pre></div>
-</div>
-<p>The SDK requires <code class="docutils literal notranslate"><span class="pre">openai&gt;=3</span></code> from 0.21.0 on. Airflow’s constraints file pins <code class="docutils literal notranslate"><span class="pre">openai</span></code>
-below 3, so with that file the command above installs <code class="docutils literal notranslate"><span class="pre">openai-agents</span></code> 0.20, the last
-release that accepts <code class="docutils literal notranslate"><span class="pre">openai</span></code> 2.x. <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> works with both.</p>
 </section>
 </section>
 
@@ -1042,17 +1459,28 @@ release that accepts <code class="docutils literal notranslate"><span class="pre
         <div class="wy-menu-vertical">
             <ul>
 <li><a class="reference internal" href="#">OpenAI Agents SDK</a><ul>
-<li><a class="reference internal" href="#run-an-openai-agents-sdk-agent-in-a-task">Run an OpenAI Agents SDK agent in a task</a></li>
-<li><a class="reference internal" href="#what-the-tools-give-the-agent">What the tools give the agent</a></li>
-<li><a class="reference internal" href="#an-agent-used-as-a-tool">An agent used as a tool</a></li>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#try-the-tools-from-a-script">Try the tools from a script</a></li>
+<li><a class="reference internal" href="#run-the-agent-in-a-task">Run the agent in a task</a></li>
+<li><a class="reference internal" href="#give-the-agent-access-to-your-data">Give the agent access to your data</a><ul>
+<li><a class="reference internal" href="#other-systems-through-their-hooks">Other systems through their hooks</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tools">Tools</a><ul>
+<li><a class="reference internal" href="#toolsets-for-airflowtools">Toolsets for <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code></a></li>
+<li><a class="reference internal" href="#what-the-model-sees-when-a-call-fails">What the model sees when a call fails</a></li>
+<li><a class="reference internal" href="#your-own-functions-as-airflow-tools">Your own functions as Airflow tools</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#agents-as-tools-and-handoffs">Agents as tools and handoffs</a></li>
+<li><a class="reference internal" href="#mcp-servers">MCP servers</a></li>
 <li><a class="reference internal" href="#tracing">Tracing</a></li>
 <li><a class="reference internal" href="#durable-execution">Durable execution</a><ul>
 <li><a class="reference internal" href="#what-a-retry-replays">What a retry replays</a></li>
 <li><a class="reference internal" href="#what-always-runs-live">What always runs live</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#differences-from-agentoperator">Differences from <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code></a></li>
-<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#sessions-approvals-and-streaming">Sessions, approvals and streaming</a></li>
 </ul>
 </li>
 </ul>

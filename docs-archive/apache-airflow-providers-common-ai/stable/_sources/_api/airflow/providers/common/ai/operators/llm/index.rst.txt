@@ -20,9 +20,9 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: LLMOperator(*, prompt, llm_conn_id, model_id = None, fallback_conn_ids = None, system_prompt = '', output_type = str, model_settings = None, output_retries = None, usage_limits = None, require_approval = False, approval_timeout = None, on_approval_timeout = 'fail', allow_modifications = False, approval_notifiers = None, approval_assigned_users = None, decision_policy = None, serialize_output = False, **kwargs)
+.. py:class:: LLMOperator(*, prompt, llm_conn_id, model_id = None, fallback_conn_ids = None, system_prompt = '', output_type = str, model_settings = None, output_retries = None, usage_limits = None, require_approval = False, approval_timeout = None, on_approval_timeout = 'fail', allow_modifications = False, approval_notifiers = None, approval_assigned_users = None, fail_on_reject = True, ignore_downstream_trigger_rules = False, decision_policy = None, serialize_output = False, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.ai.mixins.cancellable_run.CancellableAgentRunMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.approval.LLMApprovalMixin`, :py:obj:`airflow.providers.common.ai.mixins.usage_budget.UsageBudgetMixin`
+   Bases: :py:obj:`airflow.providers.common.ai.mixins.cancellable_run.CancellableAgentRunMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`airflow.providers.common.ai.mixins.approval.LLMApprovalMixin`, :py:obj:`airflow.providers.common.ai.mixins.usage_budget.UsageBudgetMixin`, :py:obj:`airflow.providers.common.compat.sdk.SkipMixin`
 
 
    Call an LLM with a prompt and return the output.
@@ -134,6 +134,15 @@ Module Contents
        user id.  ``None`` (default) lets any user with the permission respond.
        On Airflow 3.1 to 3.3 the list is fixed when the review is first
        created; on 3.4+ a cleared or retried task replaces it.  Needs Airflow 3.1+.
+   :param fail_on_reject: If ``False``, a rejected review skips the direct
+       downstream tasks except teardowns and the task succeeds, as
+       :class:`~airflow.providers.standard.operators.hitl.ApprovalOperator`
+       does.  Only takes effect when a review is opened.  Default ``True``:
+       a rejection fails the task.
+   :param ignore_downstream_trigger_rules: If ``True``, a rejected review that
+       does not fail the task skips every downstream task except teardowns
+       rather than only the direct ones.  Only takes effect when a review is opened.
+       Default ``False``.
    :param decision_policy: Experimental. A
        :class:`~airflow.providers.common.ai.policies.decision.DecisionPolicy`
        saying how confident the model has to be for the operator to return its answer by
@@ -236,6 +245,16 @@ Module Contents
 
 
    .. py:attribute:: allow_modifications
+      :value: False
+
+
+
+   .. py:attribute:: fail_on_reject
+      :value: True
+
+
+
+   .. py:attribute:: ignore_downstream_trigger_rules
       :value: False
 
 

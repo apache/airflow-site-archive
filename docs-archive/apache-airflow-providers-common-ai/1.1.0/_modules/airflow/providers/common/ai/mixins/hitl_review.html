@@ -720,6 +720,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">SessionStatus</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.output_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">dump_output_for_display</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">describe_prompt</span>
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.log">[docs]</a>
@@ -730,6 +731,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="n">_MAX_CONSECUTIVE_XCOM_PULL_FAILURES</span> <span class="o">=</span> <span class="mi">10</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
@@ -754,10 +757,6 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.hitl_poll_interval">[docs]</a>
     <span class="n">hitl_poll_interval</span><span class="p">:</span> <span class="nb">float</span></div>
 
-<div class="viewcode-block" id="HITLReviewProtocol.prompt">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.prompt">[docs]</a>
-    <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span></div>
-
 <div class="viewcode-block" id="HITLReviewProtocol.task_id">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.task_id">[docs]</a>
     <span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span></div>
@@ -765,6 +764,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="HITLReviewProtocol.log">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.log">[docs]</a>
     <span class="n">log</span><span class="p">:</span> <span class="n">Any</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="HITLReviewProtocol.prompt">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.prompt">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
 </div>
 
 
@@ -805,7 +810,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    - ``enable_hitl_review`` (``bool``)</span>
 <span class="sd">    - ``hitl_timeout`` (``timedelta | None``)</span>
 <span class="sd">    - ``hitl_poll_interval`` (``float``, seconds)</span>
-<span class="sd">    - ``prompt`` (``str``)</span>
+<span class="sd">    - ``prompt`` (``str`` or ``Sequence[UserContent]``)</span>
 
 <span class="sd">    And must implement: meth:`regenerate_with_feedback`.</span>
 <span class="sd">    """</span>
@@ -841,7 +846,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span><span class="p">,</span>
             <span class="n">iteration</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
             <span class="n">max_iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">,</span>
-            <span class="n">prompt</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
+            <span class="n">prompt</span><span class="o">=</span><span class="n">describe_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">),</span>
             <span class="n">current_output</span><span class="o">=</span><span class="n">output_str</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -959,7 +964,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                         <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">MAX_ITERATIONS_EXCEEDED</span><span class="p">,</span>
                         <span class="n">iteration</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
                         <span class="n">max_iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">,</span>
-                        <span class="n">prompt</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
+                        <span class="n">prompt</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
                         <span class="n">current_output</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">_session_max</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
@@ -982,7 +987,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span><span class="p">,</span>
                     <span class="n">iteration</span><span class="o">=</span><span class="n">new_iteration</span><span class="p">,</span>
                     <span class="n">max_iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">,</span>
-                    <span class="n">prompt</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
+                    <span class="n">prompt</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
                     <span class="n">current_output</span><span class="o">=</span><span class="n">new_output</span><span class="p">,</span>
                 <span class="p">)</span>
 

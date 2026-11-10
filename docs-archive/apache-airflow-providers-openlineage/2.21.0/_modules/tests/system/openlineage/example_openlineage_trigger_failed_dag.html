@@ -679,7 +679,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">It checks:</span>
 <span class="sd">    - task's trigger_dag_id</span>
 <span class="sd">    - DAGRun START and FAIL events, for the triggered DAG</span>
-<span class="sd">    - propagation of OL parent and root info from DAGRun conf</span>
+<span class="sd">    - propagation of OL parent and root info, including job types, from DAGRun conf</span>
 <span class="sd">    - error message run facet on DAG FAIL event</span>
 <span class="sd">    - airflow state run facet on DAG FAIL event showing failed state</span>
 <span class="sd">"""</span>
@@ -727,9 +727,16 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
                 <span class="s2">"rootParentRunId"</span><span class="p">:</span> <span class="s2">"9d3b14f7-de91-40b6-aeef-e887e2c7673e"</span><span class="p">,</span>
                 <span class="s2">"rootParentJobNamespace"</span><span class="p">:</span> <span class="s2">"prod_analytics"</span><span class="p">,</span>
                 <span class="s2">"rootParentJobName"</span><span class="p">:</span> <span class="s2">"generate_report_sales_e2e"</span><span class="p">,</span>
+                <span class="s2">"parentJobType"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"processingType"</span><span class="p">:</span> <span class="s2">"BATCH"</span><span class="p">,</span> <span class="s2">"integration"</span><span class="p">:</span> <span class="s2">"SPARK"</span><span class="p">,</span> <span class="s2">"jobType"</span><span class="p">:</span> <span class="s2">"JOB"</span><span class="p">},</span>
+                <span class="s2">"rootParentJobType"</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"processingType"</span><span class="p">:</span> <span class="s2">"STREAMING"</span><span class="p">,</span>
+                    <span class="s2">"integration"</span><span class="p">:</span> <span class="s2">"CUSTOM"</span><span class="p">,</span>
+                    <span class="s2">"jobType"</span><span class="p">:</span> <span class="s2">"PIPELINE"</span><span class="p">,</span>
+                <span class="p">},</span>
             <span class="p">},</span>
         <span class="p">},</span>
         <span class="n">poke_interval</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">deferrable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -741,6 +748,8 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
     <span class="n">check_events</span> <span class="o">=</span> <span class="n">OpenLineageTestOperator</span><span class="p">(</span>
         <span class="n">task_id</span><span class="o">=</span><span class="s2">"check_events"</span><span class="p">,</span>
         <span class="n">file_path</span><span class="o">=</span><span class="n">get_expected_event_file_path</span><span class="p">(</span><span class="n">DAG_ID</span><span class="p">),</span>
+        <span class="c1"># START when the task starts and again when it resumes after waiting for the Dag run it triggered</span>
+        <span class="n">event_count_assertions</span><span class="o">=</span><span class="p">{</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">DAG_ID</span><span class="si">}</span><span class="s2">.trigger_dagrun.event.start"</span><span class="p">:</span> <span class="s2">"&gt;=2"</span><span class="p">},</span>
     <span class="p">)</span>
 
     <span class="n">trigger_dagrun</span> <span class="o">&gt;&gt;</span> <span class="n">empty_task_on_fail</span> <span class="o">&gt;&gt;</span> <span class="n">check_events</span>

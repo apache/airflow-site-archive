@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.1</span>
+        <span class="version-label">Version: </span><span class="version">7.0.2</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -476,7 +476,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.1</span>
+        <span class="version-label">Version: </span><span class="version">7.0.2</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -676,6 +676,30 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/utils/remote_job/index.html#airflow.providers.ssh.utils.remote_job.WINDOWS_DEFAULT_BASE_DIR">[docs]</a>
 <span class="n">WINDOWS_DEFAULT_BASE_DIR</span> <span class="o">=</span> <span class="s2">"$env:TEMP</span><span class="se">\\</span><span class="s2">airflow-ssh-jobs"</span></div>
 
+
+<span class="c1"># PowerShell ends a single-quoted string at any of these, not only the ASCII</span>
+<span class="c1"># apostrophe; a doubled one stands for itself.</span>
+<span class="n">_PS_SINGLE_QUOTES</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s2">"(['</span><span class="se">\u2018\u2019\u201a\u201b</span><span class="s2">])"</span><span class="p">)</span>
+<span class="n">_PS_ENV_PREFIX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\$env:([A-Za-z_][A-Za-z0-9_]*)"</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ps_quote</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Quote ``value`` as a PowerShell single-quoted string, which is never interpolated."""</span>
+    <span class="k">return</span> <span class="s2">"'"</span> <span class="o">+</span> <span class="n">_PS_SINGLE_QUOTES</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\1\1"</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"'"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ps_path</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return a PowerShell expression that evaluates to ``path``.</span>
+
+<span class="sd">    A leading ``$env:NAME``, as in the default base directory, is expanded on the remote</span>
+<span class="sd">    host. The rest of the path is literal, so a ``$``, backtick or quote in</span>
+<span class="sd">    ``remote_base_dir`` stays part of the directory name. Pass the result to</span>
+<span class="sd">    ``-LiteralPath``, since ``-Path`` would read ``[`` and ``]`` as wildcards.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">match</span> <span class="o">:=</span> <span class="n">_PS_ENV_PREFIX</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"($env:</span><span class="si">{</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">_ps_quote</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">match</span><span class="o">.</span><span class="n">end</span><span class="p">()</span><span class="w"> </span><span class="p">:])</span><span class="si">}</span><span class="s2">)"</span>
+    <span class="k">return</span> <span class="n">_ps_quote</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_validate_job_dir</span><span class="p">(</span>
@@ -940,15 +964,23 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">environment</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Build a PowerShell wrapper that runs the command detached via Start-Process.</span>
+<span class="sd">    Build a PowerShell wrapper that runs the command detached via ``Win32_Process.Create``.</span>
 
 <span class="sd">    The wrapper:</span>
 
-<span class="sd">    - Creates the job directory</span>
-<span class="sd">    - Starts the command in a new detached PowerShell process</span>
-<span class="sd">    - Redirects stdout/stderr to the log file</span>
-<span class="sd">    - Writes the exit code atomically on completion</span>
-<span class="sd">    - Writes the PID for potential cancellation</span>
+<span class="sd">    - Creates the job directory and writes the command into it as ``cmd.ps1``, next to</span>
+<span class="sd">      the job script that runs it</span>
+<span class="sd">    - Starts the job script as a separate process that outlives the SSH session, in the</span>
+<span class="sd">      SSH session's working directory</span>
+<span class="sd">    - Appends everything the command writes, on every stream, to the log file as UTF-8</span>
+<span class="sd">    - Writes the exit code on completion, including when the command calls ``exit``,</span>
+<span class="sd">      throws, or fails to parse</span>
+<span class="sd">    - Writes the PID for potential cancellation, and fails the submission if the job</span>
+<span class="sd">      directory cannot be set up or the process cannot be started</span>
+
+<span class="sd">    The command runs as a script, so the host's execution policy applies to it with</span>
+<span class="sd">    ``-ExecutionPolicy Bypass`` for the process; a Group Policy that only allows signed</span>
+<span class="sd">    scripts fails the job with the policy error in its log.</span>
 
 <span class="sd">    :param command: The command to execute (PowerShell script path or command)</span>
 <span class="sd">    :param paths: RemoteJobPaths instance with all paths</span>
@@ -959,42 +991,68 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="n">environment</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">environment</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">_validate_env_var_name</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-            <span class="n">escaped_value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-            <span class="n">env_setup</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"$env:</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2"> = '</span><span class="si">{</span><span class="n">escaped_value</span><span class="si">}</span><span class="s2">'; "</span>
+            <span class="n">env_setup</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"$env:</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">_ps_quote</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">; "</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">ps_escape</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">s</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
+    <span class="n">sep</span> <span class="o">=</span> <span class="n">paths</span><span class="o">.</span><span class="n">sep</span>
 
-    <span class="n">job_dir</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">job_dir</span><span class="p">)</span>
-    <span class="n">log_file</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">log_file</span><span class="p">)</span>
-    <span class="n">exit_code_file</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">exit_code_file</span><span class="p">)</span>
-    <span class="n">exit_code_tmp</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">exit_code_tmp_file</span><span class="p">)</span>
-    <span class="n">pid_file</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">pid_file</span><span class="p">)</span>
-    <span class="n">status_file</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">status_file</span><span class="p">)</span>
-    <span class="n">escaped_command</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
-    <span class="n">job_id</span> <span class="o">=</span> <span class="n">ps_escape</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">job_id</span><span class="p">)</span>
-
-    <span class="n">child_script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$ErrorActionPreference = 'Continue'</span>
-<span class="s2">$env:LOG_FILE = '</span><span class="si">{</span><span class="n">log_file</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">$env:STATUS_FILE = '</span><span class="si">{</span><span class="n">status_file</span><span class="si">}</span><span class="s2">'</span>
+    <span class="c1"># Use $d and $b for directories to avoid passing long paths multiple times, and write</span>
+    <span class="c1"># the scripts to disk to avoid double base64 encoding. job.ps1 travels in a verbatim</span>
+    <span class="c1"># here-string and holds nothing user-supplied but quoted environment values; the command</span>
+    <span class="c1"># goes to its own cmd.ps1, so `exit N` in it ends only that script, with $LASTEXITCODE N.</span>
+    <span class="c1"># *&gt;&amp;1 keeps Write-Host and warnings; error records are turned into their message before</span>
+    <span class="c1"># Out-String formats objects the way a console would. The log writer shares the file for</span>
+    <span class="c1"># reading and flushes every line, so the trigger can tail it while the job runs.</span>
+    <span class="c1"># Windows reports a crashed process as a negative exit code; record it unsigned, since</span>
+    <span class="c1"># the trigger only accepts digits. The writer opens $logPath, not $env:LOG_FILE, so an</span>
+    <span class="c1"># environment entry of that name cannot redirect the job's log.</span>
+    <span class="n">child_script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$ErrorActionPreference = "Continue"</span>
+<span class="s2">$logPath = "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">stdout.log"</span>
+<span class="s2">$env:LOG_FILE = $logPath</span>
+<span class="s2">$env:STATUS_FILE = "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">status"</span>
 <span class="si">{</span><span class="n">env_setup</span><span class="si">}</span>
-<span class="si">{</span><span class="n">escaped_command</span><span class="si">}</span>
-<span class="s2">$ec = $LASTEXITCODE</span>
-<span class="s2">if ($null -eq $ec) </span><span class="se">{{</span><span class="s2"> $ec = 0 </span><span class="se">}}</span>
-<span class="s2">Set-Content -NoNewline -Path '</span><span class="si">{</span><span class="n">exit_code_tmp</span><span class="si">}</span><span class="s2">' -Value $ec</span>
-<span class="s2">Move-Item -Force -Path '</span><span class="si">{</span><span class="n">exit_code_tmp</span><span class="si">}</span><span class="s2">' -Destination '</span><span class="si">{</span><span class="n">exit_code_file</span><span class="si">}</span><span class="s2">'</span>
+<span class="s2">$log = [System.IO.StreamWriter]::new([System.IO.FileStream]::new($logPath, 'Append', 'Write', 'ReadWrite'), [System.Text.UTF8Encoding]::new($false))</span>
+<span class="s2">$log.AutoFlush = $true</span>
+<span class="s2">$ec = 1</span>
+<span class="s2">try </span><span class="se">{{</span>
+<span class="s2">  &amp; "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">cmd.ps1" *&gt;&amp;1 |</span>
+<span class="s2">    ForEach-Object </span><span class="se">{{</span><span class="s2"> if ($_ -is [System.Management.Automation.ErrorRecord]) </span><span class="se">{{</span><span class="s2"> "$_" </span><span class="se">}}</span><span class="s2"> else </span><span class="se">{{</span><span class="s2"> $_ </span><span class="se">}}</span><span class="s2"> </span><span class="se">}}</span><span class="s2"> |</span>
+<span class="s2">    Out-String -Stream |</span>
+<span class="s2">    ForEach-Object </span><span class="se">{{</span><span class="s2"> $log.WriteLine($_) </span><span class="se">}}</span>
+<span class="s2">  $ec = if ($null -eq $LASTEXITCODE) </span><span class="se">{{</span><span class="s2"> 0 </span><span class="se">}}</span><span class="s2"> else </span><span class="se">{{</span><span class="s2"> $LASTEXITCODE </span><span class="se">}}</span>
+<span class="se">}}</span><span class="s2"> catch </span><span class="se">{{</span>
+<span class="s2">  $log.WriteLine("$_")</span>
+<span class="se">}}</span><span class="s2"> finally </span><span class="se">{{</span>
+<span class="s2">  $log.Close()</span>
+<span class="s2">  if ($ec -lt 0) </span><span class="se">{{</span><span class="s2"> $ec += 4294967296 </span><span class="se">}}</span>
+<span class="s2">  Set-Content -NoNewline -LiteralPath "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">exit_code.tmp" -Value $ec</span>
+<span class="s2">  Move-Item -Force -LiteralPath "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">exit_code.tmp" -Destination "$b</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">exit_code"</span>
+<span class="se">}}</span>
 <span class="s2">"""</span>
-    <span class="n">child_script_bytes</span> <span class="o">=</span> <span class="n">child_script</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-le"</span><span class="p">)</span>
-    <span class="n">encoded_script</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">child_script_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
 
-    <span class="n">wrapper</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$jobDir = '</span><span class="si">{</span><span class="n">job_dir</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">New-Item -ItemType Directory -Force -Path $jobDir | Out-Null</span>
-<span class="s2">$log = '</span><span class="si">{</span><span class="n">log_file</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">'' | Set-Content -Path $log</span>
+    <span class="c1"># Launch as Win32_Process so that it doesn't die when SSH exits. job.ps1 is read and run</span>
+    <span class="c1"># as a script block rather than with -File, so execution policy never blocks the job's</span>
+    <span class="c1"># own bookkeeping, only the user's cmd.ps1. The launch quotes the already-resolved $d, so</span>
+    <span class="c1"># the child does not re-expand $env:NAME in its own environment. Create reports failure</span>
+    <span class="c1"># in ReturnValue instead of throwing.</span>
+    <span class="n">wrapper</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$ErrorActionPreference = 'Stop'</span>
+<span class="s2">$ProgressPreference = 'SilentlyContinue'</span>
+<span class="s2">trap </span><span class="se">{{</span><span class="s2"> [Console]::Error.WriteLine("$_"); exit 1 </span><span class="se">}}</span>
+<span class="s2">$d = </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">job_dir</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">New-Item -ItemType Directory -Force -Path $d | Out-Null</span>
+<span class="s2">[System.IO.File]::WriteAllText("$d</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">cmd.ps1", </span><span class="si">{</span><span class="n">_ps_quote</span><span class="p">(</span><span class="n">command</span><span class="p">)</span><span class="si">}</span><span class="s2">, [System.Text.UTF8Encoding]::new($true))</span>
+<span class="s2">@'</span>
+<span class="si">{</span><span class="n">child_script</span><span class="si">}</span><span class="s2">'@ | Set-Content -LiteralPath "$d</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">job.ps1" -Encoding UTF8</span>
+<span class="s2">New-Item -ItemType File -Force -Path "$d</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">stdout.log" | Out-Null</span>
 
-<span class="s2">$p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '</span><span class="si">{</span><span class="n">encoded_script</span><span class="si">}</span><span class="s2">') -RedirectStandardOutput $log -RedirectStandardError $log -PassThru -WindowStyle Hidden</span>
-<span class="s2">Set-Content -NoNewline -Path '</span><span class="si">{</span><span class="n">pid_file</span><span class="si">}</span><span class="s2">' -Value $p.Id</span>
-<span class="s2">Write-Output '</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">'</span>
+<span class="s2">$q = "'" + ($d -replace "</span><span class="si">{</span><span class="n">_PS_SINGLE_QUOTES</span><span class="o">.</span><span class="n">pattern</span><span class="si">}</span><span class="s2">", '$1$1') + "'"</span>
+<span class="s2">$launch = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$b = ' + $q + '; . ([scriptblock]::Create([IO.File]::ReadAllText($b + ''</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">job.ps1'')))"'</span>
+<span class="s2">$p = ([wmiclass]'Win32_Process').Create($launch, $PWD.ProviderPath, $null)</span>
+<span class="s2">if ($p.ReturnValue -ne 0) </span><span class="se">{{</span>
+<span class="s2">  [Console]::Error.WriteLine("Win32_Process.Create failed with return value $($p.ReturnValue)")</span>
+<span class="s2">  exit 1</span>
+<span class="se">}}</span>
+<span class="s2">Set-Content -NoNewline -LiteralPath "$d</span><span class="si">{</span><span class="n">sep</span><span class="si">}</span><span class="s2">pid" -Value $p.ProcessId</span>
+<span class="s2">Write-Output </span><span class="si">{</span><span class="n">_ps_quote</span><span class="p">(</span><span class="n">paths</span><span class="o">.</span><span class="n">job_id</span><span class="p">)</span><span class="si">}</span>
 <span class="s2">"""</span>
     <span class="n">wrapper_bytes</span> <span class="o">=</span> <span class="n">wrapper</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-le"</span><span class="p">)</span>
     <span class="n">encoded_wrapper</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">wrapper_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
@@ -1026,14 +1084,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Build a PowerShell command to read log bytes from offset.</span>
 
+<span class="sd">    The chunk is written to stdout as UTF-8 bytes. Printing it as a PowerShell string would</span>
+<span class="sd">    re-encode it in the SSH session's console code page, which the trigger's strict UTF-8</span>
+<span class="sd">    decoding rejects for any non-ASCII character.</span>
+
 <span class="sd">    :param log_file: Path to the log file</span>
 <span class="sd">    :param offset: Byte offset to start reading from</span>
 <span class="sd">    :param max_bytes: Maximum bytes to read</span>
 <span class="sd">    :return: PowerShell command that outputs the log chunk</span>
 <span class="sd">    """</span>
-    <span class="n">escaped_path</span> <span class="o">=</span> <span class="n">log_file</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = '</span><span class="si">{</span><span class="n">escaped_path</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">if (Test-Path $path) </span><span class="se">{{</span>
+    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">log_file</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">if (Test-Path -LiteralPath $path) </span><span class="se">{{</span>
 <span class="s2">  try </span><span class="se">{{</span>
 <span class="s2">    $fs = [System.IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')</span>
 <span class="s2">    $fs.Seek(</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, [System.IO.SeekOrigin]::Begin) | Out-Null</span>
@@ -1041,7 +1102,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="s2">    $n = $fs.Read($buf, 0, $buf.Length)</span>
 <span class="s2">    $fs.Close()</span>
 <span class="s2">    if ($n -gt 0) </span><span class="se">{{</span>
-<span class="s2">      [System.Text.Encoding]::UTF8.GetString($buf, 0, $n)</span>
+<span class="s2">      $bytes = [System.Text.Encoding]::UTF8.GetBytes([System.Text.Encoding]::UTF8.GetString($buf, 0, $n))</span>
+<span class="s2">      $out = [Console]::OpenStandardOutput()</span>
+<span class="s2">      $out.Write($bytes, 0, $bytes.Length)</span>
+<span class="s2">      $out.Flush()</span>
 <span class="s2">    </span><span class="se">}}</span>
 <span class="s2">  </span><span class="se">}}</span><span class="s2"> catch </span><span class="se">{{}}</span>
 <span class="se">}}</span><span class="s2">"""</span>
@@ -1074,10 +1138,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param file_path: Path to the file</span>
 <span class="sd">    :return: PowerShell command that outputs the file size</span>
 <span class="sd">    """</span>
-    <span class="n">escaped_path</span> <span class="o">=</span> <span class="n">file_path</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = '</span><span class="si">{</span><span class="n">escaped_path</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">if (Test-Path $path) </span><span class="se">{{</span>
-<span class="s2">  (Get-Item $path).Length</span>
+    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">if (Test-Path -LiteralPath $path) </span><span class="se">{{</span>
+<span class="s2">  (Get-Item -LiteralPath $path).Length</span>
 <span class="se">}}</span><span class="s2"> else </span><span class="se">{{</span>
 <span class="s2">  0</span>
 <span class="se">}}</span><span class="s2">"""</span>
@@ -1110,10 +1173,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param exit_code_file: Path to the exit code file</span>
 <span class="sd">    :return: PowerShell command that outputs exit code if done, empty otherwise</span>
 <span class="sd">    """</span>
-    <span class="n">escaped_path</span> <span class="o">=</span> <span class="n">exit_code_file</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = '</span><span class="si">{</span><span class="n">escaped_path</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">if (Test-Path $path) </span><span class="se">{{</span>
-<span class="s2">  $txt = Get-Content -Raw -Path $path</span>
+    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">exit_code_file</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">if (Test-Path -LiteralPath $path) </span><span class="se">{{</span>
+<span class="s2">  $txt = Get-Content -Raw -LiteralPath $path</span>
 <span class="s2">  if ($txt -match '^[0-9]+$') </span><span class="se">{{</span><span class="s2"> $txt.Trim() </span><span class="se">}}</span>
 <span class="se">}}</span><span class="s2">"""</span>
     <span class="n">script_bytes</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-le"</span><span class="p">)</span>
@@ -1169,10 +1231,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param pid_file: Path to the PID file</span>
 <span class="sd">    :return: PowerShell command to kill the process</span>
 <span class="sd">    """</span>
-    <span class="n">escaped_path</span> <span class="o">=</span> <span class="n">pid_file</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = '</span><span class="si">{</span><span class="n">escaped_path</span><span class="si">}</span><span class="s2">'</span>
-<span class="s2">if (Test-Path $path) </span><span class="se">{{</span>
-<span class="s2">  $procId = Get-Content $path</span>
+    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"""$path = </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">pid_file</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">if (Test-Path -LiteralPath $path) </span><span class="se">{{</span>
+<span class="s2">  $procId = Get-Content -LiteralPath $path</span>
 <span class="s2">  &amp; taskkill.exe /PID $procId /T /F 2&gt;$null</span>
 <span class="se">}}</span><span class="s2">"""</span>
     <span class="n">script_bytes</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-le"</span><span class="p">)</span>
@@ -1211,8 +1272,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :raises ValueError: If job_dir is not under the expected base directory</span>
 <span class="sd">    """</span>
     <span class="n">_validate_job_dir</span><span class="p">(</span><span class="n">job_dir</span><span class="p">,</span> <span class="s2">"windows"</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">)</span>
-    <span class="n">escaped_path</span> <span class="o">=</span> <span class="n">job_dir</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span>
-    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Remove-Item -Recurse -Force -Path '</span><span class="si">{</span><span class="n">escaped_path</span><span class="si">}</span><span class="s2">' -ErrorAction SilentlyContinue"</span>
+    <span class="n">script</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Remove-Item -Recurse -Force -LiteralPath </span><span class="si">{</span><span class="n">_ps_path</span><span class="p">(</span><span class="n">job_dir</span><span class="p">)</span><span class="si">}</span><span class="s2"> -ErrorAction SilentlyContinue"</span>
     <span class="n">script_bytes</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-le"</span><span class="p">)</span>
     <span class="n">encoded_script</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">script_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)</span>
     <span class="k">return</span> <span class="sa">f</span><span class="s2">"powershell.exe -NoProfile -NonInteractive -EncodedCommand </span><span class="si">{</span><span class="n">encoded_script</span><span class="si">}</span><span class="s2">"</span></div>
@@ -1499,7 +1559,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=4b9d3a76"></script>
+        <script src="../../../../../_static/documentation_options.js?v=7c65b01c"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

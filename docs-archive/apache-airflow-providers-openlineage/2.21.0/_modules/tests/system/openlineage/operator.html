@@ -690,7 +690,9 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">dateutil.parser</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">jinja2</span><span class="w"> </span><span class="kn">import</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">TemplateError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">packaging.version</span><span class="w"> </span><span class="kn">import</span> <span class="n">Version</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow</span><span class="w"> </span><span class="kn">import</span> <span class="n">__version__</span> <span class="k">as</span> <span class="n">airflow_version</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseOperator</span><span class="p">,</span> <span class="n">Variable</span>
 
 <span class="k">try</span><span class="p">:</span>
@@ -699,6 +701,13 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="NoVariableError">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.NoVariableError">[docs]</a>
     <span class="n">NoVariableError</span> <span class="o">=</span> <span class="ne">KeyError</span>  <span class="c1"># type: ignore[misc, assignment]  # AF2</span></div>
+
+
+<span class="c1"># Not imported from the system tests' expected_events: operator.py imports nothing else of the system tests, so it can</span>
+<span class="c1"># be copied as is next to Dags whose `system.` imports are rewritten</span>
+<div class="viewcode-block" id="AIRFLOW_VERSION">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.AIRFLOW_VERSION">[docs]</a>
+<span class="n">AIRFLOW_VERSION</span> <span class="o">=</span> <span class="n">Version</span><span class="p">(</span><span class="n">airflow_version</span><span class="p">)</span></div>
 
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -727,6 +736,23 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="p">(</span><span class="n">key</span> <span class="o">:=</span> <span class="n">_validated_key</span><span class="o">.</span><span class="n">get</span><span class="p">())</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span>
     <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">VALIDATION_ERROR_TAG</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="check_values">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.check_values">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_values</span><span class="p">(</span><span class="n">checks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Check values a task computes itself, given as ``{name: (actual, expected)}``, e.g. what a macro returns.</span>
+
+<span class="sd">    Every mismatch is logged as a validation error before failing the task.</span>
+<span class="sd">    """</span>
+    <span class="n">mismatches</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">actual</span><span class="p">,</span> <span class="n">expected</span><span class="p">)</span> <span class="ow">in</span> <span class="n">checks</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">actual</span> <span class="o">!=</span> <span class="n">expected</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">mismatches</span><span class="p">:</span>
+        <span class="n">actual</span><span class="p">,</span> <span class="n">expected</span> <span class="o">=</span> <span class="n">checks</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"`</span><span class="si">%s</span><span class="s2">`: expected `</span><span class="si">%r</span><span class="s2">` but got `</span><span class="si">%r</span><span class="s2">`"</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">actual</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">mismatches</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unexpected values of </span><span class="si">{</span><span class="n">mismatches</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
 
@@ -1041,7 +1067,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="check_run_id_integrity">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.check_run_id_integrity">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_run_id_integrity</span><span class="p">(</span>
-    <span class="n">events_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]],</span> <span class="n">repeated_start_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="n">events_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]],</span>
+    <span class="n">repeated_start_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">corrected_terminal_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">unstarted_terminal_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Check that ``run.runId`` identifies exactly one attempt of exactly one job, and return the problems found.</span>
@@ -1059,7 +1088,11 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">         ``repeated_start_keys`` (deferral re-emits START on every resume), and exactly one COMPLETE or FAIL;</span>
 <span class="sd">       * Dag run: one START and at most one COMPLETE or FAIL. The Dag run that contains the checking task is</span>
 <span class="sd">         still running when the check happens, so its COMPLETE/FAIL is missing, while Dag runs triggered by it</span>
-<span class="sd">         can already have finished.</span>
+<span class="sd">         can already have finished;</span>
+<span class="sd">       * one more COMPLETE or FAIL is allowed when one of them has its key in ``corrected_terminal_keys``: a user</span>
+<span class="sd">         marking a finished task or Dag run with another state emits a second one for the same run;</span>
+<span class="sd">       * no START is needed when the key of its COMPLETE or FAIL is in ``unstarted_terminal_keys``: a task that</span>
+<span class="sd">         fails before it runs, e.g. on rendering its templates, or that a user marks before it started.</span>
 
 <span class="sd">    Across groups:</span>
 
@@ -1105,12 +1138,15 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
             <span class="k">continue</span>
         <span class="n">event_types</span> <span class="o">=</span> <span class="p">[</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"eventType"</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span><span class="p">]</span>
         <span class="n">start_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span> <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"eventType"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"START"</span><span class="p">}</span>
+        <span class="n">terminal_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">members</span> <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"eventType"</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"COMPLETE"</span><span class="p">,</span> <span class="s2">"FAIL"</span><span class="p">)}</span>
         <span class="n">terminals</span> <span class="o">=</span> <span class="p">[</span><span class="n">event_type</span> <span class="k">for</span> <span class="n">event_type</span> <span class="ow">in</span> <span class="n">event_types</span> <span class="k">if</span> <span class="n">event_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"COMPLETE"</span><span class="p">,</span> <span class="s2">"FAIL"</span><span class="p">)]</span>
         <span class="n">starts</span> <span class="o">=</span> <span class="n">event_types</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">"START"</span><span class="p">)</span>
         <span class="n">repeated_starts_allowed</span> <span class="o">=</span> <span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">start_keys</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">repeated_start_keys</span><span class="p">))</span>
         <span class="n">too_many_starts</span> <span class="o">=</span> <span class="n">starts</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">repeated_starts_allowed</span>
-        <span class="n">too_many_terminals</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">terminals</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="p">(</span><span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">terminals</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">starts</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">too_many_starts</span> <span class="ow">or</span> <span class="n">too_many_terminals</span><span class="p">:</span>
+        <span class="n">max_terminals</span> <span class="o">=</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">terminal_keys</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">corrected_terminal_keys</span><span class="p">)</span> <span class="k">else</span> <span class="mi">1</span>
+        <span class="n">too_many_terminals</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">terminals</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_terminals</span> <span class="ow">or</span> <span class="p">(</span><span class="n">job_type</span> <span class="o">!=</span> <span class="s2">"DAG"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">terminals</span><span class="p">)</span>
+        <span class="n">missing_start</span> <span class="o">=</span> <span class="n">starts</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">terminal_keys</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">unstarted_terminal_keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">missing_start</span> <span class="ow">or</span> <span class="n">too_many_starts</span> <span class="ow">or</span> <span class="n">too_many_terminals</span><span class="p">:</span>
             <span class="n">expected</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="s2">"one START (several only if the Dag expects repeated STARTs, see event_count_assertions) "</span>
                 <span class="s2">"and one COMPLETE/FAIL"</span>
@@ -1159,13 +1195,19 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="sort_by_execution">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.sort_by_execution">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">sort_by_execution</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">"""Order the events of a task's executions by loop iteration, map index and try, as ``event_sort_fn``."""</span>
-    <span class="c1"># Dag run events have no airflow facet</span>
-    <span class="n">task_instance</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"run"</span><span class="p">][</span><span class="s2">"facets"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"taskInstance"</span><span class="p">,</span> <span class="p">{})</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">sort_by_execution</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Order the events of executions by Dag run clear, loop run and iteration, map index and try, as ``event_sort_fn``."""</span>
+    <span class="n">facets</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"run"</span><span class="p">][</span><span class="s2">"facets"</span><span class="p">]</span>
+    <span class="c1"># Dag run events carry their Dag run in airflowDagRun and have no task instance</span>
+    <span class="n">dag_run</span> <span class="o">=</span> <span class="p">(</span><span class="n">facets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">facets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflowDagRun"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dagRun"</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">task_instance</span> <span class="o">=</span> <span class="n">facets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"airflow"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"taskInstance"</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">loop</span> <span class="o">=</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">map_index</span> <span class="o">=</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">(</span>
-        <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"loop"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"index"</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
-        <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span> <span class="k">if</span> <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"map_index"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">dag_run</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"clear_number"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="n">loop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"trajectory"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="n">loop</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"index"</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">map_index</span> <span class="k">if</span> <span class="n">map_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
         <span class="n">task_instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"try_number"</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
     <span class="p">)</span></div>
 
@@ -1197,7 +1239,9 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">        included in the error if events are unexpectedly found.</span>
 <span class="sd">    :param file_path: alternatively, a path to a JSON file containing an array of event templates.</span>
 <span class="sd">        Multiple events sharing the same ``job.name`` + ``eventType`` key are accumulated into a list.</span>
-<span class="sd">        An event with ``"$absent": "&lt;reason&gt;"`` asserts the variable must not exist.</span>
+<span class="sd">        An event with ``"$absent": "&lt;reason&gt;"`` asserts the variable must not exist. An event with</span>
+<span class="sd">        ``"$since": "&lt;version&gt;"`` is checked only from that Airflow version on, e.g. when older versions don't</span>
+<span class="sd">        emit it.</span>
 <span class="sd">    :param env: jinja environment used to render event templates.</span>
 <span class="sd">    :param event_count_assertions: dict mapping a regex pattern (matched against variable keys) to a</span>
 <span class="sd">        count expression. Supported expressions: ``"N"``, ``"==N"``, ``"&gt;=N"``, ``"&lt;=N"``.</span>
@@ -1211,6 +1255,12 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">        ascending before comparison. Useful for mapped tasks whose events arrive in non-deterministic</span>
 <span class="sd">        order. When the template for a key is a list, sorting is required for pairwise comparison to</span>
 <span class="sd">        be meaningful.</span>
+<span class="sd">    :param corrected_terminal_keys: keys of COMPLETE/FAIL events emitted when a user marks a finished task or</span>
+<span class="sd">        Dag run with another state. The run they belong to may then have one COMPLETE/FAIL more in the</span>
+<span class="sd">        ``check_run_id_integrity`` check: the one of its original outcome, and the one of the correction.</span>
+<span class="sd">    :param unstarted_terminal_keys: keys of COMPLETE/FAIL events of runs that have no START, as the task never ran:</span>
+<span class="sd">        it failed before it started or a user marked it before it started. The ``check_run_id_integrity`` check</span>
+<span class="sd">        then doesn't require a START for their runs.</span>
 <span class="sd">    :param check_run_ids: if True (default), additionally check the collected events with</span>
 <span class="sd">        ``check_run_id_integrity``: START and COMPLETE/FAIL of one attempt share a ``runId``, while another</span>
 <span class="sd">        try, map index or loop iteration gets its own. Set to False only for a Dag whose expected events</span>
@@ -1243,6 +1293,8 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="n">fail_fast</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">event_sort_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">check_run_ids</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">corrected_terminal_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+        <span class="n">unstarted_terminal_keys</span><span class="p">:</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="c1"># Never from the Dag's default_args: a retry would hide the mismatch the first try failed on, as that try</span>
@@ -1277,6 +1329,14 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.check_run_ids">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">check_run_ids</span> <span class="o">=</span> <span class="n">check_run_ids</span></div>
 
+<div class="viewcode-block" id="OpenLineageTestOperator.corrected_terminal_keys">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.corrected_terminal_keys">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corrected_terminal_keys</span> <span class="o">=</span> <span class="n">corrected_terminal_keys</span></div>
+
+<div class="viewcode-block" id="OpenLineageTestOperator.unstarted_terminal_keys">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.unstarted_terminal_keys">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unstarted_terminal_keys</span> <span class="o">=</span> <span class="n">unstarted_terminal_keys</span></div>
+
 <div class="viewcode-block" id="OpenLineageTestOperator.event_sort_fn">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.event_sort_fn">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">event_sort_fn</span> <span class="o">=</span> <span class="n">event_sort_fn</span></div>
@@ -1289,7 +1349,8 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="OpenLineageTestOperator.execute">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/operator/index.html#tests.system.openlineage.operator.OpenLineageTestOperator.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>  <span class="c1"># Wait for all variables to update properly</span>
+        <span class="c1"># Events emitted around the end of the upstream tasks may still be on their way to the Variables</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"SYSTEM_TESTS_OL_CHECK_EVENTS_DELAY_SECONDS"</span><span class="p">,</span> <span class="s2">"10"</span><span class="p">)))</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Reading OpenLineage event templates from file `</span><span class="si">%s</span><span class="s2">`"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">)</span>
@@ -1297,6 +1358,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
                 <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                     <span class="n">events</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+                    <span class="c1"># "$since" only drops events older versions do not emit, keeping one file. Events that differ</span>
+                    <span class="c1"># between versions need a version-suffixed file (see get_expected_event_file_path).</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="n">since</span> <span class="o">:=</span> <span class="n">event</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"$since"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">and</span> <span class="n">Version</span><span class="p">(</span><span class="n">since</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">AIRFLOW_VERSION</span><span class="p">:</span>
+                        <span class="k">continue</span>
                     <span class="n">key</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s2">"job"</span><span class="p">][</span><span class="s2">"name"</span><span class="p">]</span> <span class="o">+</span> <span class="s2">".event."</span> <span class="o">+</span> <span class="n">event</span><span class="p">[</span><span class="s2">"eventType"</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"$absent"</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">event_templates</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"$absent"</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">"$absent"</span><span class="p">]}</span>
@@ -1336,6 +1401,8 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
                 <span class="k">if</span> <span class="n">problems</span> <span class="o">:=</span> <span class="n">check_run_id_integrity</span><span class="p">(</span>
                     <span class="n">events_by_key</span><span class="p">,</span>
                     <span class="n">repeated_start_keys</span><span class="o">=</span><span class="p">{</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">events_by_key</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expects_repeated_events</span><span class="p">(</span><span class="n">key</span><span class="p">)},</span>
+                    <span class="n">corrected_terminal_keys</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">corrected_terminal_keys</span><span class="p">,</span>
+                    <span class="n">unstarted_terminal_keys</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">unstarted_terminal_keys</span><span class="p">,</span>
                 <span class="p">):</span>
                     <span class="k">for</span> <span class="n">problem</span> <span class="ow">in</span> <span class="n">problems</span><span class="p">:</span>
                         <span class="n">log_validation_error</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">problem</span><span class="p">)</span>

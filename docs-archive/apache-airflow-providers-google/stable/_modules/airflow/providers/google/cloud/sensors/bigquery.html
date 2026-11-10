@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.8.0</span>
+        <span class="version-label">Version: </span><span class="version">22.9.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -488,7 +488,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.8.0</span>
+        <span class="version-label">Version: </span><span class="version">22.9.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -693,15 +693,18 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud.bigquery</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetReference</span><span class="p">,</span> <span class="n">TableReference</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseSensorOperator</span><span class="p">,</span> <span class="n">conf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseSensorOperator</span><span class="p">,</span> <span class="n">conf</span><span class="p">,</span> <span class="n">timezone</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.hooks.bigquery</span><span class="w"> </span><span class="kn">import</span> <span class="n">BigQueryHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.cloud.triggers.bigquery</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">BigQueryStreamingBufferEmptyTrigger</span><span class="p">,</span>
     <span class="n">BigQueryTableExistenceTrigger</span><span class="p">,</span>
     <span class="n">BigQueryTablePartitionExistenceTrigger</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.google.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
@@ -1108,12 +1111,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    streaming buffer`` errors.</span>
 
 <span class="sd">    .. warning::</span>
-<span class="sd">        The sensor reads ``table.streaming_buffer`` from BigQuery's table</span>
-<span class="sd">        metadata, which is eventually consistent. For a short window right</span>
-<span class="sd">        after a streaming insert the buffer metadata is still absent, so the</span>
-<span class="sd">        sensor may report the buffer empty before it actually is. Known</span>
-<span class="sd">        limitation tracked at</span>
-<span class="sd">        https://github.com/apache/airflow/issues/66963</span>
+<span class="sd">        BigQuery's ``table.streaming_buffer`` metadata is eventually consistent.</span>
+<span class="sd">        The sensor mitigates this by requiring multiple consecutive empty</span>
+<span class="sd">        observations before reporting the buffer empty (configurable via</span>
+<span class="sd">        ``empty_confirmations``), but this may delay success by up to one</span>
+<span class="sd">        ``poke_interval`` compared to earlier releases. ``mode="reschedule"`` with</span>
+<span class="sd">        ``empty_confirmations &gt; 1`` needs a running triggerer once an empty reading is seen;</span>
+<span class="sd">        ``empty_confirmations=1`` keeps the worker-only behaviour.</span>
 
 <span class="sd">    :param project_id: Google Cloud project containing the table.</span>
 <span class="sd">    :param dataset_id: Dataset of the table to monitor.</span>
@@ -1121,6 +1125,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param gcp_conn_id: Airflow connection ID for GCP.</span>
 <span class="sd">    :param impersonation_chain: Optional service account to impersonate, or a</span>
 <span class="sd">        chained list of accounts. See the Google provider docs for details.</span>
+<span class="sd">    :param empty_confirmations: Number of consecutive empty readings required</span>
+<span class="sd">        before considering the streaming buffer empty. Must be at least 1.</span>
+<span class="sd">        Defaults to 2.</span>
 <span class="sd">    :param deferrable: Run in deferrable mode using</span>
 <span class="sd">        :class:`BigQueryStreamingBufferEmptyTrigger`.</span>
 <span class="sd">    """</span>
@@ -1149,6 +1156,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">table_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">gcp_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"google_cloud_default"</span><span class="p">,</span>
         <span class="n">impersonation_chain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">empty_confirmations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1156,6 +1164,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">kwargs</span><span class="p">[</span><span class="s2">"poke_interval"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">30</span>
 
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">empty_confirmations</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"empty_confirmations must be at least 1"</span><span class="p">)</span>
 
 <div class="viewcode-block" id="BigQueryStreamingBufferEmptySensor.project_id">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.project_id">[docs]</a>
@@ -1177,10 +1188,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.impersonation_chain">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">impersonation_chain</span> <span class="o">=</span> <span class="n">impersonation_chain</span></div>
 
+<div class="viewcode-block" id="BigQueryStreamingBufferEmptySensor.empty_confirmations">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.empty_confirmations">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">empty_confirmations</span> <span class="o">=</span> <span class="n">empty_confirmations</span></div>
+
 <div class="viewcode-block" id="BigQueryStreamingBufferEmptySensor.deferrable">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.deferrable">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_consecutive_empty</span> <span class="o">=</span> <span class="mi">0</span>
 
 <div class="viewcode-block" id="BigQueryStreamingBufferEmptySensor.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.execute">[docs]</a>
@@ -1190,8 +1206,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">poke</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">):</span>
             <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_defer_to_trigger</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_defer_to_trigger</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
-            <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">),</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="n">timeout</span><span class="p">),</span>
             <span class="n">trigger</span><span class="o">=</span><span class="n">BigQueryStreamingBufferEmptyTrigger</span><span class="p">(</span>
                 <span class="n">project_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span>
                 <span class="n">dataset_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset_id</span><span class="p">,</span>
@@ -1199,10 +1219,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">poll_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">poke_interval</span><span class="p">,</span>
                 <span class="n">gcp_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">gcp_conn_id</span><span class="p">,</span>
                 <span class="n">impersonation_chain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">impersonation_chain</span><span class="p">,</span>
+                <span class="n">empty_confirmations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">empty_confirmations</span><span class="p">,</span>
             <span class="p">),</span>
             <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
-        <span class="p">)</span></div>
-
+        <span class="p">)</span>
 
 <div class="viewcode-block" id="BigQueryStreamingBufferEmptySensor.execute_complete">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/google/cloud/sensors/bigquery/index.html#airflow.providers.google.cloud.sensors.bigquery.BigQueryStreamingBufferEmptySensor.execute_complete">[docs]</a>
@@ -1233,8 +1253,46 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">table</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_client</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">)</span><span class="o">.</span><span class="n">get_table</span><span class="p">(</span><span class="n">table_ref</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">NotFound</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Table </span><span class="si">{</span><span class="n">table_uri</span><span class="si">}</span><span class="s2"> not found"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">err</span>
-        <span class="k">return</span> <span class="n">table</span><span class="o">.</span><span class="n">streaming_buffer</span> <span class="ow">is</span> <span class="kc">None</span></div>
-</div>
+
+        <span class="k">if</span> <span class="n">table</span><span class="o">.</span><span class="n">streaming_buffer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_consecutive_empty</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_consecutive_empty</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"Streaming buffer reported empty (</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> confirmations) for table: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_consecutive_empty</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">empty_confirmations</span><span class="p">,</span>
+            <span class="n">table_uri</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_consecutive_empty</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">empty_confirmations</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">reschedule</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+            <span class="c1"># A reschedule rebuilds the operator and Airflow 3 clears XComs on each run start, so the</span>
+            <span class="c1"># confirmation count cannot survive it; the trigger repeats the full confirmation count instead.</span>
+            <span class="n">first_reschedule_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_first_reschedule_date</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+            <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">first_reschedule_date</span><span class="p">)</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="k">if</span> <span class="n">first_reschedule_date</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">-</span> <span class="n">elapsed</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_defer_to_trigger</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">-</span> <span class="n">elapsed</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_first_reschedule_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">get_first_reschedule_date</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="c1"># Same lookup as the Airflow 2.11 BaseSensorOperator.execute; `_orig_start_date` only exists in Airflow 2.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sensors.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_orig_start_date</span>  <span class="c1"># type: ignore[attr-defined]</span>
+
+        <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">_orig_start_date</span><span class="p">(</span>
+            <span class="n">dag_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span>
+            <span class="n">task_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span>
+            <span class="n">run_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span>
+            <span class="n">map_index</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span><span class="p">,</span>
+            <span class="n">try_number</span><span class="o">=</span><span class="p">(</span><span class="n">ti</span><span class="o">.</span><span class="n">max_tries</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retries</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 </pre></div>
 
@@ -1495,7 +1553,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=5036158c"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=21e35fd5"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -4,6 +4,14 @@ airflow.providers.common.sql.sensors.sql
 .. py:module:: airflow.providers.common.sql.sensors.sql
 
 
+Exceptions
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.sql.sensors.sql.SqlSensorTriggerError
+
+
 Classes
 -------
 
@@ -15,7 +23,15 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: SqlSensor(*, conn_id, sql, parameters = None, success = None, failure = None, selector = itemgetter(0), fail_on_empty = False, hook_params = None, **kwargs)
+.. py:exception:: SqlSensorTriggerError
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.AirflowException`
+
+
+   Raised when the deferred ``SqlSensor`` trigger reports a failure.
+
+
+.. py:class:: SqlSensor(*, conn_id, sql, parameters = None, success = None, failure = None, selector = _first_cell, fail_on_empty = False, hook_params = None, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseSensorOperator`
 
@@ -46,6 +62,12 @@ Module Contents
    :param fail_on_empty: Explicitly fail on no rows returned.
    :param hook_params: Extra config params to be passed to the underlying hook.
            Should match the desired hook constructor params.
+   :param deferrable: Wait in the triggerer instead of on a worker. The triggerer only
+       checks the default condition (the first cell is truthy), so the sensor logs a
+       warning and runs in its usual ``mode`` instead when ``success``, ``failure``,
+       ``selector``, ``silent_fail``, ``never_fail`` or ``exponential_backoff`` is set,
+       when a subclass overrides ``poke`` or ``_get_hook``, on Airflow 3 before 3.2.2, or
+       on Airflow 2 when ``parameters`` holds values JSON cannot keep, such as dates.
 
 
    .. py:attribute:: template_fields
@@ -99,9 +121,26 @@ Module Contents
 
 
 
+   .. py:attribute:: deferrable
+
+
    .. py:method:: poke(context)
 
       Override when deriving this class.
 
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: execute_complete(context, event)
 
 

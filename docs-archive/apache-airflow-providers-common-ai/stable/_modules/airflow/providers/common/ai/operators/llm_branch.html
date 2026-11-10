@@ -809,11 +809,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param fail_on_reject: If ``True``, a rejected review fails the task</span>
 <span class="sd">        instead of skipping the downstream tasks. Generally discouraged,</span>
 <span class="sd">        as for :class:`~airflow.providers.standard.operators.hitl.ApprovalOperator`.</span>
-<span class="sd">        Only takes effect when a review is opened. Default ``False``.</span>
-<span class="sd">    :param ignore_downstream_trigger_rules: If ``True``, a rejected review skips</span>
-<span class="sd">        every downstream task rather than only the direct ones, so a task whose</span>
-<span class="sd">        trigger rule would still run it is skipped too. Only takes effect when a</span>
-<span class="sd">        review is opened. Default ``False``.</span>
+<span class="sd">        Only takes effect when a review is opened. Default ``False``, unlike</span>
+<span class="sd">        :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`.</span>
 <span class="sd">    :param model_settings: Pydantic AI ``ModelSettings`` for the model call, such as</span>
 <span class="sd">        ``temperature`` or ``max_tokens``. See :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`.</span>
 <span class="sd">    :param output_retries: How many times the model is asked again when its output</span>
@@ -825,7 +822,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    Human-in-the-Loop approval parameters are inherited from</span>
 <span class="sd">    :class:`~airflow.providers.common.ai.operators.llm.LLMOperator`</span>
 <span class="sd">    (``require_approval``, ``approval_timeout``, ``on_approval_timeout``,</span>
-<span class="sd">    ``allow_modifications``, ``approval_notifiers``, ``approval_assigned_users``).</span>
+<span class="sd">    ``allow_modifications``, ``approval_notifiers``, ``approval_assigned_users``,</span>
+<span class="sd">    ``ignore_downstream_trigger_rules``).</span>
 <span class="sd">    The task pauses after the LLM chooses the branch(es) and only skips the</span>
 <span class="sd">    unselected downstream tasks once a reviewer approves. Rejecting the</span>
 <span class="sd">    review skips the direct downstream tasks except teardowns, matching</span>
@@ -856,7 +854,6 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">branches</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">BranchOption</span> <span class="o">|</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">allow_multiple_branches</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">fail_on_reject</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-        <span class="n">ignore_downstream_trigger_rules</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="s2">"output_type"</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
@@ -864,7 +861,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="s2">"LLMBranchOperator does not accept 'output_type'; it builds the output type "</span>
                 <span class="s2">"itself from the downstream task IDs."</span>
             <span class="p">)</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">fail_on_reject</span><span class="o">=</span><span class="n">fail_on_reject</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 <div class="viewcode-block" id="LLMBranchOperator.branches">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm_branch/index.html#airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator.branches">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">branches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_normalize_branches</span><span class="p">(</span><span class="n">branches</span><span class="p">)</span></div>
@@ -872,14 +869,6 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="LLMBranchOperator.allow_multiple_branches">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm_branch/index.html#airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator.allow_multiple_branches">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">allow_multiple_branches</span> <span class="o">=</span> <span class="n">allow_multiple_branches</span></div>
-
-<div class="viewcode-block" id="LLMBranchOperator.fail_on_reject">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm_branch/index.html#airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator.fail_on_reject">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_reject</span> <span class="o">=</span> <span class="n">fail_on_reject</span></div>
-
-<div class="viewcode-block" id="LLMBranchOperator.ignore_downstream_trigger_rules">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/operators/llm_branch/index.html#airflow.providers.common.ai.operators.llm_branch.LLMBranchOperator.ignore_downstream_trigger_rules">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ignore_downstream_trigger_rules</span> <span class="o">=</span> <span class="n">ignore_downstream_trigger_rules</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_normalize_branches</span><span class="p">(</span>
@@ -1031,20 +1020,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="c1"># the branches that ran, and there is no Pydantic output to rehydrate. The helper still</span>
             <span class="c1"># finalizes a rejection or timeout before the exception leaves.</span>
             <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resume_after_review</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">generated_output</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">decision</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">HITLRejectException</span><span class="p">:</span>
+        <span class="k">except</span> <span class="n">HITLRejectException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fail_on_reject</span><span class="p">:</span>
                 <span class="k">raise</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Rejected by </span><span class="si">%s</span><span class="s2">. Skipping downstream tasks..."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_responder</span><span class="p">(</span><span class="n">event</span><span class="p">))</span>
-            <span class="c1"># The record was finalized before the exception; skip() hands the skip to the supervisor</span>
-            <span class="c1"># by raising, so nothing after it runs.</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_clear_usage_budget</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
-            <span class="n">task</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task"</span><span class="p">]</span>
-            <span class="n">tasks</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="n">task</span><span class="o">.</span><span class="n">get_flat_relatives</span><span class="p">(</span><span class="n">upstream</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ignore_downstream_trigger_rules</span>
-                <span class="k">else</span> <span class="n">task</span><span class="o">.</span><span class="n">get_direct_relatives</span><span class="p">(</span><span class="n">upstream</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-            <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="n">ti</span><span class="o">=</span><span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">],</span> <span class="n">tasks</span><span class="o">=</span><span class="p">(</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">t</span><span class="o">.</span><span class="n">is_teardown</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_skip_downstream_on_reject</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">branches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_reviewed_branches</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
         <span class="n">selected</span> <span class="o">=</span> <span class="p">{</span><span class="n">branches</span><span class="p">}</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">branches</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">set</span><span class="p">(</span><span class="n">branches</span><span class="p">)</span>

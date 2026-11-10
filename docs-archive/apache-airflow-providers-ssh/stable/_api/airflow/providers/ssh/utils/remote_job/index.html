@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
             <link rel="next" title="airflow.providers.ssh.version_compat" href="../../version_compat/index.html" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.1</span>
+        <span class="version-label">Version: </span><span class="version">7.0.2</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -479,7 +479,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.1</span>
+        <span class="version-label">Version: </span><span class="version">7.0.2</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -678,7 +678,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <td><p>Build a POSIX shell wrapper that runs the command detached.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.ssh.utils.remote_job.build_windows_wrapper_command" title="airflow.providers.ssh.utils.remote_job.build_windows_wrapper_command"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_windows_wrapper_command</span></code></a>(command, paths[, ...])</p></td>
-<td><p>Build a PowerShell wrapper that runs the command detached via Start-Process.</p></td>
+<td><p>Build a PowerShell wrapper that runs the command detached via <code class="docutils literal notranslate"><span class="pre">Win32_Process.Create</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.ssh.utils.remote_job.build_posix_log_tail_command" title="airflow.providers.ssh.utils.remote_job.build_posix_log_tail_command"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_posix_log_tail_command</span></code></a>(log_file, offset, max_bytes)</p></td>
 <td><p>Build a POSIX command to read log bytes from offset.</p></td>
@@ -871,15 +871,22 @@ to ensure uniqueness across retries and potential race conditions.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="airflow.providers.ssh.utils.remote_job.build_windows_wrapper_command">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.ssh.utils.remote_job.</span></span><span class="sig-name descname"><span class="pre">build_windows_wrapper_command</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">command</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">paths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">environment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/ssh/utils/remote_job.html#build_windows_wrapper_command"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.ssh.utils.remote_job.build_windows_wrapper_command" title="Link to this definition">¶</a></dt>
-<dd><p>Build a PowerShell wrapper that runs the command detached via Start-Process.</p>
+<dd><p>Build a PowerShell wrapper that runs the command detached via <code class="docutils literal notranslate"><span class="pre">Win32_Process.Create</span></code>.</p>
 <p>The wrapper:</p>
 <ul class="simple">
-<li><p>Creates the job directory</p></li>
-<li><p>Starts the command in a new detached PowerShell process</p></li>
-<li><p>Redirects stdout/stderr to the log file</p></li>
-<li><p>Writes the exit code atomically on completion</p></li>
-<li><p>Writes the PID for potential cancellation</p></li>
+<li><p>Creates the job directory and writes the command into it as <code class="docutils literal notranslate"><span class="pre">cmd.ps1</span></code>, next to
+the job script that runs it</p></li>
+<li><p>Starts the job script as a separate process that outlives the SSH session, in the
+SSH session’s working directory</p></li>
+<li><p>Appends everything the command writes, on every stream, to the log file as UTF-8</p></li>
+<li><p>Writes the exit code on completion, including when the command calls <code class="docutils literal notranslate"><span class="pre">exit</span></code>,
+throws, or fails to parse</p></li>
+<li><p>Writes the PID for potential cancellation, and fails the submission if the job
+directory cannot be set up or the process cannot be started</p></li>
 </ul>
+<p>The command runs as a script, so the host’s execution policy applies to it with
+<code class="docutils literal notranslate"><span class="pre">-ExecutionPolicy</span> <span class="pre">Bypass</span></code> for the process; a Group Policy that only allows signed
+scripts fails the job with the policy error in its log.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -922,6 +929,9 @@ to ensure uniqueness across retries and potential race conditions.</p>
 <dt class="sig sig-object py" id="airflow.providers.ssh.utils.remote_job.build_windows_log_tail_command">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.ssh.utils.remote_job.</span></span><span class="sig-name descname"><span class="pre">build_windows_log_tail_command</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">log_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_bytes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../_modules/airflow/providers/ssh/utils/remote_job.html#build_windows_log_tail_command"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.ssh.utils.remote_job.build_windows_log_tail_command" title="Link to this definition">¶</a></dt>
 <dd><p>Build a PowerShell command to read log bytes from offset.</p>
+<p>The chunk is written to stdout as UTF-8 bytes. Printing it as a PowerShell string would
+re-encode it in the SSH session’s console code page, which the trigger’s strict UTF-8
+decoding rejects for any non-ASCII character.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1418,7 +1428,7 @@ OS-specific default base directory.</p></li>
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=4b9d3a76"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=7c65b01c"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

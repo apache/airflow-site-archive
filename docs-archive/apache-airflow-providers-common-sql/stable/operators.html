@@ -15,11 +15,11 @@
             <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="genindex.html" />
             <link rel="search" title="Search" href="search.html" />
             <link rel="next" title="airflow.providers.common.sql" href="_api/airflow/providers/common/sql/index.html" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.4.0</span>
+        <span class="version-label">Version: </span><span class="version">3.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -487,7 +487,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.4.0</span>
+        <span class="version-label">Version: </span><span class="version">3.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -986,6 +986,62 @@ between two connections.</p>
 </div>
 </div>
 </section>
+<section id="wait-for-a-sql-condition">
+<span id="howto-sensor-sqlsensor"></span><h2>Wait for a SQL condition<a class="headerlink" href="#wait-for-a-sql-condition" title="Link to this heading">¶</a></h2>
+<p>Use the <a class="reference internal" href="_api/airflow/providers/common/sql/sensors/sql/index.html#airflow.providers.common.sql.sensors.sql.SqlSensor" title="airflow.providers.common.sql.sensors.sql.SqlSensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">SqlSensor</span></code></a> to wait until a query returns a row
+whose first cell is truthy, for example until today’s orders have landed. It works with any connection
+whose hook is a <a class="reference internal" href="_api/airflow/providers/common/sql/hooks/sql/index.html#airflow.providers.common.sql.hooks.sql.DbApiHook" title="airflow.providers.common.sql.hooks.sql.DbApiHook"><code class="xref py py-class docutils literal notranslate"><span class="pre">DbApiHook</span></code></a>. The examples below use
+PostgreSQL; write <code class="docutils literal notranslate"><span class="pre">sql</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> in your database’s dialect and placeholder style.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/common/sql/example_sql_sensor.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/tests/system/common/sql/example_sql_sensor.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">wait_for_orders</span> <span class="o">=</span> <span class="n">SqlSensor</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"wait_for_orders"</span><span class="p">,</span>
+    <span class="n">conn_id</span><span class="o">=</span><span class="s2">"sales_db"</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="s2">"SELECT COUNT(*) FROM orders WHERE order_date = CURRENT_DATE"</span><span class="p">,</span>
+    <span class="n">poke_interval</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">"reschedule"</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>For a condition you cannot write in SQL, pass <code class="docutils literal notranslate"><span class="pre">success</span></code> or <code class="docutils literal notranslate"><span class="pre">failure</span></code> callables. They receive the first
+cell of the first row, or whatever <code class="docutils literal notranslate"><span class="pre">selector</span></code> returns for that row. <code class="docutils literal notranslate"><span class="pre">fail_on_empty=True</span></code> fails the task
+when the query returns no rows instead of checking again.</p>
+<section id="deferrable-mode">
+<h3>Deferrable mode<a class="headerlink" href="#deferrable-mode" title="Link to this heading">¶</a></h3>
+<p>With <code class="docutils literal notranslate"><span class="pre">deferrable=True</span></code>, the sensor checks once on the worker. If the condition is not met, it defers and
+the triggerer runs the query every <code class="docutils literal notranslate"><span class="pre">poke_interval</span></code> seconds, so the task holds no worker slot while it
+waits. <code class="docutils literal notranslate"><span class="pre">timeout</span></code> caps the time spent deferred.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/common/sql/example_sql_sensor.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/tests/system/common/sql/example_sql_sensor.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">wait_for_orders_deferrable</span> <span class="o">=</span> <span class="n">SqlSensor</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"wait_for_orders_deferrable"</span><span class="p">,</span>
+    <span class="n">conn_id</span><span class="o">=</span><span class="s2">"sales_db"</span><span class="p">,</span>
+    <span class="n">sql</span><span class="o">=</span><span class="s2">"SELECT COUNT(*) &gt;= </span><span class="si">%(min_orders)s</span><span class="s2"> FROM orders WHERE order_date = CURRENT_DATE"</span><span class="p">,</span>
+    <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">"min_orders"</span><span class="p">:</span> <span class="mi">100</span><span class="p">},</span>
+    <span class="n">poke_interval</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+    <span class="n">timeout</span><span class="o">=</span><span class="mi">6</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span><span class="p">,</span>
+    <span class="n">deferrable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>The triggerer only checks the default condition, that the first cell of the first row is truthy, so write
+the condition in SQL as above. The sensor logs a warning and runs in its usual <code class="docutils literal notranslate"><span class="pre">mode</span></code> instead of
+deferring when:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">success</span></code>, <code class="docutils literal notranslate"><span class="pre">failure</span></code> or <code class="docutils literal notranslate"><span class="pre">selector</span></code> is set, because these Python callables only run on a worker;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silent_fail</span></code>, <code class="docutils literal notranslate"><span class="pre">never_fail</span></code> or <code class="docutils literal notranslate"><span class="pre">exponential_backoff</span></code> is set, because they only apply to pokes on a
+worker;</p></li>
+<li><p>a subclass overrides <code class="docutils literal notranslate"><span class="pre">poke</span></code> or <code class="docutils literal notranslate"><span class="pre">_get_hook</span></code>, because the triggerer would not run that code;</p></li>
+<li><p>it runs on Airflow 3 before 3.2.2, whose triggerer cannot safely look up connections from the thread
+that runs the query. Deferring works on Airflow 2.11 and on 3.2.2 and later;</p></li>
+<li><p>on Airflow 2, <code class="docutils literal notranslate"><span class="pre">parameters</span></code> holds values other than strings, numbers, booleans and <code class="docutils literal notranslate"><span class="pre">None</span></code>.
+Airflow 2 stores trigger arguments as JSON, so dates, datetimes and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> values would reach
+the triggerer as strings.</p></li>
+</ul>
+</section>
+</section>
 <section id="analytics-operator">
 <h2>Analytics Operator<a class="headerlink" href="#analytics-operator" title="Link to this heading">¶</a></h2>
 <p>The Analytics operator is designed to run analytic queries on data stored in various datastores. It is a generic operator that can query data in S3, GCS, Azure, and Local File System.</p>
@@ -1279,6 +1335,10 @@ analytics sql queries:</p>
 <li><a class="reference internal" href="#insert-rows-into-table">Insert rows into Table</a></li>
 <li><a class="reference internal" href="#bulk-load-data-into-a-table">Bulk load data into a table</a></li>
 <li><a class="reference internal" href="#generic-transfer">Generic Transfer</a></li>
+<li><a class="reference internal" href="#wait-for-a-sql-condition">Wait for a SQL condition</a><ul>
+<li><a class="reference internal" href="#deferrable-mode">Deferrable mode</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#analytics-operator">Analytics Operator</a><ul>
 <li><a class="reference internal" href="#when-to-use-analytics-operator">When to Use Analytics Operator</a></li>
 <li><a class="reference internal" href="#supported-storage-systems">Supported Storage Systems</a></li>
@@ -1512,7 +1572,7 @@ analytics sql queries:</p>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=4d935f96"></script>
+        <script src="_static/documentation_options.js?v=acc74ff5"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

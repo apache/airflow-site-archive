@@ -1,0 +1,58 @@
+airflow.providers.keycloak.auth_manager.services.token
+======================================================
+
+.. py:module:: airflow.providers.keycloak.auth_manager.services.token
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.keycloak.auth_manager.services.token.create_token_for
+   airflow.providers.keycloak.auth_manager.services.token.create_jwt_federated_token
+   airflow.providers.keycloak.auth_manager.services.token.create_client_credentials_token
+
+
+Module Contents
+---------------
+
+.. py:function:: create_token_for(username, password, expiration_time_in_seconds = conf.getint('api_auth', 'jwt_expiration_time'))
+
+.. py:function:: create_jwt_federated_token(assertion, expiration_time_in_seconds = conf.getint('api_auth', 'jwt_expiration_time'))
+
+   Create a token from a Keycloak access token obtained outside of Airflow.
+
+   This authentication flow accepts an access token issued by Keycloak through any
+   Keycloak-native mechanism (e.g. a "Signed JWT - Federated" client bound to an
+   external OIDC identity provider such as a Kubernetes ServiceAccount issuer, or AWS
+   IAM outbound identity federation). Airflow does not obtain the token on the caller's
+   behalf, the caller must obtain it directly from Keycloak's token endpoint. Airflow
+   verifies the token and calls Keycloak's UserInfo endpoint to validate it and retrieve
+   user information.
+
+   The token's signature, issuer, and audience are verified against this realm's JWKS.
+   The ``aud`` claim (a string or a list) must include this Airflow client's id, which
+   requires an Audience mapper on the federated client's scope in Keycloak. The calling
+   client (``azp``) must also appear in the ``jwt_federated_client_ids`` allow-list
+   below -- an ``aud`` match alone only proves the token was meant for Airflow, not
+   that the issuing client has been vetted for machine auth. Any Keycloak validation
+   error is returned as a generic ``403 Invalid Keycloak assertion`` response.
+
+
+.. py:function:: create_client_credentials_token(client_id, client_secret, expiration_time_in_seconds = conf.getint('api_auth', 'jwt_expiration_time'))
+
+   Create token using OAuth2 client_credentials grant type.
+
+   This authentication flow uses the provided client_id and client_secret
+   to obtain a token for a service account. The Keycloak client must have:
+   - Service accounts roles: ON
+   - Client Authentication: ON (confidential client)
+
+   The service account must be configured with the appropriate roles/permissions.
+
+   Only the client Airflow is configured to use is accepted. The route this is reached
+   from is unauthenticated, so without that restriction the credentials of any
+   confidential client in the realm would be usable to obtain an Airflow token.
+
+
