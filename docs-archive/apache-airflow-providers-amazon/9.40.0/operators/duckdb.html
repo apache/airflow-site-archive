@@ -684,8 +684,8 @@ Amazon S3 directly, which makes it an affordable way to run transforms that do n
 of a distributed cluster.</p>
 <p>DuckDB is not an AWS service, so the generic hook, operator and <code class="docutils literal notranslate"><span class="pre">duckdb</span></code> connection type live in the
 <a class="reference external" href="/docs/apache-airflow-providers-duckdb/stable/index.html" title="(in apache-airflow-providers-duckdb v0.2.1)"><span class="xref std std-doc">DuckDB provider</span></a>. What this provider adds is the AWS
-auth. Using an Airflow AWS connection to create the DuckDB secret that grants access to S3.
-This means there is no credential wiring needed in the Dag.</p>
+auth: the hook creates the DuckDB secret that grants access to S3, so there is no credential wiring
+needed in the Dag.</p>
 <p>You run <a class="reference external" href="/docs/apache-airflow-providers-duckdb/stable/_api/airflow/providers/duckdb/operators/duckdb/index.html#airflow.providers.duckdb.operators.duckdb.DuckDBExecuteQueryOperator" title="(in apache-airflow-providers-duckdb v0.2.1)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DuckDBExecuteQueryOperator</span></code></a> and point it
 at a <code class="docutils literal notranslate"><span class="pre">duckdb_aws</span></code> connection when the SQL should reach S3.</p>
 <section id="prerequisite-tasks">
@@ -729,19 +729,13 @@ details and for the alternative that needs no home directory at all. If you run 
 environment variables.</p>
 </div>
 <section id="run-a-duckdb-query-against-amazon-s3">
-<span id="howto-connection-duckdb-aws"></span><h3>Run a DuckDB query against Amazon S3<a class="headerlink" href="#run-a-duckdb-query-against-amazon-s3" title="Link to this heading">¶</a></h3>
-<p>Two connections are involved:</p>
-<ul class="simple">
-<li><p>A <strong>DuckDB on AWS</strong> (<code class="docutils literal notranslate"><span class="pre">duckdb_aws</span></code>) connection which configures DuckDB itself, i.e.: <em>which DuckDB database and with what settings</em>.
-Its id is what you pass to
-<a class="reference external" href="/docs/apache-airflow-providers-duckdb/stable/_api/airflow/providers/duckdb/operators/duckdb/index.html#airflow.providers.duckdb.operators.duckdb.DuckDBExecuteQueryOperator" title="(in apache-airflow-providers-duckdb v0.2.1)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DuckDBExecuteQueryOperator</span></code></a> as <code class="docutils literal notranslate"><span class="pre">conn_id</span></code>, and its
-type is also what selects <a class="reference internal" href="../_api/airflow/providers/amazon/aws/hooks/duckdb/index.html#airflow.providers.amazon.aws.hooks.duckdb.AwsDuckDBHook" title="airflow.providers.amazon.aws.hooks.duckdb.AwsDuckDBHook"><code class="xref py py-class docutils literal notranslate"><span class="pre">AwsDuckDBHook</span></code></a>.</p></li>
-<li><p>An <strong>AWS</strong> (<code class="docutils literal notranslate"><span class="pre">aws</span></code>) connection says <em>which AWS identity</em>, i.e.: keys or role, region, endpoint, etc. The DuckDB
-connection points at it through <code class="docutils literal notranslate"><span class="pre">aws_conn_id</span></code>, which defaults to <code class="docutils literal notranslate"><span class="pre">aws_default</span></code>.</p></li>
-</ul>
-<p>Credentials stay in the usual AWS connection. The <code class="docutils literal notranslate"><span class="pre">duckdb_aws</span></code> connection can be empty (though it must exist) and often
-will be with DuckDB’s ability to use in-memory databases. Create it, name it whatever you like, and leave every field blank
-to get an in-memory database.</p>
+<h3>Run a DuckDB query against Amazon S3<a class="headerlink" href="#run-a-duckdb-query-against-amazon-s3" title="Link to this heading">¶</a></h3>
+<p>Two connections are involved: a <a class="reference internal" href="../connections/duckdb_aws.html#howto-connection-duckdb-aws"><span class="std std-ref">DuckDB on AWS connection</span></a> that
+says which DuckDB database to open and with what settings, and an
+<a class="reference internal" href="../connections/aws.html#howto-connection-aws"><span class="std std-ref">AWS connection</span></a> that gives the region and endpoint. The AWS connection’s
+credentials are used only when <code class="docutils literal notranslate"><span class="pre">credential_strategy</span></code> is <code class="docutils literal notranslate"><span class="pre">config</span></code>; by default DuckDB takes
+credentials from the worker’s environment, see <a class="reference internal" href="#howto-operator-duckdb-aws-credentials"><span class="std std-ref">How credentials reach DuckDB</span></a>. The
+DuckDB on AWS connection can be empty, but the operator needs it to exist.</p>
 <p>Given that connection, the hook loads the <code class="docutils literal notranslate"><span class="pre">httpfs</span></code> and <code class="docutils literal notranslate"><span class="pre">aws</span></code> extensions and creates the S3 secret,
 so the task supplies only SQL:</p>
 <div class="example-block-wrapper compound">
@@ -775,8 +769,11 @@ an in-memory database, which suits a task that reads from S3 and writes back to 
 <p class="admonition-title">Note</p>
 <p><code class="docutils literal notranslate"><span class="pre">aws_conn_id</span></code> resolves on whether the key is present, not on its value, because <code class="docutils literal notranslate"><span class="pre">None</span></code> is a
 valid choice for it rather than the absence of one. Set it to <code class="docutils literal notranslate"><span class="pre">null</span></code> in the <code class="docutils literal notranslate"><span class="pre">extra</span></code> (or
-<code class="docutils literal notranslate"><span class="pre">None</span></code> in <code class="docutils literal notranslate"><span class="pre">hook_params</span></code>) to use no Airflow AWS connection at all and let the AWS SDK find
-credentials in the environment, such as environment variables or an instance role.</p>
+<code class="docutils literal notranslate"><span class="pre">None</span></code> in <code class="docutils literal notranslate"><span class="pre">hook_params</span></code>) to use no Airflow AWS connection at all. The secret then gets a
+region and endpoint only from the DuckDB connection’s own keys, such as <code class="docutils literal notranslate"><span class="pre">region_name</span></code> and
+<code class="docutils literal notranslate"><span class="pre">s3_endpoint_url</span></code>, and <code class="docutils literal notranslate"><span class="pre">config</span></code> takes credentials from boto3’s default chain, such as
+environment variables or an instance role. <code class="docutils literal notranslate"><span class="pre">credential_chain</span></code> takes credentials from the
+environment either way.</p>
 </div>
 </section>
 <section id="using-the-hook-directly">
@@ -794,7 +791,7 @@ avoids paying connection setup and extension loading more than once per task:</p
 </div>
 </section>
 <section id="how-credentials-reach-duckdb">
-<h3>How credentials reach DuckDB<a class="headerlink" href="#how-credentials-reach-duckdb" title="Link to this heading">¶</a></h3>
+<span id="howto-operator-duckdb-aws-credentials"></span><h3>How credentials reach DuckDB<a class="headerlink" href="#how-credentials-reach-duckdb" title="Link to this heading">¶</a></h3>
 <p>DuckDB does not use <code class="docutils literal notranslate"><span class="pre">boto3</span></code>. The hook therefore issues a <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">SECRET</span></code> statement that tells
 DuckDB how to authenticate, and the <code class="docutils literal notranslate"><span class="pre">credential_strategy</span></code> parameter selects how:</p>
 <dl>
@@ -831,6 +828,9 @@ DuckDB cannot see. The credentials become part of the SQL statement, so prefer
 <span class="p">)</span>
 </pre></div>
 </div>
+<p>If <code class="docutils literal notranslate"><span class="pre">credential_strategy</span></code> is not set and the AWS connection has credentials (keys, a <code class="docutils literal notranslate"><span class="pre">role_arn</span></code> or
+a <code class="docutils literal notranslate"><span class="pre">profile_name</span></code>), the hook logs a warning, because <code class="docutils literal notranslate"><span class="pre">credential_chain</span></code> does not use them. Set it to
+<code class="docutils literal notranslate"><span class="pre">config</span></code> to use them, or to <code class="docutils literal notranslate"><span class="pre">credential_chain</span></code> to silence the warning.</p>
 </section>
 <section id="non-default-s3-endpoints">
 <h3>Non-default S3 endpoints<a class="headerlink" href="#non-default-s3-endpoints" title="Link to this heading">¶</a></h3>

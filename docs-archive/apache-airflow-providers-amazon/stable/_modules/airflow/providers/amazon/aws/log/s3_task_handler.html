@@ -694,6 +694,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">codecs</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -713,7 +714,22 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.taskinstance</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskInstance</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">RuntimeTaskInstanceProtocol</span> <span class="k">as</span> <span class="n">RuntimeTI</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.log.file_task_handler</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogMessages</span><span class="p">,</span> <span class="n">LogSourceInfo</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.log.file_task_handler</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">LogMessages</span><span class="p">,</span>
+        <span class="n">LogResponse</span><span class="p">,</span>
+        <span class="n">LogSourceInfo</span><span class="p">,</span>
+        <span class="n">RawLogStream</span><span class="p">,</span>
+        <span class="n">StreamingLogResponse</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># Mirrors ``airflow.utils.log.file_task_handler.CHUNK_SIZE`` so that remote reads are chunked the</span>
+<span class="c1"># same way local log reads are. Not imported from core to avoid coupling the provider to a private</span>
+<span class="c1"># constant that older Airflow versions may not expose.</span>
+<div class="viewcode-block" id="CHUNK_SIZE">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/log/s3_task_handler/index.html#airflow.providers.amazon.aws.log.s3_task_handler.CHUNK_SIZE">[docs]</a>
+<span class="n">CHUNK_SIZE</span> <span class="o">=</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">5</span>  <span class="c1"># 5MB</span></div>
+
 
 
 <span class="nd">@attrs</span><span class="o">.</span><span class="n">define</span>
@@ -912,23 +928,69 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="S3RemoteLogIO.read">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/log/s3_task_handler/index.html#airflow.providers.amazon.aws.log.s3_task_handler.S3RemoteLogIO.read">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ti</span><span class="p">:</span> <span class="n">RuntimeTI</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">LogSourceInfo</span><span class="p">,</span> <span class="n">LogMessages</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
-        <span class="n">logs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">messages</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ti</span><span class="p">:</span> <span class="n">RuntimeTI</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LogResponse</span><span class="p">:</span>
+        <span class="n">messages</span><span class="p">,</span> <span class="n">log_streams</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">relative_path</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">log_streams</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="kc">None</span>
+
+        <span class="c1"># Exhaust each stream into a single string, for callers that cannot consume a stream.</span>
+        <span class="c1"># The newline is added back per line so that the string is byte-identical to the object.</span>
+        <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="p">[</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">line</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">log_stream</span><span class="p">)</span> <span class="k">for</span> <span class="n">log_stream</span> <span class="ow">in</span> <span class="n">log_streams</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="S3RemoteLogIO.stream">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/log/s3_task_handler/index.html#airflow.providers.amazon.aws.log.s3_task_handler.S3RemoteLogIO.stream">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">relative_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ti</span><span class="p">:</span> <span class="n">RuntimeTI</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StreamingLogResponse</span><span class="p">:</span>
+        <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">bucket</span><span class="p">,</span> <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">parse_s3_url</span><span class="p">(</span><span class="n">s3url</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">remote_base</span><span class="p">,</span> <span class="n">relative_path</span><span class="p">))</span>
         <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">list_keys</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="n">bucket</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="n">prefix</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">keys</span><span class="p">:</span>
-            <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="sa">f</span><span class="s2">"s3://</span><span class="si">{</span><span class="n">bucket</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
-                <span class="n">messages</span> <span class="o">=</span> <span class="n">keys</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Found logs in s3:"</span><span class="p">)</span>
-                <span class="n">messages</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  * </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-                <span class="n">logs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_read</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">return_error</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-            <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="n">logs</span>
-        <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="kc">None</span></div>
-</div>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="p">[]</span>
+
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="sa">f</span><span class="s2">"s3://</span><span class="si">{</span><span class="n">bucket</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
+            <span class="n">messages</span> <span class="o">=</span> <span class="n">keys</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Found logs in s3:"</span><span class="p">)</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  * </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
+
+        <span class="c1"># The objects are not fetched here: each generator issues its GetObject on first use.</span>
+        <span class="k">return</span> <span class="n">messages</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_log_stream</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">]</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_log_stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remote_log_location</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RawLogStream</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">        Yield the lines of a remote log object without holding the whole object in memory.</span>
+
+<span class="sd">        Lines are split exactly like :func:`~airflow.utils.log.file_task_handler._stream_lines_by_chunk`</span>
+<span class="sd">        does for local logs: on ``"\n"`` only, with the trailing newline stripped, so the records the</span>
+<span class="sd">        log reader sees are the same ones it saw when this method read the object as a single string.</span>
+
+<span class="sd">        :param remote_log_location: the log's location in remote storage</span>
+<span class="sd">        :yield: Lines of the log object.</span>
+<span class="sd">        """</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_key</span><span class="p">(</span><span class="n">remote_log_location</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()[</span><span class="s2">"Body"</span><span class="p">]</span>
+            <span class="c1"># An incremental decoder keeps multi-byte characters intact across chunk boundaries.</span>
+            <span class="n">decoder</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getincrementaldecoder</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)(</span><span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
+            <span class="n">buffer</span> <span class="o">=</span> <span class="s2">""</span>
+            <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">body</span><span class="o">.</span><span class="n">iter_chunks</span><span class="p">(</span><span class="n">chunk_size</span><span class="o">=</span><span class="n">CHUNK_SIZE</span><span class="p">):</span>
+                <span class="n">buffer</span> <span class="o">+=</span> <span class="n">decoder</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+                <span class="o">*</span><span class="n">lines</span><span class="p">,</span> <span class="n">buffer</span> <span class="o">=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+                <span class="k">yield from</span> <span class="n">lines</span>
+            <span class="n">buffer</span> <span class="o">+=</span> <span class="n">decoder</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="sa">b</span><span class="s2">""</span><span class="p">,</span> <span class="n">final</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">buffer</span><span class="p">:</span>
+                <span class="k">yield from</span> <span class="n">buffer</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="c1"># Surface the failure as a log line instead of raising, so that a single unreadable</span>
+            <span class="c1"># object does not hide the logs of the other objects of the same task instance.</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Could not read logs from </span><span class="si">{</span><span class="n">remote_log_location</span><span class="si">}</span><span class="s2"> with error: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">msg</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">body</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">body</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
 
 
 

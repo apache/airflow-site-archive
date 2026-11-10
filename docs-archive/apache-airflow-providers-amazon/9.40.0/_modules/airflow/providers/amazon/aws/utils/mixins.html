@@ -709,11 +709,36 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cache</span><span class="p">,</span> <span class="n">cached_property</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">NamedTuple</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">final</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsGenericHook</span>
 
 <div class="viewcode-block" id="AwsHookType">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/utils/mixins/index.html#airflow.providers.amazon.aws.utils.mixins.AwsHookType">[docs]</a>
 <span class="n">AwsHookType</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"AwsHookType"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">AwsGenericHook</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="normalize_botocore_config">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/utils/mixins/index.html#airflow.providers.amazon.aws.utils.mixins.normalize_botocore_config">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize_botocore_config</span><span class="p">(</span>
+    <span class="n">botocore_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">Config</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">Config</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Reduce ``botocore_config`` to the mapping that the operator and sensor interfaces declare.</span>
+
+<span class="sd">    A ``Config`` instance is accepted by the hooks but cannot be serialized, so one that reaches a</span>
+<span class="sd">    trigger argument fails the task at defer time, once the operator's AWS call has already been</span>
+<span class="sd">    made. Both forms build the same client, so the mapping is kept as the single representation.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">botocore_config</span><span class="p">,</span> <span class="n">Config</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">botocore_config</span>
+    <span class="c1"># Only the caller's own options, so that the mapping does not pin whichever defaults the</span>
+    <span class="c1"># installed botocore happens to carry.</span>
+    <span class="n">user_provided_options</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">botocore_config</span><span class="p">,</span> <span class="s2">"_user_provided_options"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">user_provided_options</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">botocore_config</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">user_provided_options</span><span class="p">)</span></div>
 
 
 
@@ -751,7 +776,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">aws_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">verify</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">botocore_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">botocore_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">Config</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">additional_params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -781,7 +806,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">                    self.botocore_config = params.botocore_config</span>
 <span class="sd">                    self.foo = foo</span>
 <span class="sd">        """</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="p">,</span> <span class="n">verify</span><span class="p">,</span> <span class="n">botocore_config</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="p">,</span> <span class="n">verify</span><span class="p">,</span> <span class="n">normalize_botocore_config</span><span class="p">(</span><span class="n">botocore_config</span><span class="p">))</span></div>
 </div>
 
 

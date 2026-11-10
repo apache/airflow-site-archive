@@ -695,6 +695,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">urllib.parse</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
@@ -703,7 +704,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">BotoCoreError</span><span class="p">,</span> <span class="n">ClientError</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueJobRunStoppedError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueJobRunStoppedError</span><span class="p">,</span> <span class="n">GlueJobRunStopTimeoutError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.glue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueDataQualityHook</span><span class="p">,</span> <span class="n">GlueJobHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.s3</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3Hook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.links.glue</span><span class="w"> </span><span class="kn">import</span> <span class="n">GlueJobRunDetailsLink</span>
@@ -746,6 +747,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue/index.html#airflow.providers.amazon.aws.operators.glue.NOT_FOUND_STATE">[docs]</a>
 <span class="n">NOT_FOUND_STATE</span> <span class="o">=</span> <span class="s2">"NOT_FOUND"</span></div>
 
+<span class="c1"># Upper bound on waiting for a previous run to leave STOPPING before a fresh run is submitted.</span>
+<div class="viewcode-block" id="PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue/index.html#airflow.providers.amazon.aws.operators.glue.PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS">[docs]</a>
+<span class="n">PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mi">600</span></div>
+
 
 
 <div class="viewcode-block" id="GlueJobOperator">
@@ -782,7 +788,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param verbose: If True, Glue Job Run logs show in the Airflow Task Logs.  (default: False)</span>
 <span class="sd">    :param update_config: If True, Operator will update job configuration.  (default: False)</span>
 <span class="sd">    :param replace_script_file: If True, the script file will be replaced in S3. (default: False)</span>
-<span class="sd">    :param stop_job_run_on_kill: If True, Operator will stop the job run when task is killed.</span>
+<span class="sd">    :param stop_job_run_on_kill: If True, Operator will stop the job run when task is killed. In</span>
+<span class="sd">        deferrable mode this requires Airflow 3.3+, and with ``durable`` a retried or cleared task stops</span>
+<span class="sd">        its previous run and waits for it to end before starting a new one, instead of reconnecting to it.</span>
 <span class="sd">    :param sleep_before_return: time in seconds to wait before returning final status. This is meaningful in case</span>
 <span class="sd">        of limiting concurrency, Glue needs 5-10 seconds to clean up resources.</span>
 <span class="sd">        Thus if status is returned immediately it might end up in case of more than 1 concurrent run.</span>
@@ -1146,6 +1154,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
                     <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
                     <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                    <span class="n">stop_job_run_on_kill</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stop_job_run_on_kill</span><span class="p">,</span>
                 <span class="p">),</span>
                 <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
             <span class="p">)</span>
@@ -1264,13 +1273,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">submit_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Start a Glue job run and return its run id, or reconnect to one this task already started."""</span>
         <span class="n">script_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_script_args</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">AIRFLOW_V_3_3_PLUS</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">durable</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_job_run_on_kill</span>
+            <span class="ow">and</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">try_number</span> <span class="o">&gt;</span> <span class="mi">1</span>
+        <span class="p">):</span>
+            <span class="c1"># The trigger's on_kill stops the previous run on any user action, and it cannot tell a</span>
+            <span class="c1"># clear (which re-runs the task) from mark failed/success. Reattaching would wait on a</span>
+            <span class="c1"># run that on_kill is stopping, so stop it here and start fresh instead.</span>
+            <span class="n">previous_job_run_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_previous_job_run</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">script_args</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">TASK_UUID_ARG</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">previous_job_run_id</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stop_job_run_and_wait</span><span class="p">(</span><span class="n">previous_job_run_id</span><span class="p">)</span>
         <span class="c1"># Scan only when there's nothing else to go on: first attempt, no store, or a store that</span>
         <span class="c1"># never recorded this key. The store check itself is skipped on the deferrable path, where</span>
         <span class="c1"># nothing is ever written to it -- a store error there would otherwise block the scan.</span>
         <span class="c1"># Deferrable retries could reconnect via task_state_store too, avoiding this scan entirely,</span>
         <span class="c1"># if ResumableJobMixin exposed its reconnect decision apart from its polling loop;</span>
         <span class="c1"># tracked at https://github.com/apache/airflow/issues/71485.</span>
-        <span class="k">if</span> <span class="p">(</span>
+        <span class="k">elif</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">durable</span>
             <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">)</span>
             <span class="ow">and</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">try_number</span> <span class="o">&gt;</span> <span class="mi">1</span>
@@ -1293,6 +1315,32 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">_set_job_run_id</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">glue_job_run</span><span class="p">[</span><span class="s2">"JobRunId"</span><span class="p">])</span>
         <span class="k">return</span> <span class="n">glue_job_run</span><span class="p">[</span><span class="s2">"JobRunId"</span><span class="p">]</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_stop_job_run_and_wait</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_run_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Stop a job run and wait until it is terminal.</span>
+
+<span class="sd">        A STOPPING run still counts toward MaxConcurrentRuns, so submitting before then would fail.</span>
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"Stopping previous AWS Glue job </span><span class="si">%s</span><span class="s2"> run </span><span class="si">%s</span><span class="s2"> before starting a new one."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">,</span> <span class="n">job_run_id</span>
+        <span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">batch_stop_job_run</span><span class="p">(</span><span class="n">JobName</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">,</span> <span class="n">JobRunIds</span><span class="o">=</span><span class="p">[</span><span class="n">job_run_id</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Errors"</span><span class="p">):</span>
+            <span class="c1"># The trigger's on_kill may already have stopped it, or it may have just finished.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Stop request for run </span><span class="si">%s</span><span class="s2"> returned errors: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">job_run_id</span><span class="p">,</span> <span class="n">response</span><span class="p">[</span><span class="s2">"Errors"</span><span class="p">])</span>
+        <span class="n">deadline</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="n">PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_job_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="p">,</span> <span class="n">job_run_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">JOB_RUN_TERMINAL_STATES</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Previous AWS Glue job run </span><span class="si">%s</span><span class="s2"> reached </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="n">job_run_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">deadline</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">GlueJobRunStopTimeoutError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Previous AWS Glue job </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_name</span><span class="si">}</span><span class="s2"> run </span><span class="si">{</span><span class="n">job_run_id</span><span class="si">}</span><span class="s2"> is still </span><span class="si">{</span><span class="n">state</span><span class="si">}</span><span class="s2"> "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS</span><span class="si">}</span><span class="s2">s after being stopped; not starting a new run."</span>
+                <span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">job_poll_interval</span><span class="p">)</span>
 
 <div class="viewcode-block" id="GlueJobOperator.get_job_status">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/glue/index.html#airflow.providers.amazon.aws.operators.glue.GlueJobOperator.get_job_status">[docs]</a>
