@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -697,7 +697,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlsplit</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsBaseHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.sts</span><span class="w"> </span><span class="kn">import</span> <span class="n">StsHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">NOTSET</span><span class="p">,</span> <span class="n">ArgNotSet</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowOptionalProviderFeatureException</span>
 
@@ -730,19 +733,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/duckdb/index.html#airflow.providers.amazon.aws.hooks.duckdb.AwsDuckDBHook">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">AwsDuckDBHook</span><span class="p">(</span><span class="n">DuckDBHook</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Interact with DuckDB using AWS credentials brokered by Airflow.</span>
+<span class="sd">    Interact with DuckDB with access to Amazon S3.</span>
 
-<span class="sd">    Extends :class:`~airflow.providers.duckdb.hooks.duckdb.DuckDBHook` with an S3 secret built from</span>
-<span class="sd">    an Airflow AWS connection, so ``read_parquet('s3://...')`` and ``COPY ... TO 's3://...'`` work</span>
-<span class="sd">    with no credential wiring in the Dag.</span>
+<span class="sd">    Extends :class:`~airflow.providers.duckdb.hooks.duckdb.DuckDBHook` with a DuckDB S3 secret, so</span>
+<span class="sd">    ``read_parquet('s3://...')`` and ``COPY ... TO 's3://...'`` work with no credential wiring in the</span>
+<span class="sd">    Dag. The secret takes its region and endpoint from an Airflow AWS connection, and its credentials</span>
+<span class="sd">    too with the ``config`` strategy.</span>
 
 <span class="sd">    Two credential strategies are supported:</span>
 
 <span class="sd">    ``credential_chain`` (the default)</span>
 <span class="sd">        Issues ``CREATE SECRET (TYPE s3, PROVIDER credential_chain)``, which resolves credentials</span>
 <span class="sd">        through the AWS SDK inside DuckDB's ``aws`` extension. Nothing secret is written into SQL</span>
-<span class="sd">        text, and because DuckDB holds the resolution itself the SDK refreshes expiring credentials,</span>
-<span class="sd">        so a query that outlives a set of temporary credentials does not fail partway through.</span>
+<span class="sd">        text, and the secret is created with ``REFRESH 'auto'``: when S3 rejects expired credentials,</span>
+<span class="sd">        DuckDB resolves the chain again and retries, so a query that outlives a set of temporary</span>
+<span class="sd">        credentials does not fail partway through. Before DuckDB 1.5.6, only opening a file to read</span>
+<span class="sd">        refreshes the credentials, so listing files, reading further into a file that is already</span>
+<span class="sd">        open, and writing can still fail once the credentials expire.</span>
 
 <span class="sd">    ``config``</span>
 <span class="sd">        Resolves credentials through :class:`~airflow.providers.amazon.aws.hooks.base_aws.AwsBaseHook`</span>
@@ -751,6 +758,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        become part of the SQL statement. Needed when the connection carries static keys the AWS SDK</span>
 <span class="sd">        running inside DuckDB cannot see, or when talking to an S3-compatible endpoint with its own</span>
 <span class="sd">        credentials. Prefer ``credential_chain`` where it works.</span>
+
+<span class="sd">    When ``credential_strategy`` is not set and the AWS connection has credentials (keys, a</span>
+<span class="sd">    ``role_arn`` or a ``profile_name``), the hook warns that ``credential_chain`` does not use them.</span>
 
 <span class="sd">    Either strategy is better than none: DuckDB's ``httpfs`` extension has its own HTTP client which</span>
 <span class="sd">    reads credentials from the standard ``AWS_*`` environment variables but does **not** implement the</span>
@@ -764,9 +774,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    ``autoinstall_extensions=False`` to forbid the download, in which case the extensions have to be</span>
 <span class="sd">    present already, either in an ``extension_directory`` or baked into the image.</span>
 
-<span class="sd">    :param aws_conn_id: the :ref:`AWS connection &lt;howto/connection:aws&gt;` used to reach S3. Defaults to</span>
-<span class="sd">        ``aws_default``. Set to ``None`` to use no Airflow connection and let the AWS SDK resolve</span>
-<span class="sd">        credentials from the environment instead.</span>
+<span class="sd">    :param aws_conn_id: the :ref:`AWS connection &lt;howto/connection:aws&gt;` the S3 secret's region and</span>
+<span class="sd">        endpoint come from, and its credentials too with the ``config`` strategy. Defaults to</span>
+<span class="sd">        ``aws_default``. Set to ``None`` to use no Airflow AWS connection: the region and endpoint</span>
+<span class="sd">        then come only from this hook's own parameters, and ``config`` takes credentials from</span>
+<span class="sd">        boto3's default chain. ``credential_chain`` takes credentials from the environment either way.</span>
 <span class="sd">    :param region_name: region for the S3 secret. Defaults to the region from ``aws_conn_id``.</span>
 <span class="sd">    :param credential_strategy: ``credential_chain``, ``config``, or ``none`` to create no secret at</span>
 <span class="sd">        all (for a DuckDB database that never touches S3).</span>
@@ -779,7 +791,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="sd">    As with :class:`~airflow.providers.duckdb.hooks.duckdb.DuckDBHook`, every parameter may also be set</span>
 <span class="sd">    in the DuckDB connection ``extra``, and an explicit argument wins. ``aws_conn_id`` resolves on</span>
-<span class="sd">    whether the key is present, so ``{"aws_conn_id": null}`` selects the ambient AWS environment.</span>
+<span class="sd">    whether the key is present, so ``{"aws_conn_id": null}`` selects no AWS connection rather than</span>
+<span class="sd">    ``aws_default``.</span>
 <span class="sd">    """</span>
 
     <span class="c1">#: ``httpfs`` provides the S3 filesystem; ``aws`` provides the credential chain secret provider.</span>
@@ -838,6 +851,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">_credential_chain</span> <span class="o">=</span> <span class="n">credential_chain</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_s3_endpoint_url</span> <span class="o">=</span> <span class="n">s3_endpoint_url</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_secret_name</span> <span class="o">=</span> <span class="n">secret_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_aws_identity_looked_up</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ignored_credentials_checked</span> <span class="o">=</span> <span class="kc">False</span>
 
     <span class="nd">@property</span>
 <div class="viewcode-block" id="AwsDuckDBHook.aws_conn_id">
@@ -926,12 +941,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="AwsDuckDBHook.configure_secrets">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/hooks/duckdb/index.html#airflow.providers.amazon.aws.hooks.duckdb.AwsDuckDBHook.configure_secrets">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">configure_secrets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">DuckDBPyConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Create the DuckDB S3 secret for this connection."""</span>
+<span class="w">        </span><span class="sd">"""Create the DuckDB S3 secret for this connection, and log the AWS identity it uses."""</span>
         <span class="n">strategy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">credential_strategy</span>
         <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"none"</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"credential_strategy is 'none'; not creating a DuckDB S3 secret."</span><span class="p">)</span>
             <span class="k">return</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_warn_if_connection_credentials_are_ignored</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_validate_identifier</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">secret_name</span><span class="p">,</span> <span class="s2">"secret"</span><span class="p">)</span>
         <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"TYPE s3"</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_provider_clauses</span><span class="p">(</span><span class="n">strategy</span><span class="p">)]</span>
 
@@ -959,14 +975,72 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="s2">"if this database does not use S3."</span><span class="p">,</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">secret_name</span><span class="p">,</span>
                 <span class="n">error</span><span class="p">,</span>
-            <span class="p">)</span></div>
+            <span class="p">)</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log_aws_identity</span><span class="p">(</span><span class="n">strategy</span><span class="p">,</span> <span class="n">region</span><span class="p">,</span> <span class="n">endpoint_url</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_warn_if_connection_credentials_are_ignored</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Warn once per hook when ``credential_chain`` leaves the AWS connection's credentials unused."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ignored_credentials_checked</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ignored_credentials_checked</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">explicit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_credential_strategy</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection_extra</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"credential_strategy"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">explicit</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="c1"># profile_name counts: boto3 resolves it like every other AWS hook, DuckDB's chain would not.</span>
+        <span class="n">conn_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_hook</span><span class="o">.</span><span class="n">conn_config</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">conn_config</span><span class="o">.</span><span class="n">aws_access_key_id</span>
+            <span class="ow">or</span> <span class="n">conn_config</span><span class="o">.</span><span class="n">aws_session_token</span>
+            <span class="ow">or</span> <span class="n">conn_config</span><span class="o">.</span><span class="n">role_arn</span>
+            <span class="ow">or</span> <span class="n">conn_config</span><span class="o">.</span><span class="n">profile_name</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"The AWS connection </span><span class="si">%r</span><span class="s2"> has credentials, but DuckDB is using its own credential chain, so "</span>
+                <span class="s2">"they are not used. Set credential_strategy to 'config' to use them, or to "</span>
+                <span class="s2">"'credential_chain' to silence this warning."</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_log_aws_identity</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">strategy</span><span class="p">:</span> <span class="n">CredentialStrategy</span><span class="p">,</span> <span class="n">region</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">endpoint_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Log the AWS identity once per hook, to help debug S3 ``HTTP 403`` errors."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aws_identity_looked_up</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_aws_identity_looked_up</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">endpoint_url</span><span class="p">:</span>
+                <span class="n">host</span> <span class="o">=</span> <span class="n">urlsplit</span><span class="p">(</span><span class="n">endpoint_url</span> <span class="k">if</span> <span class="s2">"//"</span> <span class="ow">in</span> <span class="n">endpoint_url</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"//</span><span class="si">{</span><span class="n">endpoint_url</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">hostname</span> <span class="ow">or</span> <span class="s2">""</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".amazonaws.com"</span><span class="p">,</span> <span class="s2">".amazonaws.com.cn"</span><span class="p">)):</span>
+                    <span class="k">return</span>  <span class="c1"># Not AWS (e.g. MinIO), so no AWS identity applies.</span>
+            <span class="n">aws_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_hook</span><span class="o">.</span><span class="n">config</span>
+            <span class="n">bounded</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span>
+                <span class="c1"># Keeps an unreachable STS endpoint from delaying the task by more than a few seconds.</span>
+                <span class="n">connect_timeout</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="n">read_timeout</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="n">retries</span><span class="o">=</span><span class="p">{</span><span class="s2">"total_max_attempts"</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+                <span class="c1"># Caller names only the operator (_PythonDecoratedOperator for @task), so name the hook too.</span>
+                <span class="n">user_agent_extra</span><span class="o">=</span><span class="sa">f</span><span class="s2">"AwsDuckDBHook </span><span class="si">{</span><span class="n">aws_config</span><span class="o">.</span><span class="n">user_agent_extra</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">''</span><span class="si">}</span><span class="s2">"</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="p">)</span>
+            <span class="n">sts_hook</span> <span class="o">=</span> <span class="n">StsHook</span><span class="p">(</span>
+                <span class="c1"># DuckDB's credential chain ignores the connection's credentials, so boto3 has to as well.</span>
+                <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span> <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"config"</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="n">aws_config</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">bounded</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"AWS identity: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">sts_hook</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span><span class="o">.</span><span class="n">get_caller_identity</span><span class="p">()[</span><span class="s2">"Arn"</span><span class="p">])</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>  <span class="c1"># Not BaseException: a task timeout must still stop the task.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Could not look up the AWS identity: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_provider_clauses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strategy</span><span class="p">:</span> <span class="n">CredentialStrategy</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"credential_chain"</span><span class="p">:</span>
             <span class="n">clauses</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"PROVIDER credential_chain"</span><span class="p">]</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">credential_chain</span><span class="p">:</span>
                 <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CHAIN '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_quote</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">credential_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span>
+            <span class="c1"># Without REFRESH, DuckDB keeps the credentials it first resolved for the life of the secret.</span>
+            <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"REFRESH 'auto'"</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">clauses</span>
         <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="s2">"config"</span><span class="p">:</span>
             <span class="n">credentials</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_hook</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(</span><span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_region_name</span><span class="p">())</span>
@@ -1268,7 +1342,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

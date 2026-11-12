@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -715,6 +715,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">SageMakerTrigger</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">trim_none_values</span><span class="p">,</span> <span class="n">validate_execute_complete_event</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.deferral</span><span class="w"> </span><span class="kn">import</span> <span class="n">should_defer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.mixins</span><span class="w"> </span><span class="kn">import</span> <span class="n">aws_template_fields</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.sagemaker</span><span class="w"> </span><span class="kn">import</span> <span class="n">ApprovalStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.tags</span><span class="w"> </span><span class="kn">import</span> <span class="n">format_tags</span>
@@ -998,6 +999,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">                {"output_name": "evaluation", "file_name": "metrics.json", "result_name": "EvaluationReport"}</span>
 <span class="sd">            ]</span>
 <span class="sd">            # Downstream: ti.xcom_pull("this_task")["OutputFiles"]["EvaluationReport"]["mse"]</span>
+<span class="sd">    :param cancel_on_kill: If True, the processing job is stopped when the task is killed.</span>
+<span class="sd">        Without it the job keeps running, and billing, after the task is gone. A deferred task is</span>
+<span class="sd">        stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only</span>
+<span class="sd">        applies while the task holds a worker slot. It does not cover a deferral that expires on</span>
+<span class="sd">        its own ``timeout``: the Triggerer kills the trigger without calling ``on_kill``, and no</span>
+<span class="sd">        event reaches the task, so nothing runs to stop the job.</span>
 <span class="sd">    :return: Dict with a ``Processing`` key (the job description) and, when ``output_files_to_xcom``</span>
 <span class="sd">        is configured, an ``OutputFiles`` key containing the parsed JSON contents of the configured</span>
 <span class="sd">        output files (keyed by their ``result_name``).</span>
@@ -1020,6 +1027,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">action_if_job_exists</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"timestamp"</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
         <span class="n">output_files_to_xcom</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">cancel_on_kill</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -1060,10 +1068,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerProcessingOperator.deferrable">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
 
+<div class="viewcode-block" id="SageMakerProcessingOperator.cancel_on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerProcessingOperator.cancel_on_kill">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="o">=</span> <span class="n">cancel_on_kill</span></div>
+
 <div class="viewcode-block" id="SageMakerProcessingOperator.serialized_job">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerProcessingOperator.serialized_job">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">serialized_job</span><span class="p">:</span> <span class="nb">dict</span></div>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_processing_job_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_create_integer_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Set fields which should be cast to integers."""</span>
@@ -1098,6 +1111,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="bp">self</span><span class="o">.</span><span class="n">action_if_job_exists</span> <span class="o">==</span> <span class="s2">"fail"</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_processing_job</span><span class="p">,</span>
         <span class="p">)</span>
+
+        <span class="c1"># Recorded before the submit call so a kill in that window still has a name to stop.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_processing_job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"ProcessingJobName"</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
@@ -1144,6 +1160,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
                     <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
                     <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                    <span class="n">cancel_on_kill</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span><span class="p">,</span>
                 <span class="p">),</span>
                 <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
             <span class="p">)</span>
@@ -1160,6 +1177,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">validated_event</span> <span class="o">=</span> <span class="n">validate_execute_complete_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"success"</span><span class="p">:</span>
+            <span class="c1"># A "timeout" event means the waiter gave up while the job was still running; "failed"</span>
+            <span class="c1"># and "stopped" are already terminal.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="ow">and</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"timeout"</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Stopping SageMaker processing job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_name"</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">stop_processing_job</span><span class="p">(</span><span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_name"</span><span class="p">])</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error while running job: </span><span class="si">{</span><span class="n">validated_event</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"SageMaker job </span><span class="si">%s</span><span class="s2"> completed."</span><span class="p">,</span> <span class="n">validated_event</span><span class="p">[</span><span class="s2">"job_name"</span><span class="p">])</span>
@@ -1168,6 +1190,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">result</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"Processing"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialized_job</span><span class="p">}</span>
         <span class="n">result</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_read_output_files</span><span class="p">())</span>
         <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="SageMakerProcessingOperator.on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerProcessingOperator.on_kill">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_kill</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Stop the SageMaker processing job if ``cancel_on_kill`` is set."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_processing_job_name</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Stopping SageMaker processing job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_processing_job_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">stop_processing_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_processing_job_name</span><span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_read_output_files</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
@@ -1378,7 +1409,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.</span>
 <span class="sd">    :param verify: Whether or not to verify SSL certificates. See:</span>
 <span class="sd">        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html</span>
-<span class="sd">    :param deferrable:  Will wait asynchronously for completion.</span>
+<span class="sd">    :param deferrable: Will wait asynchronously for completion.</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :return Dict: Returns The ARN of the endpoint created in Amazon SageMaker.</span>
 <span class="sd">    """</span>
 
@@ -1490,7 +1523,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">response</span><span class="p">[</span><span class="s2">"ResponseMetadata"</span><span class="p">][</span><span class="s2">"HTTPStatusCode"</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">200</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sagemaker endpoint creation failed: </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerTrigger</span><span class="p">(</span>
                     <span class="n">job_name</span><span class="o">=</span><span class="n">endpoint_info</span><span class="p">[</span><span class="s2">"EndpointName"</span><span class="p">],</span>
@@ -1903,6 +1936,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        if the tuning job doesn't finish within max_ingestion_time seconds. If you</span>
 <span class="sd">        set this parameter to None, the operation does not timeout.</span>
 <span class="sd">    :param deferrable: Will wait asynchronously for completion.</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 <span class="sd">    :return Dict: Returns The ARN of the tuning job created in Amazon SageMaker.</span>
 <span class="sd">    """</span>
 
@@ -1972,7 +2007,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">response</span><span class="p">[</span><span class="s2">"ResponseMetadata"</span><span class="p">][</span><span class="s2">"HTTPStatusCode"</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">200</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sagemaker Tuning Job creation failed: </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">description</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerTrigger</span><span class="p">(</span>
                     <span class="n">job_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"HyperParameterTuningJobName"</span><span class="p">],</span>
@@ -2104,6 +2139,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        This is only relevant if check_if_job_exists is True.</span>
 <span class="sd">    :param deferrable: Run operator in the deferrable mode. This is only effective if wait_for_completion is</span>
 <span class="sd">        set to True.</span>
+<span class="sd">    :param cancel_on_kill: If True, the training job is stopped when the task is killed.</span>
+<span class="sd">        Without it the job keeps running, and billing, after the task is gone. A deferred task is</span>
+<span class="sd">        stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only</span>
+<span class="sd">        applies while the task holds a worker slot.</span>
 <span class="sd">    :return Dict: Returns The ARN of the training job created in Amazon SageMaker.</span>
 <span class="sd">    """</span>
 
@@ -2119,6 +2158,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">check_if_job_exists</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">action_if_job_exists</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"timestamp"</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+        <span class="n">cancel_on_kill</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -2157,10 +2197,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.deferrable">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
 
+<div class="viewcode-block" id="SageMakerTrainingOperator.cancel_on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.cancel_on_kill">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="o">=</span> <span class="n">cancel_on_kill</span></div>
+
 <div class="viewcode-block" id="SageMakerTrainingOperator.serialized_training_data">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.serialized_training_data">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">serialized_training_data</span><span class="p">:</span> <span class="nb">dict</span></div>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="SageMakerTrainingOperator.expand_role">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.expand_role">[docs]</a>
@@ -2191,7 +2236,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job</span><span class="p">,</span>
             <span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">])</span>
+        <span class="c1"># Recorded before the submit call so a kill in that window still has a name to stop.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
@@ -2262,6 +2310,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
                     <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
                     <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                    <span class="n">cancel_on_kill</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span><span class="p">,</span>
                 <span class="p">),</span>
                 <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
             <span class="p">)</span>
@@ -2286,6 +2335,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">serialize_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">serialized_training_data</span> <span class="o">=</span> <span class="n">serialize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job</span><span class="p">(</span><span class="n">job_name</span><span class="p">))</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">"Training"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialized_training_data</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.on_kill">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.on_kill">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_kill</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Stop the SageMaker training job if ``cancel_on_kill`` is set."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Stopping SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">stop_training_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SageMakerTrainingOperator.get_openlineage_facets_on_complete">
@@ -2377,6 +2435,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param verbose: Whether to print steps details when waiting for completion.</span>
 <span class="sd">        Defaults to true, consider turning off for pipelines that have thousands of steps.</span>
 <span class="sd">    :param deferrable: Run operator in the deferrable mode.</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 
 <span class="sd">    :return str: Returns The ARN of the pipeline execution created in Amazon SageMaker.</span>
 <span class="sd">    """</span>
@@ -2448,7 +2508,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">"Starting a new execution for pipeline </span><span class="si">%s</span><span class="s2">, running with ARN </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pipeline_name</span><span class="p">,</span> <span class="n">arn</span>
         <span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerPipelineTrigger</span><span class="p">(</span>
                     <span class="n">waiter_type</span><span class="o">=</span><span class="n">SageMakerPipelineTrigger</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">COMPLETE</span><span class="p">,</span>
@@ -2512,6 +2572,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        Defaults to true, consider turning off for pipelines that have thousands of steps.</span>
 <span class="sd">    :param fail_if_not_running: raises an exception if the pipeline stopped or succeeded before this was run</span>
 <span class="sd">    :param deferrable: Run operator in the deferrable mode.</span>
+<span class="sd">        Deferring when ``wait_for_completion`` is False is deprecated; from the next major release</span>
+<span class="sd">        this has no effect when ``wait_for_completion`` is False.</span>
 
 <span class="sd">    :return str: Returns the status of the pipeline execution after the operation has been done.</span>
 <span class="sd">    """</span>
@@ -2583,7 +2645,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="n">status</span>
 
         <span class="c1"># else, eventually wait for completion</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">should_defer</span><span class="p">(</span><span class="n">deferrable</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">,</span> <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
                 <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerPipelineTrigger</span><span class="p">(</span>
                     <span class="n">waiter_type</span><span class="o">=</span><span class="n">SageMakerPipelineTrigger</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">STOPPED</span><span class="p">,</span>
@@ -3844,7 +3906,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

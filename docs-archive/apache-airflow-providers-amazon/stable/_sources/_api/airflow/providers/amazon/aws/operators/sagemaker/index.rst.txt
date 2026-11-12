@@ -148,7 +148,7 @@ Module Contents
 
 
 
-.. py:class:: SageMakerProcessingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), output_files_to_xcom = None, **kwargs)
+.. py:class:: SageMakerProcessingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), output_files_to_xcom = None, cancel_on_kill = False, **kwargs)
 
    Bases: :py:obj:`SageMakerBaseOperator`
 
@@ -200,6 +200,12 @@ Module Contents
                {"output_name": "evaluation", "file_name": "metrics.json", "result_name": "EvaluationReport"}
            ]
            # Downstream: ti.xcom_pull("this_task")["OutputFiles"]["EvaluationReport"]["mse"]
+   :param cancel_on_kill: If True, the processing job is stopped when the task is killed.
+       Without it the job keeps running, and billing, after the task is gone. A deferred task is
+       stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only
+       applies while the task holds a worker slot. It does not cover a deferral that expires on
+       its own ``timeout``: the Triggerer kills the trigger without calling ``on_kill``, and no
+       event reaches the task, so nothing runs to stop the job.
    :return: Dict with a ``Processing`` key (the job description) and, when ``output_files_to_xcom``
        is configured, an ``OutputFiles`` key containing the parsed JSON contents of the configured
        output files (keyed by their ``result_name``).
@@ -247,6 +253,11 @@ Module Contents
    .. py:attribute:: deferrable
 
 
+   .. py:attribute:: cancel_on_kill
+      :value: False
+
+
+
    .. py:attribute:: serialized_job
       :type:  dict
 
@@ -269,6 +280,12 @@ Module Contents
 
 
    .. py:method:: execute_complete(context, event = None)
+
+
+   .. py:method:: on_kill()
+
+      Stop the SageMaker processing job if ``cancel_on_kill`` is set.
+
 
 
    .. py:method:: get_openlineage_facets_on_complete(task_instance)
@@ -372,7 +389,9 @@ Module Contents
    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.
    :param verify: Whether or not to verify SSL certificates. See:
        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html
-   :param deferrable:  Will wait asynchronously for completion.
+   :param deferrable: Will wait asynchronously for completion.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
    :return Dict: Returns The ARN of the endpoint created in Amazon SageMaker.
 
 
@@ -582,6 +601,8 @@ Module Contents
        if the tuning job doesn't finish within max_ingestion_time seconds. If you
        set this parameter to None, the operation does not timeout.
    :param deferrable: Will wait asynchronously for completion.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
    :return Dict: Returns The ARN of the tuning job created in Amazon SageMaker.
 
 
@@ -663,7 +684,7 @@ Module Contents
 
 
 
-.. py:class:: SageMakerTrainingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, check_if_job_exists = True, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), **kwargs)
+.. py:class:: SageMakerTrainingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, check_if_job_exists = True, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), cancel_on_kill = False, **kwargs)
 
    Bases: :py:obj:`SageMakerBaseOperator`
 
@@ -705,6 +726,10 @@ Module Contents
        This is only relevant if check_if_job_exists is True.
    :param deferrable: Run operator in the deferrable mode. This is only effective if wait_for_completion is
        set to True.
+   :param cancel_on_kill: If True, the training job is stopped when the task is killed.
+       Without it the job keeps running, and billing, after the task is gone. A deferred task is
+       stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only
+       applies while the task holds a worker slot.
    :return Dict: Returns The ARN of the training job created in Amazon SageMaker.
 
 
@@ -741,6 +766,11 @@ Module Contents
    .. py:attribute:: deferrable
 
 
+   .. py:attribute:: cancel_on_kill
+      :value: False
+
+
+
    .. py:attribute:: serialized_training_data
       :type:  dict
 
@@ -766,6 +796,12 @@ Module Contents
 
 
    .. py:method:: serialize_result(job_name)
+
+
+   .. py:method:: on_kill()
+
+      Stop the SageMaker training job if ``cancel_on_kill`` is set.
+
 
 
    .. py:method:: get_openlineage_facets_on_complete(task_instance)
@@ -838,6 +874,8 @@ Module Contents
    :param verbose: Whether to print steps details when waiting for completion.
        Defaults to true, consider turning off for pipelines that have thousands of steps.
    :param deferrable: Run operator in the deferrable mode.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
 
    :return str: Returns The ARN of the pipeline execution created in Amazon SageMaker.
 
@@ -923,6 +961,8 @@ Module Contents
        Defaults to true, consider turning off for pipelines that have thousands of steps.
    :param fail_if_not_running: raises an exception if the pipeline stopped or succeeded before this was run
    :param deferrable: Run operator in the deferrable mode.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
 
    :return str: Returns the status of the pipeline execution after the operation has been done.
 

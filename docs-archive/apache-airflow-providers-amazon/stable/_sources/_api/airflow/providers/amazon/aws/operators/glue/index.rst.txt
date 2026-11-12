@@ -12,6 +12,7 @@ Attributes
    airflow.providers.amazon.aws.operators.glue.JOB_RUN_SUCCESS_STATES
    airflow.providers.amazon.aws.operators.glue.JOB_RUN_TERMINAL_STATES
    airflow.providers.amazon.aws.operators.glue.NOT_FOUND_STATE
+   airflow.providers.amazon.aws.operators.glue.PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS
 
 
 Classes
@@ -38,6 +39,10 @@ Module Contents
 
 .. py:data:: NOT_FOUND_STATE
    :value: 'NOT_FOUND'
+
+
+.. py:data:: PREVIOUS_JOB_RUN_STOP_TIMEOUT_SECONDS
+   :value: 600
 
 
 .. py:class:: GlueJobOperator(*, job_name = 'aws_glue_default_job', job_desc = 'AWS Glue Job with Airflow', script_location = None, concurrent_run_limit = None, script_args = None, retry_limit = 0, num_of_dpus = None, s3_bucket = None, iam_role_name = None, iam_role_arn = None, create_job_kwargs = None, run_job_kwargs = None, wait_for_completion = True, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), verbose = False, replace_script_file = False, update_config = False, stop_job_run_on_kill = False, sleep_before_return = 0, job_poll_interval = 6, waiter_delay = 60, waiter_max_attempts = 75, resume_glue_job_on_retry = None, durable = None, openlineage_inject_parent_job_info = conf.getboolean('openlineage', 'spark_inject_parent_job_info', fallback=False), openlineage_inject_transport_info = conf.getboolean('openlineage', 'spark_inject_transport_info', fallback=False), **kwargs)
@@ -68,12 +73,16 @@ Module Contents
    :param run_job_kwargs: Extra arguments for Glue Job Run
    :param wait_for_completion: Whether to wait for job run completion. (default: True)
    :param deferrable: If True, the operator will wait asynchronously for the job to complete.
-       This implies waiting for completion. This mode requires aiobotocore module to be installed.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
+       This mode requires aiobotocore module to be installed.
        (default: False)
    :param verbose: If True, Glue Job Run logs show in the Airflow Task Logs.  (default: False)
    :param update_config: If True, Operator will update job configuration.  (default: False)
    :param replace_script_file: If True, the script file will be replaced in S3. (default: False)
-   :param stop_job_run_on_kill: If True, Operator will stop the job run when task is killed.
+   :param stop_job_run_on_kill: If True, Operator will stop the job run when task is killed. In
+       deferrable mode this requires Airflow 3.3+, and with ``durable`` a retried or cleared task stops
+       its previous run and waits for it to end before starting a new one, instead of reconnecting to it.
    :param sleep_before_return: time in seconds to wait before returning final status. This is meaningful in case
        of limiting concurrency, Glue needs 5-10 seconds to clean up resources.
        Thus if status is returned immediately it might end up in case of more than 1 concurrent run.
@@ -444,7 +453,9 @@ Module Contents
    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)
    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 20)
    :param deferrable: If True, the operator will wait asynchronously for the job to stop.
-       This implies waiting for completion. This mode requires aiobotocore module to be installed.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
+       This mode requires aiobotocore module to be installed.
        (default: False)
    :param aws_conn_id: The Airflow connection used for AWS credentials.
        If this is ``None`` or empty then the default boto3 behaviour is used. If
@@ -564,7 +575,9 @@ Module Contents
    :param waiter_delay: Time in seconds to wait between status checks. (default: 60)
    :param waiter_max_attempts: Maximum number of attempts to check for job completion. (default: 20)
    :param deferrable: If True, the operator will wait asynchronously for the job to stop.
-       This implies waiting for completion. This mode requires aiobotocore module to be installed.
+       Deferring when ``wait_for_completion`` is False is deprecated; from the next major release
+       this has no effect when ``wait_for_completion`` is False.
+       This mode requires aiobotocore module to be installed.
        (default: False)
    :param aws_conn_id: The Airflow connection used for AWS credentials.
        If this is ``None`` or empty then the default boto3 behaviour is used. If

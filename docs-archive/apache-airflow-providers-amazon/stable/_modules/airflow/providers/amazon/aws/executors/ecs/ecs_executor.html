@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.39.0</span>
+        <span class="version-label">Version: </span><span class="version">9.40.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -702,11 +702,14 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span><span class="p">,</span> <span class="n">deque</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">deque</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">Future</span><span class="p">,</span> <span class="n">ThreadPoolExecutor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">copy</span><span class="w"> </span><span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">TypeAlias</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">botocore.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">Config</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">NoCredentialsError</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
@@ -765,6 +768,16 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <span class="s2">"InvalidClientTokenId"</span><span class="p">,</span>
     <span class="s2">"UnrecognizedClientException"</span><span class="p">,</span>
 <span class="p">]</span></div>
+
+<div class="viewcode-block" id="THROTTLING_EXCEPTIONS">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/ecs/ecs_executor/index.html#airflow.providers.amazon.aws.executors.ecs.ecs_executor.THROTTLING_EXCEPTIONS">[docs]</a>
+<span class="n">THROTTLING_EXCEPTIONS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ThrottlingException"</span><span class="p">]</span></div>
+
+<span class="c1"># Retries on top of botocore's own. Past this number, a throttled RunTask call uses one of the workload's</span>
+<span class="c1"># ``max_run_task_attempts``, so a workload cannot stay pending for as long as the throttling lasts.</span>
+<div class="viewcode-block" id="MAX_THROTTLED_RUN_TASK_RETRIES">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/ecs/ecs_executor/index.html#airflow.providers.amazon.aws.executors.ecs.ecs_executor.MAX_THROTTLED_RUN_TASK_RETRIES">[docs]</a>
+<span class="n">MAX_THROTTLED_RUN_TASK_RETRIES</span> <span class="o">=</span> <span class="mi">5</span></div>
 
 
 
@@ -854,6 +867,31 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/ecs/ecs_executor/index.html#airflow.providers.amazon.aws.executors.ecs.ecs_executor.AwsEcsExecutor.attempts_since_last_successful_connection">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">attempts_since_last_successful_connection</span> <span class="o">=</span> <span class="mi">0</span></div>
 
+
+        <span class="c1"># ``ExecutorConf`` has no ``getint`` before Airflow 3.2.</span>
+<div class="viewcode-block" id="AwsEcsExecutor.run_task_concurrency">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/executors/ecs/ecs_executor/index.html#airflow.providers.amazon.aws.executors.ecs.ecs_executor.AwsEcsExecutor.run_task_concurrency">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run_task_concurrency</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span>
+                <span class="n">AllEcsConfigKeys</span><span class="o">.</span><span class="n">RUN_TASK_CONCURRENCY</span><span class="p">,</span>
+                <span class="n">fallback</span><span class="o">=</span><span class="n">CONFIG_DEFAULTS</span><span class="p">[</span><span class="n">AllEcsConfigKeys</span><span class="o">.</span><span class="n">RUN_TASK_CONCURRENCY</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_task_concurrency</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">AllEcsConfigKeys</span><span class="o">.</span><span class="n">RUN_TASK_CONCURRENCY</span><span class="si">}</span><span class="s2"> must be 1 or more, got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">run_task_concurrency</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+        <span class="c1"># With a concurrency of 1, RunTask calls are made one by one in the scheduler loop.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_threads</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span><span class="p">:</span> <span class="n">ThreadPoolExecutor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_task_concurrency</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_threads</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_task_concurrency</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span> <span class="o">=</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span>
+                <span class="n">max_workers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_task_threads</span><span class="p">,</span> <span class="n">thread_name_prefix</span><span class="o">=</span><span class="s2">"ecs-run-task"</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Future</span><span class="p">,</span> <span class="n">EcsQueuedTask</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">load_ecs_connection</span><span class="p">(</span><span class="n">check_connection</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <div class="viewcode-block" id="AwsEcsExecutor.IS_BOTO_CONNECTION_HEALTHY">
@@ -1003,7 +1041,15 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
             <span class="n">fallback</span><span class="o">=</span><span class="n">CONFIG_DEFAULTS</span><span class="p">[</span><span class="n">AllEcsConfigKeys</span><span class="o">.</span><span class="n">AWS_CONN_ID</span><span class="p">],</span>
         <span class="p">)</span>
         <span class="n">region_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONFIG_GROUP_NAME</span><span class="p">,</span> <span class="n">AllEcsConfigKeys</span><span class="o">.</span><span class="n">REGION_NAME</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ecs</span> <span class="o">=</span> <span class="n">EcsHook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">)</span><span class="o">.</span><span class="n">conn</span>
+        <span class="n">hook</span> <span class="o">=</span> <span class="n">EcsHook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region_name</span><span class="p">)</span>
+        <span class="c1"># Each RunTask thread, and the scheduler thread, needs a connection of its own: past the client's pool</span>
+        <span class="c1"># size (10 by default), the extra connections are closed with a warning when a burst of calls is over,</span>
+        <span class="c1"># and the next burst opens them again.</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">config</span>
+        <span class="n">connections</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_threads</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">max_pool_connections</span> <span class="o">&lt;</span> <span class="n">connections</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">Config</span><span class="p">(</span><span class="n">max_pool_connections</span><span class="o">=</span><span class="n">connections</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ecs</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_client_type</span><span class="p">(</span><span class="n">region_name</span><span class="o">=</span><span class="n">hook</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attempts_since_last_successful_connection</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">last_connection_reload</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
 
@@ -1165,84 +1211,121 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="sd">            called again in the next heart-beat.</span>
 
 <span class="sd">        If the launch type is FARGATE, this will run the tasks on new AWS Fargate instances.</span>
+
+<span class="sd">        With ``run_task_concurrency`` above 1, the RunTask calls are made in background threads, at most</span>
+<span class="sd">        that many at a time, and the scheduler loop does not wait for them: each call is handled by the</span>
+<span class="sd">        first sync that finds it finished.</span>
 <span class="sd">        """</span>
-        <span class="n">queue_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="p">)</span>
-        <span class="n">failure_reasons</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">queue_len</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="p">)):</span>
             <span class="n">ecs_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
-            <span class="n">task_key</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">key</span>
-            <span class="n">cmd</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">command</span>
-            <span class="n">queue</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">queue</span>
-            <span class="n">exec_config</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">executor_config</span>
-            <span class="n">attempt_number</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">attempt_number</span>
-            <span class="n">failure_reasons</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">if</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">next_attempt_time</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
                 <span class="k">continue</span>
+            <span class="n">run_task</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_run_task</span><span class="p">,</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">command</span><span class="p">,</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">executor_config</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_handle_run_task_response</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">,</span> <span class="n">run_task</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">run_task</span><span class="p">)]</span> <span class="o">=</span> <span class="n">ecs_task</span>
+        <span class="c1"># All the calls made with expired credentials fail together: raising on the first one would leave</span>
+        <span class="c1"># the others to fail one sync at a time, each forcing its own reconnection.</span>
+        <span class="n">credentials_error</span><span class="p">:</span> <span class="n">ClientError</span> <span class="o">|</span> <span class="n">NoCredentialsError</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="p">[</span><span class="n">future</span> <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span> <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">done</span><span class="p">()]:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">run_task_response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task</span><span class="p">(</span><span class="n">task_key</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">exec_config</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">NoCredentialsError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_handle_run_task_response</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">future</span><span class="p">),</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="n">ClientError</span><span class="p">,</span> <span class="n">NoCredentialsError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="n">credentials_error</span> <span class="o">=</span> <span class="n">credentials_error</span> <span class="ow">or</span> <span class="n">error</span>
+        <span class="k">if</span> <span class="n">credentials_error</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">credentials_error</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_run_task_response</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ecs_task</span><span class="p">:</span> <span class="n">EcsQueuedTask</span><span class="p">,</span> <span class="n">get_response</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the RunTask response for ``ecs_task``, then track the ECS task, or retry or fail the workload."""</span>
+        <span class="n">task_key</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">key</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">command</span>
+        <span class="n">queue</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">queue</span>
+        <span class="n">exec_config</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">executor_config</span>
+        <span class="n">attempt_number</span> <span class="o">=</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">attempt_number</span>
+        <span class="n">failure_reasons</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">run_task_response</span> <span class="o">=</span> <span class="n">get_response</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">NoCredentialsError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">error_code</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s2">"Error"</span><span class="p">][</span><span class="s2">"Code"</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">error_code</span> <span class="ow">in</span> <span class="n">INVALID_CREDENTIALS_EXCEPTIONS</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
                 <span class="k">raise</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">error_code</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s2">"Error"</span><span class="p">][</span><span class="s2">"Code"</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">error_code</span> <span class="ow">in</span> <span class="n">INVALID_CREDENTIALS_EXCEPTIONS</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
-                    <span class="k">raise</span>
-                <span class="n">failure_reasons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
-            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="c1"># Failed to even get a response back from the Boto3 API or something else went</span>
-                <span class="c1"># wrong.  For any possible failure we want to add the exception reasons to the</span>
-                <span class="c1"># failure list so that it is logged to the user and most importantly the task is</span>
-                <span class="c1"># added back to the pending list to be retried later.</span>
-                <span class="n">failure_reasons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="c1"># We got a response back, check if there were failures. If so, add them to the</span>
-                <span class="c1"># failures list so that it is logged to the user and most importantly the task</span>
-                <span class="c1"># is added back to the pending list to be retried later.</span>
-                <span class="k">if</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"failures"</span><span class="p">]:</span>
-                    <span class="n">failure_reasons</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">f</span><span class="p">[</span><span class="s2">"reason"</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"failures"</span><span class="p">]])</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">error_code</span> <span class="ow">in</span> <span class="n">THROTTLING_EXCEPTIONS</span>
+                <span class="ow">and</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">throttled_attempts</span> <span class="o">&lt;</span> <span class="n">MAX_THROTTLED_RUN_TASK_RETRIES</span>
+            <span class="p">):</span>
+                <span class="c1"># ECS is asking to slow down; that says nothing about the workload, so keep its attempts.</span>
+                <span class="n">ecs_task</span><span class="o">.</span><span class="n">throttled_attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">delay</span> <span class="o">=</span> <span class="n">calculate_next_attempt_delay</span><span class="p">(</span><span class="n">ecs_task</span><span class="o">.</span><span class="n">throttled_attempts</span><span class="p">,</span> <span class="n">exponent_base</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">"ECS throttled the RunTask call for </span><span class="si">%s</span><span class="s2">, retrying in </span><span class="si">%s</span><span class="s2"> (retry </span><span class="si">%s</span><span class="s2"> of </span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
+                    <span class="n">task_key</span><span class="p">,</span>
+                    <span class="n">delay</span><span class="p">,</span>
+                    <span class="n">ecs_task</span><span class="o">.</span><span class="n">throttled_attempts</span><span class="p">,</span>
+                    <span class="n">MAX_THROTTLED_RUN_TASK_RETRIES</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">ecs_task</span><span class="o">.</span><span class="n">next_attempt_time</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">delay</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="n">failure_reasons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># Failed to even get a response back from the Boto3 API or something else went</span>
+            <span class="c1"># wrong.  For any possible failure we want to add the exception reasons to the</span>
+            <span class="c1"># failure list so that it is logged to the user and most importantly the task is</span>
+            <span class="c1"># added back to the pending list to be retried later.</span>
+            <span class="n">failure_reasons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># We got a response back, check if there were failures. If so, add them to the</span>
+            <span class="c1"># failures list so that it is logged to the user and most importantly the task</span>
+            <span class="c1"># is added back to the pending list to be retried later.</span>
+            <span class="k">if</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"failures"</span><span class="p">]:</span>
+                <span class="n">failure_reasons</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">f</span><span class="p">[</span><span class="s2">"reason"</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"failures"</span><span class="p">]])</span>
 
-            <span class="k">if</span> <span class="n">failure_reasons</span><span class="p">:</span>
-                <span class="c1"># Make sure the number of attempts does not exceed max_run_task_attempts</span>
-                <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">attempt_number</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_run_task_attempts</span><span class="p">):</span>
-                    <span class="n">ecs_task</span><span class="o">.</span><span class="n">attempt_number</span> <span class="o">+=</span> <span class="mi">1</span>
-                    <span class="n">ecs_task</span><span class="o">.</span><span class="n">next_attempt_time</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">calculate_next_attempt_delay</span><span class="p">(</span>
-                        <span class="n">attempt_number</span>
-                    <span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">reasons_str</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">failure_reasons</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                        <span class="s2">"ECS workload </span><span class="si">%s</span><span class="s2"> has failed a maximum of </span><span class="si">%s</span><span class="s2"> times. Marking as failed. Reasons: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
-                        <span class="n">task_key</span><span class="p">,</span>
-                        <span class="n">attempt_number</span><span class="p">,</span>
-                        <span class="n">reasons_str</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log_task_event</span><span class="p">(</span>
-                        <span class="n">event</span><span class="o">=</span><span class="s2">"ecs task submit failure"</span><span class="p">,</span>
-                        <span class="n">ti_key</span><span class="o">=</span><span class="n">task_key</span><span class="p">,</span>
-                        <span class="n">extra</span><span class="o">=</span><span class="p">(</span>
-                            <span class="sa">f</span><span class="s2">"Task could not be queued after </span><span class="si">{</span><span class="n">attempt_number</span><span class="si">}</span><span class="s2"> attempts. "</span>
-                            <span class="sa">f</span><span class="s2">"Marking as failed. Reasons: </span><span class="si">{</span><span class="n">reasons_str</span><span class="si">}</span><span class="s2">"</span>
-                        <span class="p">),</span>
-                    <span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">task_key</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="ow">not</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"tasks"</span><span class="p">]:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"ECS RunTask Response: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">run_task_response</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">failure_reasons</span><span class="p">:</span>
+            <span class="c1"># Make sure the number of attempts does not exceed max_run_task_attempts</span>
+            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">attempt_number</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_run_task_attempts</span><span class="p">):</span>
+                <span class="n">ecs_task</span><span class="o">.</span><span class="n">attempt_number</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">ecs_task</span><span class="o">.</span><span class="n">next_attempt_time</span> <span class="o">=</span> <span class="n">timezone</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">calculate_next_attempt_delay</span><span class="p">(</span><span class="n">attempt_number</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pending_workloads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">reasons_str</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">failure_reasons</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">"ECS workload </span><span class="si">%s</span><span class="s2"> has failed a maximum of </span><span class="si">%s</span><span class="s2"> times. Marking as failed. Reasons: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+                    <span class="n">task_key</span><span class="p">,</span>
+                    <span class="n">attempt_number</span><span class="p">,</span>
+                    <span class="n">reasons_str</span><span class="p">,</span>
+                <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log_task_event</span><span class="p">(</span>
                     <span class="n">event</span><span class="o">=</span><span class="s2">"ecs task submit failure"</span><span class="p">,</span>
-                    <span class="n">extra</span><span class="o">=</span><span class="sa">f</span><span class="s2">"ECS RunTask Response: </span><span class="si">{</span><span class="n">run_task_response</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                     <span class="n">ti_key</span><span class="o">=</span><span class="n">task_key</span><span class="p">,</span>
+                    <span class="n">extra</span><span class="o">=</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Task could not be queued after </span><span class="si">{</span><span class="n">attempt_number</span><span class="si">}</span><span class="s2"> attempts. "</span>
+                        <span class="sa">f</span><span class="s2">"Marking as failed. Reasons: </span><span class="si">{</span><span class="n">reasons_str</span><span class="si">}</span><span class="s2">"</span>
+                    <span class="p">),</span>
                 <span class="p">)</span>
-                <span class="k">raise</span> <span class="n">EcsExecutorException</span><span class="p">(</span>
-                    <span class="s2">"No failures and no ECS tasks provided in response. This should never happen."</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">task</span> <span class="o">=</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"tasks"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span><span class="o">.</span><span class="n">add_task</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">task_key</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">exec_config</span><span class="p">,</span> <span class="n">attempt_number</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">running_state</span><span class="p">(</span><span class="n">task_key</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">task_arn</span><span class="p">)</span></div>
-
+                <span class="bp">self</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">task_key</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"tasks"</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"ECS RunTask Response: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">run_task_response</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_task_event</span><span class="p">(</span>
+                <span class="n">event</span><span class="o">=</span><span class="s2">"ecs task submit failure"</span><span class="p">,</span>
+                <span class="n">extra</span><span class="o">=</span><span class="sa">f</span><span class="s2">"ECS RunTask Response: </span><span class="si">{</span><span class="n">run_task_response</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">ti_key</span><span class="o">=</span><span class="n">task_key</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">raise</span> <span class="n">EcsExecutorException</span><span class="p">(</span>
+                <span class="s2">"No failures and no ECS tasks provided in response. This should never happen."</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">task</span> <span class="o">=</span> <span class="n">run_task_response</span><span class="p">[</span><span class="s2">"tasks"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span><span class="o">.</span><span class="n">add_task</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">task_key</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">exec_config</span><span class="p">,</span> <span class="n">attempt_number</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">running_state</span><span class="p">(</span><span class="n">task_key</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">task_arn</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_run_task</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -1259,7 +1342,8 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="sd">        section of the JSON request before calling Boto3's "run_task" function.</span>
 <span class="sd">        """</span>
         <span class="n">run_task_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_kwargs</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">exec_config</span><span class="p">)</span>
-        <span class="n">boto_run_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ecs</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span><span class="o">**</span><span class="n">run_task_kwargs</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">Stats</span><span class="o">.</span><span class="n">timer</span><span class="p">(</span><span class="s2">"ecs_executor.run_task.duration"</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="n">prune_dict</span><span class="p">({</span><span class="s2">"team_name"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">team_name</span><span class="p">})):</span>
+            <span class="n">boto_run_task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ecs</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span><span class="o">**</span><span class="n">run_task_kwargs</span><span class="p">)</span>
         <span class="n">run_task_response</span> <span class="o">=</span> <span class="n">BotoRunTaskSchema</span><span class="p">()</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">boto_run_task</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">run_task_response</span>
 
@@ -1317,13 +1401,15 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
         <span class="k">try</span><span class="p">:</span>
             <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="p">:</span>
                     <span class="k">break</span>
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">heartbeat_interval</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="c1"># We catch any and all exceptions because otherwise they would bubble</span>
             <span class="c1"># up and kill the scheduler process.</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Failed to end </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Failed to end </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span><span class="o">.</span><span class="n">shutdown</span><span class="p">(</span><span class="n">wait</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cancel_futures</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="AwsEcsExecutor.terminate">
@@ -1331,6 +1417,21 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">terminate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Kill all ECS processes by calling Boto3's StopTask API."""</span>
         <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># A RunTask call still in flight may start an ECS task after the StopTask calls below:</span>
+                <span class="c1"># wait for the calls already started, and drop the ones not started yet.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span><span class="o">.</span><span class="n">shutdown</span><span class="p">(</span><span class="n">wait</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cancel_futures</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="c1"># The pool no longer takes calls: ``end()`` below makes them in the scheduler loop.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_pool</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">for</span> <span class="n">future</span><span class="p">,</span> <span class="n">ecs_task</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+                    <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_task_futures</span><span class="p">[</span><span class="n">future</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">cancelled</span><span class="p">():</span>
+                        <span class="k">continue</span>
+                    <span class="c1"># One failure must not keep the other ECS tasks from being tracked, then stopped.</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_handle_run_task_response</span><span class="p">(</span><span class="n">ecs_task</span><span class="p">,</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Failed to handle the RunTask response for </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">ecs_task</span><span class="o">.</span><span class="n">key</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">active_workers</span><span class="o">.</span><span class="n">get_all_arns</span><span class="p">():</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">ecs</span><span class="o">.</span><span class="n">stop_task</span><span class="p">(</span>
                     <span class="n">cluster</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cluster</span><span class="p">,</span> <span class="n">task</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">"Airflow Executor received a SIGTERM"</span>
@@ -1745,7 +1846,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=50076ca8"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
