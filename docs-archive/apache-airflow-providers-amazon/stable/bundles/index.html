@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -704,6 +704,41 @@ must allow the directory prefix including its trailing slash.</p>
 </pre></div>
 </div>
 </section>
+<section id="s3archivedagbundle">
+<h2>S3ArchiveDagBundle<a class="headerlink" href="#s3archivedagbundle" title="Link to this heading">¶</a></h2>
+<p>Use <a class="reference internal" href="../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle" title="airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle"><code class="xref py py-class docutils literal notranslate"><span class="pre">S3ArchiveDagBundle</span></code></a> when the Dags are published as one
+<code class="docutils literal notranslate"><span class="pre">.tar.gz</span></code> object. <a class="reference internal" href="../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle" title="airflow.providers.amazon.aws.bundles.s3.S3DagBundle"><code class="xref py py-class docutils literal notranslate"><span class="pre">S3DagBundle</span></code></a> downloads every object under
+<code class="docutils literal notranslate"><span class="pre">prefix</span></code> one at a time. Each object costs a full request round-trip, so bundles made of many small files
+can take a long time to stage — a cost paid by every component that stages the bundle, which with ephemeral
+workers (e.g. KubernetesExecutor task pods) means on every task start.</p>
+<p><code class="docutils literal notranslate"><span class="pre">S3ArchiveDagBundle</span></code> stages the bundle from the <code class="docutils literal notranslate"><span class="pre">archive_key</span></code> object: one <code class="docutils literal notranslate"><span class="pre">HEAD</span></code> request to detect
+changes (unchanged archives are not re-downloaded), one <code class="docutils literal notranslate"><span class="pre">GET</span></code> to fetch it, then a local unpack and a swap
+into place. The archive is the only source of the Dags. Configure this class instead of <code class="docutils literal notranslate"><span class="pre">S3DagBundle</span></code>;
+there is no <code class="docutils literal notranslate"><span class="pre">prefix</span></code> argument and no second copy to keep in sync.</p>
+<p>Archive mode requires Python 3.11.4 or later, because unpacking uses <code class="docutils literal notranslate"><span class="pre">tarfile</span></code> <code class="docutils literal notranslate"><span class="pre">filter=&quot;data&quot;</span></code>
+(added in that release). Constructing <code class="docutils literal notranslate"><span class="pre">S3ArchiveDagBundle</span></code> on an older interpreter raises
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_CONFIG_LIST</span><span class="o">=</span><span class="s1">'[</span>
+<span class="s1">  {</span>
+<span class="s1">    "name": "my-s3-dags",</span>
+<span class="s1">    "classpath": "airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle",</span>
+<span class="s1">    "kwargs": {</span>
+<span class="s1">      "aws_conn_id": "aws_default",</span>
+<span class="s1">      "bucket_name": "my-airflow-bucket",</span>
+<span class="s1">      "archive_key": "bundle-archives/dags.tar.gz",</span>
+<span class="s1">      "refresh_interval": 60</span>
+<span class="s1">    }</span>
+<span class="s1">  }</span>
+<span class="s1">]'</span>
+</pre></div>
+</div>
+<p>Publishing the archive is the responsibility of your deployment process. Members are extracted relative to
+the bundle root, so pack the contents of the Dags directory rather than the directory itself — for example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>tar<span class="w"> </span>-C<span class="w"> </span>./dags<span class="w"> </span>-czf<span class="w"> </span>dags.tar.gz<span class="w"> </span>.
+aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>dags.tar.gz<span class="w"> </span>s3://my-airflow-bucket/bundle-archives/dags.tar.gz
+</pre></div>
+</div>
+</section>
 </section>
 
 
@@ -783,6 +818,7 @@ must allow the directory prefix including its trailing slash.</p>
             <ul>
 <li><a class="reference internal" href="#">Bundles</a><ul>
 <li><a class="reference internal" href="#s3dagbundle">S3DagBundle</a></li>
+<li><a class="reference internal" href="#s3archivedagbundle">S3ArchiveDagBundle</a></li>
 </ul>
 </li>
 </ul>
@@ -1002,7 +1038,7 @@ must allow the directory prefix including its trailing slash.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

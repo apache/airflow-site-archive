@@ -9,6 +9,14 @@ airflow.providers.common.ai.toolsets.sql
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sql.log
+
+
 Classes
 -------
 
@@ -20,9 +28,11 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: SQLToolset(db_conn_id, *, allowed_tables = _UNSET, allowed_functions = None, schema = None, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES, max_columns = DEFAULT_MAX_COLUMNS, max_retries = None)
+.. py:data:: log
 
-   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+.. py:class:: SQLToolset(db_conn_id, *, allowed_tables = _UNSET, allowed_functions = None, schema = None, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES, max_columns = DEFAULT_MAX_COLUMNS, tool_prefix = '', max_retries = None, include_table_comments = False, search_backend = None, max_listed_tables = 100)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.tool_prefix.ToolPrefixMixin`, :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
 
 
    Curated toolset that gives an LLM agent safe access to a SQL database.
@@ -33,12 +43,14 @@ Module Contents
    Uses a :class:`~airflow.providers.common.sql.hooks.sql.DbApiHook` resolved
    lazily from the given ``db_conn_id``.
 
-   When a tool fails, the database's error message is returned to the agent as a
-   retry (:class:`pydantic_ai.ModelRetry`) so the model can correct its SQL within
-   the run instead of failing the task. ``pydantic-ai`` bounds this by the tool's
-   ``max_retries``, so an unrecoverable error -- a bad connection or an auth
-   failure -- exhausts the retries and fails the task for Airflow to retry. The
-   toolset does not inspect the error type or message.
+   When the statement fails, the database's error message is returned to the agent as
+   a retry (:class:`pydantic_ai.ModelRetry`) so the model can correct its SQL within
+   the run, bounded by the tool's ``max_retries``. When the toolset cannot reach the
+   database -- the connection is missing or misconfigured, the host is unreachable,
+   the credentials are rejected, or SQLAlchemy reports the connection lost -- the
+   error is raised instead, failing the attempt for Airflow to retry: no change to
+   the SQL can fix it. Under durable execution a raised call is not recorded, so the
+   retry runs it against the database again rather than replaying the failure.
 
    :param db_conn_id: Airflow connection ID for the database. Templated when the
        toolset is passed to ``AgentOperator`` / ``@task.agent``, so each task
@@ -116,9 +128,28 @@ Module Contents
        the full list is replaced by a bounded summary (column count, a type histogram, a
        sample of columns) that points the agent at the ``name_contains`` filter, so a
        several-thousand-column table cannot exhaust the context before a query is written.
+   :param tool_prefix: Optional prefix joined to each tool name with an underscore
+       (e.g. ``"pg"`` produces ``"pg_query"``). Must be a valid Python identifier. Set it
+       when one agent has another toolset with the same tool names, such as a second
+       ``SQLToolset``, since duplicate tool names are rejected.
    :param max_retries: How many times the model may correct a failed call to one of these
        tools before the run fails. ``None`` (the default) uses the agent's tool retry
        budget, its ``retries``, as pydantic-ai's own toolsets do.
+   :param include_table_comments: When ``True``, ``list_tables`` returns
+       ``{"name": ..., "comment": ...}`` objects instead of bare names, with ``comment``
+       present only for tables that have one (each capped to 200 characters). Without a
+       ``search_backend`` the list has no size limit: the total is not bound by
+       ``max_result_bytes``. Default ``False`` keeps the list of names. ``get_schema`` always
+       returns table and column comments where the database reports them, regardless of this flag.
+   :param search_backend: Registers a ``search_tables`` tool that finds tables by a free-text
+       query, for databases with too many tables to list. Pass
+       :class:`~airflow.providers.common.ai.utils.sql_search.KeywordTableSearchBackend` for a
+       keyword match over table names and comments, or any object implementing
+       :class:`~airflow.providers.common.ai.utils.sql_search.SQLTableSearchBackend`. Whatever it
+       returns is filtered through ``allowed_tables``. ``None`` (the default) registers no search tool.
+   :param max_listed_tables: With a ``search_backend``, ``list_tables`` returns only the number of
+       tables and a pointer to ``search_tables`` once there are more than this many. Default ``100``.
+       Without a ``search_backend`` there is no limit.
 
 
    .. py:attribute:: agent_template_fields

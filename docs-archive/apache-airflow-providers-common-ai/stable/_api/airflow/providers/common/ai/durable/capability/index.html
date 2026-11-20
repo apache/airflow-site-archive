@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -457,6 +457,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -536,7 +537,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -624,6 +625,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -800,9 +802,18 @@ In a plain <code class="docutils literal notranslate"><span class="pre">&#64;tas
 normally in a test or a notebook. In a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>, a run’s steps are deleted as
 soon as the run succeeds, so that clearing the task later starts it fresh: a task that
 runs several agents replays only the run that failed, and runs the ones before it again.</p>
+<p>A tool that must run on every attempt, such as one that reads the current time or
+creates a temporary table, opts out with <code class="docutils literal notranslate"><span class="pre">metadata={&quot;airflow&quot;:</span> <span class="pre">False}</span></code>; for tools of
+a toolset you do not define, such as <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, add the capability
+<code class="docutils literal notranslate"><span class="pre">SetToolMetadata(tools=[...],</span> <span class="pre">airflow=False)</span></code>. pydantic-ai’s own <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> refuses the
+opt-out; the provider’s <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> accepts it.</p>
 <p>Toolsets the agent calls through pydantic-ai’s durable backend need a unique <code class="docutils literal notranslate"><span class="pre">id</span></code>
 (<code class="docutils literal notranslate"><span class="pre">FunctionToolset(id=...)</span></code>, <code class="docutils literal notranslate"><span class="pre">MCPToolset(...,</span> <span class="pre">id=...)</span></code>), as do capabilities that
-contribute <code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods; the ids name the steps in the journal.</p>
+contribute <code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods; the ids name the steps in the journal.
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> fill in the ids of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> or a
+function that builds a toolset passed in <code class="docutils literal notranslate"><span class="pre">toolsets</span></code> or <code class="docutils literal notranslate"><span class="pre">agent_params[&quot;toolsets&quot;]</span></code>,
+and of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> held directly by a <code class="docutils literal notranslate"><span class="pre">Toolset</span></code> capability
+(<a class="reference internal" href="../../../../../../../durable_execution.html#durable-toolset-ids"><span class="std std-ref">Toolset ids</span></a>); in a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> you set them.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -832,6 +843,14 @@ contribute <code class="docutils literal notranslate"><span class="pre">&#64;dur
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.capability.AirflowDurability.get_durable_operation_backend">
 <span class="sig-name descname"><span class="pre">get_durable_operation_backend</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/capability.html#AirflowDurability.get_durable_operation_backend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.get_durable_operation_backend" title="Link to this definition">¶</a></dt>
 <dd><p>Return the backend that dispatches this capability’s durable operations.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.capability.AirflowDurability.before_model_request">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">before_model_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_context</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/capability.html#AirflowDurability.before_model_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.before_model_request" title="Link to this definition">¶</a></dt>
+<dd><p>Validate the final request and repair durability after an outer hook swaps the model.</p>
 <dl class="field-list simple">
 </dl>
 </dd></dl>
@@ -946,6 +965,7 @@ contribute <code class="docutils literal notranslate"><span class="pre">&#64;dur
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.engine_spec"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.engine_spec</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.in_durable_context"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.in_durable_context</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.get_durable_operation_backend"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.get_durable_operation_backend()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.before_model_request"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.before_model_request()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.get_wrapper_toolset"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.get_wrapper_toolset()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.before_run"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.before_run()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.capability.AirflowDurability.wrap_run"><code class="docutils literal notranslate"><span class="pre">AirflowDurability.wrap_run()</span></code></a></li>
@@ -1134,7 +1154,7 @@ contribute <code class="docutils literal notranslate"><span class="pre">&#64;dur
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

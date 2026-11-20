@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -709,13 +709,24 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">reduce</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">get_origin</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">TypeAdapter</span><span class="p">,</span> <span class="n">ValidationError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticUserError</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoreSchema</span><span class="p">,</span> <span class="n">PydanticSerializationError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoreSchema</span><span class="p">,</span> <span class="n">PydanticSerializationError</span><span class="p">,</span> <span class="n">to_jsonable_python</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReviewedOutputValidationError</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.serde</span><span class="w"> </span><span class="kn">import</span> <span class="n">iter_pydantic_models</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># pragma: no cover - missing ``apache-airflow-task-sdk`` walker</span>
+<div class="viewcode-block" id="iter_pydantic_models">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/output_type/index.html#airflow.providers.common.ai.utils.output_type.iter_pydantic_models">[docs]</a>
+    <span class="n">iter_pydantic_models</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[assignment]</span></div>
+
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/output_type/index.html#airflow.providers.common.ai.utils.output_type.log">[docs]</a>
@@ -728,6 +739,62 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># that indexes its input (``data.get``) when the review text is not the shape it expects. Anything else,</span>
 <span class="c1"># such as a validator's network or timeout error, propagates instead of reading as a failed conversion.</span>
 <span class="n">_CONVERSION_ERRORS</span> <span class="o">=</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_model_dump_required</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">output_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Tell whether an output holding ``BaseModel`` instances must be pushed to XCom dumped.</span>
+
+<span class="sd">    The instances are looked up in the output itself, as ``_iter_models_in_output`` walks it: the elements</span>
+<span class="sd">    of a list, tuple (a NamedTuple included), set or frozenset, and the keys and values of a dict. A</span>
+<span class="sd">    downstream task can load a model from XCom only if the worker registered the model's class, and the</span>
+<span class="sd">    worker registers the classes ``iter_pydantic_models`` finds in</span>
+<span class="sd">    ``output_type``. It finds none in a list of output types, an output marker, an output function, a</span>
+<span class="sd">    ``TypeAliasType`` or a ``NewType``, so an instance of a class it did not find is dumped. Without</span>
+<span class="sd">    ``iter_pydantic_models`` (Airflow &lt; 3.3 or an older task-sdk) the worker registers no class, so every</span>
+<span class="sd">    model in the output counts as unregistered and is dumped.</span>
+<span class="sd">    """</span>
+    <span class="n">registered</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span> <span class="k">if</span> <span class="n">iter_pydantic_models</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">set</span><span class="p">(</span><span class="n">iter_pydantic_models</span><span class="p">(</span><span class="n">output_type</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">registered</span> <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="n">_iter_models_in_output</span><span class="p">(</span><span class="n">output</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="dump_output_for_xcom">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/output_type/index.html#airflow.providers.common.ai.utils.output_type.dump_output_for_xcom">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dump_output_for_xcom</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">output_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">serialize_output</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the output as it is pushed to XCom.</span>
+
+<span class="sd">    With ``serialize_output`` a model output is dumped with ``model_dump()``, as 1.0.0 does, so a ``date``</span>
+<span class="sd">    or ``Decimal`` field keeps its type. Any other output is dumped, whole and to JSON values, only when it</span>
+<span class="sd">    holds a model the worker registers no class for, with field names rather than aliases, so a ``HttpUrl``,</span>
+<span class="sd">    ``Path`` or ``Enum`` field is a string that XCom accepts. Registered models, in a container or not, are</span>
+<span class="sd">    left for the serde serializer.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">serialize_output</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_model_dump_required</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">output_type</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">output</span>
+    <span class="k">return</span> <span class="n">to_jsonable_python</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">by_alias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_iter_models_in_output</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Yield the ``BaseModel`` instances in an output.</span>
+
+<span class="sd">    Looks inside list, tuple (a NamedTuple included), set, frozenset and dict. Dataclass contents and</span>
+<span class="sd">    model fields are not walked.</span>
+<span class="sd">    """</span>
+    <span class="n">stack</span> <span class="o">=</span> <span class="p">[</span><span class="n">output</span><span class="p">]</span>
+    <span class="k">while</span> <span class="n">stack</span><span class="p">:</span>
+        <span class="n">item</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="n">item</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="p">(</span><span class="nb">set</span><span class="p">,</span> <span class="nb">frozenset</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="n">stack</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">stack</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="n">stack</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
 
 
 <div class="viewcode-block" id="dump_output_to_json">
@@ -772,7 +839,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Turn the reviewed string back into ``output_type``.</span>
 
-<span class="sd">    ``raw`` is JSON, or bare text for types pydantic builds from a string. ``str`` outputs, output</span>
+<span class="sd">    ``raw`` is JSON, or bare text for types pydantic builds from a string. A list of candidate types is validated as their union. ``str`` outputs, output</span>
 <span class="sd">    functions, pydantic-ai output markers such as ``ToolOutput`` and types pydantic has no schema for</span>
 <span class="sd">    return ``raw`` unchanged, and so does an unedited output that does not validate back (with a warning).</span>
 
@@ -782,11 +849,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="n">output_type</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">raw</span>
+    <span class="n">declared_type</span> <span class="o">=</span> <span class="n">output_type</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output_type</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="c1"># pydantic-ai treats a list of output types as "any of these". Unioning an empty list or output</span>
+        <span class="c1"># markers is a ``TypeError``, and leaves the output as it is.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">output_type</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">or_</span><span class="p">,</span> <span class="n">output_type</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">raw</span>
+    <span class="c1"># A pydantic-ai output marker (``ToolOutput``, ``NativeOutput``, ...) is not a type, and</span>
+    <span class="c1"># ``TypeAdapter`` fails on it with an ``AttributeError``.</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">adapter</span><span class="p">:</span> <span class="n">TypeAdapter</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">output_type</span><span class="p">)</span>
         <span class="n">is_output_function</span> <span class="o">=</span> <span class="n">_is_output_function</span><span class="p">(</span><span class="n">adapter</span><span class="o">.</span><span class="n">core_schema</span><span class="p">)</span>
-    <span class="c1"># A pydantic-ai output marker (``ToolOutput``, ``NativeOutput``, ...) is not a type, and</span>
-    <span class="c1"># ``TypeAdapter`` fails on it with an ``AttributeError``.</span>
     <span class="k">except</span> <span class="p">(</span><span class="n">PydanticUserError</span><span class="p">,</span> <span class="ne">AttributeError</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">raw</span>
     <span class="k">if</span> <span class="n">is_output_function</span><span class="p">:</span>
@@ -805,9 +880,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> Returning the output unchanged."</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">raw</span>
             <span class="k">raise</span> <span class="n">ReviewedOutputValidationError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">json_error</span>
-    <span class="k">if</span> <span class="n">serialize_output</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rehydrated</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">rehydrated</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">rehydrated</span></div>
+    <span class="k">return</span> <span class="n">dump_output_for_xcom</span><span class="p">(</span><span class="n">rehydrated</span><span class="p">,</span> <span class="n">declared_type</span><span class="p">,</span> <span class="n">serialize_output</span><span class="o">=</span><span class="n">serialize_output</span><span class="p">)</span></div>
 
 
 
@@ -1124,7 +1197,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

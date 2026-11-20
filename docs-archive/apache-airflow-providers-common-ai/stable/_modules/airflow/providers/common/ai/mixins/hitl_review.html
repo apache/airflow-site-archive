@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -705,22 +705,44 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># under the License.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Protocol</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NoReturn</span><span class="p">,</span> <span class="n">Protocol</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HITLMaxIterationsError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.hitl_review</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HITL_FEEDBACK_PARAM</span><span class="p">,</span>
+    <span class="n">HITL_OPTION_APPROVE</span><span class="p">,</span>
+    <span class="n">HITL_OPTION_REJECT</span><span class="p">,</span>
+    <span class="n">HITL_OPTION_REQUEST_CHANGES</span><span class="p">,</span>
     <span class="n">XCOM_AGENT_OUTPUT_PREFIX</span><span class="p">,</span>
     <span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span>
     <span class="n">XCOM_HUMAN_ACTION</span><span class="p">,</span>
+    <span class="n">XCOM_HUMAN_FEEDBACK_PREFIX</span><span class="p">,</span>
     <span class="n">AgentSessionData</span><span class="p">,</span>
     <span class="n">HumanActionData</span><span class="p">,</span>
     <span class="n">SessionStatus</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.output_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">dump_output_for_display</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt</span><span class="w"> </span><span class="kn">import</span> <span class="n">describe_prompt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_3_PLUS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HITLRejectException</span><span class="p">,</span>
+    <span class="n">HITLTimeoutError</span><span class="p">,</span>
+    <span class="n">HITLTriggerEventError</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">if</span> <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">:</span>
+    <span class="c1"># Airflow 3.3+ parks the task in AWAITING_INPUT between review rounds, so a review that takes</span>
+    <span class="c1"># hours holds no worker or pool slot. Older Airflow versions poll XCom inside execute().</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskAwaitingInput</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.execution_time.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEVER_EXPIRE</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.execution_time.hitl</span><span class="w"> </span><span class="kn">import</span> <span class="n">upsert_hitl_detail</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.timezone</span><span class="w"> </span><span class="kn">import</span> <span class="n">utcnow</span>
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.log">[docs]</a>
@@ -730,16 +752,70 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># ``hitl_timeout`` may be ``None``, so a persistently failing poll would otherwise loop forever.</span>
 <span class="n">_MAX_CONSECUTIVE_XCOM_PULL_FAILURES</span> <span class="o">=</span> <span class="mi">10</span>
 
+<span class="c1"># Task state store key holding what the operator needs to regenerate after the task resumes</span>
+<span class="c1"># (the conversation so far), written by ``dump_review_state`` on every round.</span>
+<span class="n">_REVIEW_STATE_KEY</span> <span class="o">=</span> <span class="s2">"common_ai_hitl_review_state"</span>
+<span class="c1"># How long the review state outlives a timed review, so a resume that runs late still finds it.</span>
+<span class="n">_REVIEW_STATE_RETENTION_MARGIN</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">state_sha256</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the review state saved before the park, refusing one that is gone or changed."""</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_REVIEW_STATE_KEY</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span> <span class="o">!=</span> <span class="n">state_sha256</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HITLTriggerEventError</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">"error"</span><span class="p">:</span> <span class="s2">"The saved review conversation is missing or changed while the task waited."</span><span class="p">,</span>
+                <span class="s2">"error_type"</span><span class="p">:</span> <span class="s2">"validation"</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">state</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_delete_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># Best-effort: failing the task over its cleanup would be worse, and the row expires anyway.</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">]</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">_REVIEW_STATE_KEY</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Could not delete the saved HITL review conversation"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="nd">@contextmanager</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_review_state_dropped_unless_parked</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">logger</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Delete the saved conversation when the review ends any way but parking for the next round."""</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span>
+    <span class="k">except</span> <span class="n">TaskAwaitingInput</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">BaseException</span><span class="p">:</span>
+        <span class="c1"># The conversation can hold tool results, and nothing will resume to read it.</span>
+        <span class="n">_delete_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">logger</span><span class="p">)</span>
+        <span class="k">raise</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_delete_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">logger</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pull_session</span><span class="p">(</span><span class="n">ti</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AgentSessionData</span><span class="p">:</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">task_ids</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="n">map_indexes</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">AgentSessionData</span><span class="o">.</span><span class="n">model_validate_json</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">AgentSessionData</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">SessionStatus</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">ended</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="n">status</span><span class="p">})</span>
+    <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">ended</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
+
+
 <div class="viewcode-block" id="HITLReviewProtocol">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">HITLReviewProtocol</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Attributes that the host operator must provide."""</span>
+<span class="w">    </span><span class="sd">"""The host operator's attributes and hooks, and the mixin methods that call each other."""</span>
 
 <div class="viewcode-block" id="HITLReviewProtocol.enable_hitl_review">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.enable_hitl_review">[docs]</a>
@@ -770,7 +846,45 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="HITLReviewProtocol.prompt">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.prompt">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
-</div>
+
+
+<div class="viewcode-block" id="HITLReviewProtocol.regenerate_with_feedback">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.regenerate_with_feedback">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">regenerate_with_feedback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">feedback</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="HITLReviewProtocol.dump_review_state">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.dump_review_state">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dump_review_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="HITLReviewProtocol.load_review_state">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.load_review_state">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_review_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span></div>
+
+
+<div class="viewcode-block" id="HITLReviewProtocol.complete_hitl_review">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewProtocol.complete_hitl_review">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">complete_hitl_review</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">approved_output</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parks_between_rounds</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_recorded_review_feedback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_record_review_feedback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">feedback</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_start_review_round</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">deadline</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_park_for_review</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">deadline</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">state_sha256</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_regenerate_next_round</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">feedback</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
 
 
 
@@ -778,20 +892,27 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">HITLReviewMixin</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Mixin that drives an iterative HITL review loop inside ``execute()``.</span>
+<span class="sd">    Mixin that drives an iterative HITL review after the operator generates its first output.</span>
 
-<span class="sd">    After the operator generates its first output, the mixin:</span>
+<span class="sd">    Each round, the mixin pushes session metadata and the agent output to XCom and waits for the</span>
+<span class="sd">    reviewer to act in the ``hitl_review`` plugin:</span>
 
-<span class="sd">    1. Pushes session metadata and the first agent output to XCom.</span>
-<span class="sd">    2. Polls the human action XCom (``airflow_hitl_review_human_action``) at ``hitl_poll_interval`` seconds.</span>
-<span class="sd">    3. When a human sets action to ``changes_requested`` (via the plugin API),</span>
-<span class="sd">       calls :meth:`regenerate_with_feedback` and pushes the new agent output.</span>
-<span class="sd">    4. When a human sets action to ``approved``, returns the output.</span>
-<span class="sd">    5. When a human sets action to ``rejected``, raises a `HITLRejectException`</span>
+<span class="sd">    - ``changes_requested``: calls :meth:`regenerate_with_feedback` and starts the next round.</span>
+<span class="sd">    - ``approved``: returns the output.</span>
+<span class="sd">    - ``rejected``: raises ``HITLRejectException``.</span>
 
-<span class="sd">    The loop stops after ``hitl_timeout`` or ``max_hitl_iterations``. It also stops, by</span>
-<span class="sd">    re-raising the underlying exception, when polling the human action XCom fails</span>
-<span class="sd">    ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row, even if ``hitl_timeout`` is ``None``.</span>
+<span class="sd">    **How it waits:** on Airflow 3.3+ each round is also a Human-in-the-loop request on the task</span>
+<span class="sd">    instance, and the task parks in the ``awaiting_input`` state, holding no worker or pool slot.</span>
+<span class="sd">    The plugin answers the request and resumes the task in :meth:`resume_hitl_review`, which runs</span>
+<span class="sd">    the next round in a new process; the conversation needed to regenerate is kept in the task</span>
+<span class="sd">    state store through :meth:`dump_review_state` and :meth:`load_review_state`. On older Airflow</span>
+<span class="sd">    the task stays running and polls the human action XCom (``airflow_hitl_review_human_action``)</span>
+<span class="sd">    every ``hitl_poll_interval`` seconds.</span>
+
+<span class="sd">    The review stops after ``hitl_timeout``, one wall-clock budget for all rounds combined, or</span>
+<span class="sd">    ``max_hitl_iterations``. When polling, it also stops, by re-raising the underlying exception,</span>
+<span class="sd">    when pulling the human action XCom fails ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row,</span>
+<span class="sd">    even if ``hitl_timeout`` is ``None``.</span>
 
 <span class="sd">    **Max iterations:** ``iteration`` counts outputs shown to the reviewer</span>
 <span class="sd">    (1 = initial, 2 = first regeneration, etc.). When the reviewer requests</span>
@@ -812,8 +933,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    - ``hitl_poll_interval`` (``float``, seconds)</span>
 <span class="sd">    - ``prompt`` (``str`` or ``Sequence[UserContent]``)</span>
 
-<span class="sd">    And must implement: meth:`regenerate_with_feedback`.</span>
+<span class="sd">    And must implement :meth:`regenerate_with_feedback`. To park between rounds on Airflow 3.3+,</span>
+<span class="sd">    it also implements :meth:`dump_review_state` and :meth:`load_review_state`; without them the</span>
+<span class="sd">    review polls, as on older Airflow.</span>
 <span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parks_between_rounds</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Whether the review parks between rounds; it needs Airflow 3.3+ and a saved conversation."""</span>
+        <span class="k">return</span> <span class="n">AIRFLOW_V_3_3_PLUS</span> <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">dump_review_state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">HITLReviewMixin</span><span class="o">.</span><span class="n">dump_review_state</span>
 
 <div class="viewcode-block" id="HITLReviewMixin.run_hitl_review">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin.run_hitl_review">[docs]</a>
@@ -825,7 +952,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Execute the full HITL review loop.</span>
+<span class="sd">        Start the HITL review of *output*.</span>
+
+<span class="sd">        On Airflow 3.3+ this parks the task and never returns; the review continues in</span>
+<span class="sd">        :meth:`resume_hitl_review`. Otherwise it blocks until the review ends.</span>
 
 <span class="sd">        :param context: Airflow task context.</span>
 <span class="sd">        :param output: Initial LLM output (any pydantic-serializable value).</span>
@@ -833,6 +963,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">            pydantic-ai ``list[ModelMessage]``).  Passed to</span>
 <span class="sd">            :meth:`regenerate_with_feedback` on each iteration.</span>
 <span class="sd">        :returns: The approved output as a string (JSON for non-str values pydantic can serialize).</span>
+<span class="sd">        :raises TaskAwaitingInput: When the review parks the task until the reviewer acts.</span>
 <span class="sd">        :raises HITLMaxIterationsError: When max iterations reached without approval.</span>
 <span class="sd">        :raises HITLRejectException: When the reviewer rejects the output.</span>
 <span class="sd">        :raises HITLTimeoutError: When hitl_timeout elapses with no response.</span>
@@ -841,6 +972,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        """</span>
         <span class="n">output_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_string</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
         <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
+        <span class="n">parks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parks_between_rounds</span><span class="p">()</span>
 
         <span class="n">session</span> <span class="o">=</span> <span class="n">AgentSessionData</span><span class="p">(</span>
             <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span><span class="p">,</span>
@@ -848,7 +980,18 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">max_iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">,</span>
             <span class="n">prompt</span><span class="o">=</span><span class="n">describe_prompt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prompt</span><span class="p">),</span>
             <span class="n">current_output</span><span class="o">=</span><span class="n">output_str</span><span class="p">,</span>
+            <span class="n">parked</span><span class="o">=</span><span class="n">parks</span><span class="p">,</span>
         <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">parks</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Feedback session created for </span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">dag_id</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">run_id</span><span class="p">,</span> <span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">_review_state_dropped_unless_parked</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_start_review_round</span><span class="p">(</span>
+                    <span class="n">context</span><span class="p">,</span>
+                    <span class="n">session</span><span class="p">,</span>
+                    <span class="n">message_history</span><span class="o">=</span><span class="n">message_history</span><span class="p">,</span>
+                    <span class="n">deadline</span><span class="o">=</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hitl_timeout</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hitl_timeout</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="p">)</span>
 
         <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
         <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">XCOM_AGENT_OUTPUT_PREFIX</span><span class="si">}</span><span class="s2">1"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">output_str</span><span class="p">)</span>
@@ -864,6 +1007,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">deadline</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">hitl_timeout</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hitl_timeout</span> <span class="k">else</span> <span class="kc">None</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_poll_loop</span><span class="p">(</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
             <span class="n">ti</span><span class="o">=</span><span class="n">ti</span><span class="p">,</span>
             <span class="n">session</span><span class="o">=</span><span class="n">session</span><span class="p">,</span>
             <span class="n">message_history</span><span class="o">=</span><span class="n">message_history</span><span class="p">,</span>
@@ -871,9 +1015,214 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_start_review_round</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="n">HITLReviewProtocol</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+        <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">deadline</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Save the conversation, show ``session`` to the reviewer, and park until they act.</span>
+
+<span class="sd">        A round the reviewer already asked to change in an earlier attempt of the task (see</span>
+<span class="sd">        :meth:`_get_recorded_review_feedback`) is not shown again: its feedback is applied, and the</span>
+<span class="sd">        next round starts.</span>
+<span class="sd">        """</span>
+        <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
+        <span class="k">while</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span> <span class="ow">and</span> <span class="p">(</span>
+            <span class="n">feedback</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_recorded_review_feedback</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">"Applying the feedback given on iteration </span><span class="si">%d</span><span class="s2"> in an earlier attempt: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
+                <span class="n">feedback</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># The HITL Review tab shows each round from these.</span>
+            <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">XCOM_AGENT_OUTPUT_PREFIX</span><span class="si">}{</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">)</span>
+            <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">XCOM_HUMAN_FEEDBACK_PREFIX</span><span class="si">}{</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">feedback</span><span class="p">)</span>
+            <span class="n">session</span><span class="p">,</span> <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_regenerate_next_round</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">feedback</span><span class="p">,</span> <span class="n">message_history</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dump_review_state</span><span class="p">(</span><span class="n">message_history</span><span class="p">)</span>
+        <span class="n">retention</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">deadline</span> <span class="o">-</span> <span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">_REVIEW_STATE_RETENTION_MARGIN</span> <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">NEVER_EXPIRE</span>
+        <span class="p">)</span>
+        <span class="n">context</span><span class="p">[</span><span class="s2">"task_state_store"</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">_REVIEW_STATE_KEY</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">retention</span><span class="o">=</span><span class="n">retention</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_park_for_review</span><span class="p">(</span>
+            <span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">deadline</span><span class="o">=</span><span class="n">deadline</span><span class="p">,</span> <span class="n">state_sha256</span><span class="o">=</span><span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_regenerate_next_round</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="n">HITLReviewProtocol</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">feedback</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Regenerate with ``feedback`` and return the next round's session, awaiting review, and the conversation."""</span>
+        <span class="n">new_output</span><span class="p">,</span> <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">regenerate_with_feedback</span><span class="p">(</span>
+            <span class="n">feedback</span><span class="o">=</span><span class="n">feedback</span><span class="p">,</span> <span class="n">message_history</span><span class="o">=</span><span class="n">message_history</span>
+        <span class="p">)</span>
+        <span class="n">next_session</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span>
+            <span class="n">update</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"status"</span><span class="p">:</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span><span class="p">,</span>
+                <span class="s2">"iteration"</span><span class="p">:</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="s2">"current_output"</span><span class="p">:</span> <span class="n">new_output</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Regenerated output (iteration </span><span class="si">%d</span><span class="s2">)."</span><span class="p">,</span> <span class="n">next_session</span><span class="o">.</span><span class="n">iteration</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">next_session</span><span class="p">,</span> <span class="n">message_history</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_park_for_review</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="n">HITLReviewProtocol</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+        <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">deadline</span><span class="p">:</span> <span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">state_sha256</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Open the Human-in-the-loop request for ``session``'s round and park the task on it.</span>
+
+<span class="sd">        The request is written before the session XCom, so the plugin, which accepts an action only</span>
+<span class="sd">        while the session is ``pending_review``, always has a request to answer. An answer that</span>
+<span class="sd">        lands before the task has parked is not lost: the park finds it and resumes straight away.</span>
+<span class="sd">        """</span>
+        <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
+        <span class="n">timeout</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">timeout</span> <span class="o">=</span> <span class="n">deadline</span> <span class="o">-</span> <span class="n">utcnow</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">timeout</span> <span class="o">&lt;=</span> <span class="n">timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">):</span>
+                <span class="c1"># Regeneration used up what was left of hitl_timeout.</span>
+                <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">TIMEOUT_EXCEEDED</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">HITLTimeoutError</span><span class="p">(</span><span class="s2">"Task exceeded timeout."</span><span class="p">)</span>
+
+        <span class="c1"># The same subject, body, options and params every round: on Airflow 3.3 a repeat</span>
+        <span class="c1"># request keeps the first round's, so nothing here may go stale. The output is read in</span>
+        <span class="c1"># the HITL Review tab, which also shows the earlier rounds.</span>
+        <span class="n">upsert_hitl_detail</span><span class="p">(</span>
+            <span class="n">ti_id</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">options</span><span class="o">=</span><span class="p">[</span><span class="n">HITL_OPTION_APPROVE</span><span class="p">,</span> <span class="n">HITL_OPTION_REQUEST_CHANGES</span><span class="p">,</span> <span class="n">HITL_OPTION_REJECT</span><span class="p">],</span>
+            <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"Review the output of task `</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">`"</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="p">(</span>
+                <span class="s2">"Read the output and answer in the **HITL Review** tab of this task instance, "</span>
+                <span class="s2">"which shows every round of the review. Choosing *Request changes* here needs "</span>
+                <span class="s2">"feedback for the model."</span>
+            <span class="p">),</span>
+            <span class="n">defaults</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">multiple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">HITL_FEEDBACK_PARAM</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"value"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+                    <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"What the model should change (with Request changes)."</span><span class="p">,</span>
+                    <span class="s2">"schema"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"string"</span><span class="p">,</span> <span class="s2">"null"</span><span class="p">]},</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+        <span class="p">)</span>
+        <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
+        <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">XCOM_AGENT_OUTPUT_PREFIX</span><span class="si">}{</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Waiting for review of iteration </span><span class="si">%d</span><span class="s2">."</span><span class="p">,</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">TaskAwaitingInput</span><span class="p">(</span>
+            <span class="n">method_name</span><span class="o">=</span><span class="s2">"resume_hitl_review"</span><span class="p">,</span>
+            <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"iteration"</span><span class="p">:</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
+                <span class="s2">"deadline"</span><span class="p">:</span> <span class="n">deadline</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span> <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s2">"state_sha256"</span><span class="p">:</span> <span class="n">state_sha256</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="HITLReviewMixin.resume_hitl_review">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin.resume_hitl_review">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resume_hitl_review</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">:</span> <span class="n">HITLReviewProtocol</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+        <span class="n">iteration</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">deadline</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">state_sha256</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Continue a review parked by :meth:`run_hitl_review` with the reviewer's answer.</span>
+
+<span class="sd">        Approving returns :meth:`complete_hitl_review`; requesting changes regenerates and parks</span>
+<span class="sd">        the task again for the next round.</span>
+
+<span class="sd">        :raises HITLRejectException: When the reviewer rejects the output.</span>
+<span class="sd">        :raises HITLMaxIterationsError: When changes are requested on the last allowed iteration.</span>
+<span class="sd">        :raises HITLTimeoutError: When ``hitl_timeout`` elapsed before the reviewer answered.</span>
+<span class="sd">        :raises HITLTriggerEventError: When the resume event reports another error.</span>
+<span class="sd">        """</span>
+        <span class="k">with</span> <span class="n">_review_state_dropped_unless_parked</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">):</span>
+            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"task_instance"</span><span class="p">]</span>
+            <span class="n">session</span> <span class="o">=</span> <span class="n">_pull_session</span><span class="p">(</span><span class="n">ti</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span> <span class="o">!=</span> <span class="n">iteration</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HITLTriggerEventError</span><span class="p">(</span>
+                    <span class="p">{</span>
+                        <span class="s2">"error"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"The review session is at iteration </span><span class="si">{</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="si">}</span><span class="s2">, but the task "</span>
+                        <span class="sa">f</span><span class="s2">"resumed from iteration </span><span class="si">{</span><span class="n">iteration</span><span class="si">}</span><span class="s2">."</span><span class="p">,</span>
+                        <span class="s2">"error_type"</span><span class="p">:</span> <span class="s2">"validation"</span><span class="p">,</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="s2">"error"</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"error_type"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"timeout"</span><span class="p">:</span>
+                    <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">TIMEOUT_EXCEEDED</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">HITLTimeoutError</span><span class="p">(</span><span class="s2">"Task exceeded timeout."</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">HITLTriggerEventError</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+
+            <span class="c1"># An answer given on the Required Actions page reaches only the worker, leaving the</span>
+            <span class="c1"># session pending; the plugin records its own answers itself. Recording the answer</span>
+            <span class="c1"># before anything slow makes the plugin refuse a second one for this round.</span>
+            <span class="n">answered_elsewhere</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span>
+            <span class="n">chosen</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"chosen_options"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+
+            <span class="k">if</span> <span class="n">HITL_OPTION_APPROVE</span> <span class="ow">in</span> <span class="n">chosen</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Output approved at iteration </span><span class="si">%d</span><span class="s2">."</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">answered_elsewhere</span><span class="p">:</span>
+                    <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">APPROVED</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">complete_hitl_review</span><span class="p">(</span>
+                    <span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="n">_read_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">state_sha256</span><span class="p">)</span>
+                <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">HITL_OPTION_REJECT</span> <span class="ow">in</span> <span class="n">chosen</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">answered_elsewhere</span><span class="p">:</span>
+                    <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">REJECTED</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">HITLRejectException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Output rejected at iteration </span><span class="si">{</span><span class="n">iteration</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">HITL_OPTION_REQUEST_CHANGES</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">chosen</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HITLTriggerEventError</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">"error"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"Unexpected review answer </span><span class="si">{</span><span class="n">chosen</span><span class="si">!r}</span><span class="s2">."</span><span class="p">,</span> <span class="s2">"error_type"</span><span class="p">:</span> <span class="s2">"validation"</span><span class="p">}</span>
+                <span class="p">)</span>
+
+            <span class="n">parsed_deadline</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="n">deadline</span><span class="p">)</span> <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">feedback</span> <span class="o">=</span> <span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"params_input"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">HITL_FEEDBACK_PARAM</span><span class="p">)</span>
+            <span class="n">feedback</span> <span class="o">=</span> <span class="n">feedback</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">feedback</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="s2">""</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">feedback</span><span class="p">:</span>
+                <span class="c1"># The plugin refuses empty feedback; the Required Actions form does not. Approving</span>
+                <span class="c1"># would surprise a reviewer who asked for changes, so ask again for the same round.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Changes were requested without feedback; waiting for review again."</span><span class="p">)</span>
+                <span class="n">session</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">PENDING_REVIEW</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_park_for_review</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">deadline</span><span class="o">=</span><span class="n">parsed_deadline</span><span class="p">,</span> <span class="n">state_sha256</span><span class="o">=</span><span class="n">state_sha256</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">answered_elsewhere</span><span class="p">:</span>
+                <span class="c1"># The HITL Review tab shows the feedback from this XCom.</span>
+                <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">XCOM_HUMAN_FEEDBACK_PREFIX</span><span class="si">}{</span><span class="n">iteration</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">feedback</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">iteration</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">:</span>
+                <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">MAX_ITERATIONS_EXCEEDED</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">HITLMaxIterationsError</span><span class="p">(</span><span class="s2">"Task exceeded max iterations."</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">answered_elsewhere</span><span class="p">:</span>
+                <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">CHANGES_REQUESTED</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_record_review_feedback</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">feedback</span><span class="p">)</span>
+            <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">_read_review_state</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">state_sha256</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Feedback received (iteration </span><span class="si">%d</span><span class="s2">): </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">feedback</span><span class="p">)</span>
+            <span class="n">next_session</span><span class="p">,</span> <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_regenerate_next_round</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">feedback</span><span class="p">,</span> <span class="n">message_history</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start_review_round</span><span class="p">(</span>
+                <span class="n">context</span><span class="p">,</span> <span class="n">next_session</span><span class="p">,</span> <span class="n">message_history</span><span class="o">=</span><span class="n">message_history</span><span class="p">,</span> <span class="n">deadline</span><span class="o">=</span><span class="n">parsed_deadline</span>
+            <span class="p">)</span></div>
+
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_poll_loop</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">:</span> <span class="n">HITLReviewProtocol</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
         <span class="n">ti</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span>
         <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
@@ -885,25 +1234,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        This loops until the human approves, rejects, the timeout/max iterations is reached,</span>
 <span class="sd">        or pulling the human action XCom fails ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row.</span>
 <span class="sd">        """</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-            <span class="n">HITLRejectException</span><span class="p">,</span>
-            <span class="n">HITLTimeoutError</span><span class="p">,</span>
-        <span class="p">)</span>
-
         <span class="n">last_seen_iteration</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">first_poll</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="n">consecutive_pull_failures</span> <span class="o">=</span> <span class="mi">0</span>
 
         <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">deadline</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">deadline</span><span class="p">:</span>
-                <span class="n">_session_timeout</span> <span class="o">=</span> <span class="n">AgentSessionData</span><span class="p">(</span>
-                    <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">TIMEOUT_EXCEEDED</span><span class="p">,</span>
-                    <span class="n">iteration</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
-                    <span class="n">max_iterations</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">max_iterations</span><span class="p">,</span>
-                    <span class="n">prompt</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
-                    <span class="n">current_output</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">_session_timeout</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
+                <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">TIMEOUT_EXCEEDED</span><span class="p">)</span>
                 <span class="k">raise</span> <span class="n">HITLTimeoutError</span><span class="p">(</span><span class="s2">"Task exceeded timeout."</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="ow">not</span> <span class="n">first_poll</span><span class="p">:</span>
@@ -960,14 +1297,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">current_output</span>
 
                 <span class="k">if</span> <span class="n">session</span><span class="o">.</span><span class="n">iteration</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">:</span>
-                    <span class="n">_session_max</span> <span class="o">=</span> <span class="n">AgentSessionData</span><span class="p">(</span>
-                        <span class="n">status</span><span class="o">=</span><span class="n">SessionStatus</span><span class="o">.</span><span class="n">MAX_ITERATIONS_EXCEEDED</span><span class="p">,</span>
-                        <span class="n">iteration</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
-                        <span class="n">max_iterations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hitl_iterations</span><span class="p">,</span>
-                        <span class="n">prompt</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">prompt</span><span class="p">,</span>
-                        <span class="n">current_output</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">current_output</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_AGENT_SESSION</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="n">_session_max</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">))</span>
+                    <span class="n">_push_session</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">SessionStatus</span><span class="o">.</span><span class="n">MAX_ITERATIONS_EXCEEDED</span><span class="p">)</span>
                     <span class="k">raise</span> <span class="n">HITLMaxIterationsError</span><span class="p">(</span><span class="s2">"Task exceeded max iterations."</span><span class="p">)</span>
 
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
@@ -975,8 +1305,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">session</span><span class="o">.</span><span class="n">iteration</span><span class="p">,</span>
                     <span class="n">feedback_text</span><span class="p">,</span>
                 <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_record_review_feedback</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">feedback_text</span><span class="p">)</span>
 
-                <span class="n">new_output</span><span class="p">,</span> <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">regenerate_with_feedback</span><span class="p">(</span>  <span class="c1"># type: ignore[attr-defined]</span>
+                <span class="n">new_output</span><span class="p">,</span> <span class="n">message_history</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">regenerate_with_feedback</span><span class="p">(</span>
                     <span class="n">feedback</span><span class="o">=</span><span class="n">feedback_text</span><span class="p">,</span>
                     <span class="n">message_history</span><span class="o">=</span><span class="n">message_history</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -1009,6 +1340,62 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="s2">"Operators using HITLReviewMixin must implement regenerate_with_feedback()."</span>
         <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="HITLReviewMixin.dump_review_state">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin.dump_review_state">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dump_review_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_history</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Serialize what :meth:`load_review_state` needs to regenerate after the task resumes.</span>
+
+<span class="sd">        Called on Airflow 3.3+ before every park; the string is kept in the task state store.</span>
+
+<span class="sd">        :param message_history: Provider-specific conversation state.</span>
+<span class="sd">        """</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">"Operators using HITLReviewMixin must implement dump_review_state()."</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="HITLReviewMixin.load_review_state">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin.load_review_state">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load_review_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Restore what :meth:`dump_review_state` saved, in the resumed task.</span>
+
+<span class="sd">        Called before each regeneration.</span>
+
+<span class="sd">        :returns: The ``message_history`` to pass to :meth:`regenerate_with_feedback`.</span>
+<span class="sd">        """</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">"Operators using HITLReviewMixin must implement load_review_state()."</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_recorded_review_feedback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the feedback a reviewer gave on ``session``'s round in an earlier attempt, if any.</span>
+
+<span class="sd">        For an operator whose regenerations replay on retry, so a retry does not ask the reviewer</span>
+<span class="sd">        about a round they already answered. The default records nothing.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_record_review_feedback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AgentSessionData</span><span class="p">,</span> <span class="n">feedback</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Note the reviewer's live answer on ``session``'s round, before the regeneration it asks for.</span>
+
+<span class="sd">        An operator that records answers keeps it for :meth:`_get_recorded_review_feedback`. Does</span>
+<span class="sd">        nothing by default.</span>
+<span class="sd">        """</span>
+
+<div class="viewcode-block" id="HITLReviewMixin.complete_hitl_review">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/mixins/hitl_review/index.html#airflow.providers.common.ai.mixins.hitl_review.HITLReviewMixin.complete_hitl_review">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">complete_hitl_review</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">approved_output</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the task's result once the review is approved.</span>
+
+<span class="sd">        :param approved_output: The approved output as the reviewer read it.</span>
+<span class="sd">        :param state: What :meth:`dump_review_state` saved for the approved round, when the task</span>
+<span class="sd">            resumed after parking; ``None`` when the review ran in this process.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="n">approved_output</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -1275,7 +1662,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

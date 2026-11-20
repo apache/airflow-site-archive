@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -711,6 +711,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">CancellationToken</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallbackExceptionGroup</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_active_journal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.fallback_exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallbackChainExhaustedError</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">AgentRunResult</span>
@@ -746,10 +750,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">run_agent_sync</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">agent</span><span class="p">:</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">user_prompt</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">run_kwargs</span><span class="p">:</span> <span class="n">Any</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AgentRunResult</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">"""Call ``agent.run_sync`` under a fresh cancellation token held for :meth:`on_kill`."""</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Call ``agent.run_sync`` under a fresh cancellation token held for :meth:`on_kill`.</span>
+
+<span class="sd">        A ``FallbackExceptionGroup`` from a failed chain is raised again as</span>
+<span class="sd">        :class:`~airflow.providers.common.ai.fallback_exceptions.FallbackChainExhaustedError`, carrying</span>
+<span class="sd">        what the durable journal replayed and recorded so far.</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cancellation_token</span> <span class="o">=</span> <span class="n">CancellationToken</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">agent</span><span class="o">.</span><span class="n">run_sync</span><span class="p">(</span><span class="n">user_prompt</span><span class="p">,</span> <span class="n">cancellation_token</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cancellation_token</span><span class="p">,</span> <span class="o">**</span><span class="n">run_kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">FallbackExceptionGroup</span> <span class="k">as</span> <span class="n">group</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">FallbackChainExhaustedError</span><span class="p">):</span>
+                <span class="k">raise</span>
+            <span class="n">journal</span> <span class="o">=</span> <span class="n">find_active_journal</span><span class="p">()</span>
+            <span class="k">raise</span> <span class="n">FallbackChainExhaustedError</span><span class="o">.</span><span class="n">from_group</span><span class="p">(</span>
+                <span class="n">group</span><span class="p">,</span>
+                <span class="n">replayed_steps</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">journal</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">journal</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">replayed</span><span class="o">.</span><span class="n">total</span><span class="p">(),</span>
+                <span class="n">recorded_steps</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">journal</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">journal</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">recorded</span><span class="o">.</span><span class="n">total</span><span class="p">(),</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">group</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_cancellation_token</span> <span class="o">=</span> <span class="kc">None</span></div>
 
@@ -1028,7 +1047,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

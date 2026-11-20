@@ -18,7 +18,8 @@ airflow.providers.common.ai.tools
    :class:`~airflow.providers.common.ai.toolsets.sql.SQLToolset` and
    :class:`~airflow.providers.common.ai.toolsets.hook.HookToolset`, implement
    :class:`ToolProvider` and expose their tools through
-   :meth:`ToolProvider.airflow_tools`.
+   :meth:`ToolProvider.airflow_tools`. Such a toolset wrapped with ``.filtered()``,
+   ``.prefixed()`` or ``.renamed()`` is accepted too.
 
 
 
@@ -34,6 +35,14 @@ Submodules
    /_api/airflow/providers/common/ai/tools/openai_agents/index
    /_api/airflow/providers/common/ai/tools/strands/index
    /_api/airflow/providers/common/ai/tools/tracing/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.tools.ToolSource
 
 
 Exceptions
@@ -163,14 +172,29 @@ Package Contents
 
 
 
+.. py:type:: ToolSource
+   :canonical: ToolProvider | AirflowTool | FilteredToolset[Any] | PrefixedToolset[Any] | RenamedToolset[Any]
+
+
+   What a framework adapter accepts: a tool, or a toolset that ``.filtered()``, ``.prefixed()`` and ``.renamed()`` may wrap.
+
+
 .. py:function:: collect_tools(sources)
 
    Flatten toolsets and individual tools, as a framework adapter receives them, into tools.
 
+   A toolset wrapped with ``.filtered()``, ``.prefixed()`` or ``.renamed()`` contributes the
+   tools the wrappers offer, under the names they give them. The ``.filtered()`` function runs
+   once, here, with an inert run context, so a filter that reads per-run state does not
+   re-evaluate it before each model turn.
+
+   :raises TypeError: when a source is another wrapper, such as ``.approval_required()``, or
+       has no ``airflow_tools()`` method.
    :raises MCPToolsetNotSupportedError: when a source is an ``MCPToolset``. Connect the
        framework's own MCP client to the server instead.
    :raises ValueError: when two tools share a name. Frameworks route a call by name, so one
        of them would silently never run; give the toolsets different ``tool_prefix`` values,
-       where they take one.
+       where they take one, or wrap them with ``.prefixed()``. Also when a ``.renamed()`` map
+       sends an offered name to a name the toolset does not have, such as a map written backwards.
 
 

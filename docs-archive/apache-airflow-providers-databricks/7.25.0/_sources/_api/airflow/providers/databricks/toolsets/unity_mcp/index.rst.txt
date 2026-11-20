@@ -1,0 +1,182 @@
+airflow.providers.databricks.toolsets.unity_mcp
+===============================================
+
+.. py:module:: airflow.providers.databricks.toolsets.unity_mcp
+
+.. autoapi-nested-parse::
+
+   Toolset that gives a common.ai agent the tools of a Unity Gateway MCP Service.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.toolsets.unity_mcp.log
+   airflow.providers.databricks.toolsets.unity_mcp.GATEWAY_MCP_SERVICES_PATH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.toolsets.unity_mcp.DatabricksUnityMCPToolset
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.toolsets.unity_mcp.validate_service_name
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:data:: GATEWAY_MCP_SERVICES_PATH
+   :value: 'ai-gateway/mcp-services'
+
+
+.. py:function:: validate_service_name(service_name)
+
+   Raise ``ValueError`` unless ``service_name`` is a three-level ``catalog.schema.service`` name.
+
+   Each part may contain only ASCII letters, digits and underscores.
+
+
+.. py:class:: DatabricksUnityMCPToolset(service_name, *, databricks_conn_id = DatabricksHook.default_conn_name, tool_prefix = None, init_timeout = 30)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Give an agent the tools of a Unity Gateway MCP Service, authenticated as the connection's identity.
+
+   The service is named by its three-level Unity Catalog name, ``catalog.schema.service``, and
+   reached at ``https://<workspace host>/ai-gateway/mcp-services/<catalog.schema.service>``. The
+   workspace host and the credentials both come from the Databricks connection, so Dag code holds
+   neither a gateway URL nor a token, and the token is only ever sent to that workspace, over
+   HTTPS. The connection's ``proxies`` extra applies to gateway requests.
+
+   The gateway runs every tool call as the identity of the connection's credentials (a user's
+   personal access token, a service principal, or an Azure AD / federated identity). That identity
+   needs ``EXECUTE`` on the MCP Service, ``USE CATALOG`` and ``USE SCHEMA`` on its catalog and
+   schema, and an assignment to the workspace. It sees only the tools selected for the service, and
+   the service's policies apply.
+
+   Tokens are fetched from the connection for each request, so OAuth tokens refresh during a long
+   agent run and on reconnection. An error the server returns for a tool call reaches the model,
+   which can correct its arguments and try again. When the gateway gives no answer of its own, a
+   tool call may or may not have run, so it is never retried; it fails the task with
+   :class:`~airflow.providers.databricks.exceptions.DatabricksUnityMCPAccessDeniedError`,
+   :class:`~airflow.providers.databricks.exceptions.DatabricksUnityMCPThrottledError`,
+   :class:`~airflow.providers.databricks.exceptions.DatabricksUnityMCPTransportError`, or
+   :class:`~airflow.providers.databricks.exceptions.DatabricksUnityMCPError`, as do failures
+   while connecting and listing tools.
+
+   .. code-block:: python
+
+       from airflow.providers.common.ai.operators.agent import AgentOperator
+       from airflow.providers.databricks.toolsets.unity_mcp import DatabricksUnityMCPToolset
+
+       AgentOperator(
+           task_id="ask_mcp_service",
+           prompt="Which tools do you have?",
+           llm_conn_id="pydanticai_default",
+           toolsets=[DatabricksUnityMCPToolset("main.default.my_mcp", databricks_conn_id="databricks")],
+       )
+
+   :param service_name: Three-level name of the MCP Service, ``catalog.schema.service``. Templated
+       when the toolset is passed to ``AgentOperator`` / ``@task.agent``.
+   :param databricks_conn_id: Databricks connection whose host and credentials are used. Templated
+       when the toolset is passed to ``AgentOperator`` / ``@task.agent``.
+   :param tool_prefix: Optional prefix prepended to tool names.
+   :param init_timeout: Seconds to wait for the MCP handshake when connecting. Unity Gateway forwards
+       a response only once the MCP server has finished sending it, so a server that keeps its
+       response stream open needs more than pydantic-ai's default of 5 seconds.
+
+
+   .. py:attribute:: agent_template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('_databricks_conn_id', '_service_name')
+
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: get_service_url(hook)
+
+      Return the gateway URL of the MCP Service on the connection's workspace.
+
+
+
+   .. py:method:: __aenter__()
+      :async:
+
+
+      Enter the toolset context.
+
+      This is where you can set up network connections in a concrete implementation.
+
+
+
+   .. py:method:: __aexit__(*args)
+      :async:
+
+
+      Exit the toolset context.
+
+      This is where you can tear down network connections in a concrete implementation.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+
+   .. py:method:: airflow_tools()
+      :abstractmethod:
+
+
+      Not supported: use the agent framework's own MCP client instead.
+
+      An MCP session belongs to the event loop that opened it, and the framework-neutral
+      tools run outside the Pydantic AI run that manages it, so every call would reconnect.
+
+
+

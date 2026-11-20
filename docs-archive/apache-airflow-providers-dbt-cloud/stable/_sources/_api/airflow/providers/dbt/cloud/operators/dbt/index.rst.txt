@@ -45,9 +45,9 @@ Module Contents
 
 
 
-.. py:class:: DbtCloudRunJobOperator(*, dbt_cloud_conn_id = DbtCloudHook.default_conn_name, job_id = None, project_name = None, environment_name = None, job_name = None, account_id = None, trigger_reason = None, steps_override = None, schema_override = None, wait_for_termination = True, timeout = 60 * 60 * 24 * 7, check_interval = 60, additional_run_config = None, reuse_existing_run = False, retry_from_failure = False, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), hook_params = None, openlineage_inject_parent_job_info = conf.getboolean('openlineage', 'spark_inject_parent_job_info', fallback=False), **kwargs)
+.. py:class:: DbtCloudRunJobOperator(*, dbt_cloud_conn_id = DbtCloudHook.default_conn_name, job_id = None, project_name = None, environment_name = None, job_name = None, account_id = None, trigger_reason = None, steps_override = None, schema_override = None, wait_for_termination = True, timeout = 60 * 60 * 24 * 7, check_interval = 60, additional_run_config = None, reuse_existing_run = False, retry_from_failure = False, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), hook_params = None, openlineage_inject_parent_job_info = conf.getboolean('openlineage', 'spark_inject_parent_job_info', fallback=False), durable = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
 
    Executes a dbt Cloud job.
@@ -91,6 +91,9 @@ Module Contents
        reading dbt Cloud runs can parse this to link the dbt Cloud run back to the Airflow task that
        triggered it. Note this overwrites the ``trigger_reason``. Defaults to the
        ``openlineage.spark_inject_parent_job_info`` config value.
+   :param durable: When ``True`` (the default), the dbt Cloud run id is persisted to task state before
+       waiting, so a retry after a worker crash reconnects to that run instead of triggering a new one.
+       Applies only when ``wait_for_termination`` is True. Has no effect below Airflow 3.3.
    :param execution_timeout: Maximum time allowed for the task to run. If exceeded, the dbt Cloud
        job will be cancelled and the task will fail. When both ``execution_timeout`` and
        ``timeout`` are set, the earlier deadline takes precedence.
@@ -103,6 +106,11 @@ Module Contents
 
 
    .. py:attribute:: operator_extra_links
+
+
+   .. py:attribute:: external_id_key
+      :value: 'dbt_cloud_job_run_id'
+
 
 
    .. py:attribute:: dbt_cloud_conn_id
@@ -201,6 +209,56 @@ Module Contents
       as when rendering jinja templates.
 
       Refer to get_template_context for more context.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
 
 
 

@@ -34,7 +34,9 @@ Module Contents
 
    Pass toolsets that implement
    :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``
-   and ``HookToolset``, or individual
+   and ``HookToolset``, optionally wrapped with ``.filtered()``,
+   ``.prefixed()`` or ``.renamed()`` (a ``.filtered()`` function runs once, when this
+   is built, with ``ctx.deps`` set to ``None``), or individual
    :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. The agent, its
    model and its runner stay plain OpenAI Agents SDK.
 
@@ -52,13 +54,14 @@ Module Contents
    It is a list of ``FunctionTool`` objects typed as ``Agent.tools`` is, so add your own
    tools with ``[*AirflowTools(warehouse), my_tool]``.
 
-   Each tool keeps the source tool's name, description and argument schema, and every
+   Each tool keeps its source's name, description and argument schema, and every
    result passes through Airflow's secret masker first. The schema is passed as it is,
    with ``strict_json_schema=False``: the SDK's strict mode would make every argument
    required. A failure the model can correct, such as a query naming a missing column,
    reaches it as ``{"error": ...}``, counted against the tool's retry limit afresh on
-   every run of the agent. Arguments that are not a JSON object also come back as
-   ``{"error": ...}``, bounded by the run's ``max_turns`` rather than that limit. A tool
+   every run of the agent; a retry of a durable run counts the ones it replays as well.
+   Arguments that are not a JSON object also come back as ``{"error": ...}``, bounded by
+   the run's ``max_turns`` rather than that limit. A tool
    still failing once the limit is used up, or any other failure, raises
    :class:`~airflow.providers.common.ai.tools.ToolCallError` out of ``Runner.run``, so
    the task fails and Airflow retries it. Tools a toolset marks sequential, such as the

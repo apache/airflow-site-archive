@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -729,7 +729,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span><span class="p">,</span> <span class="n">mask_secrets</span>
 
 <span class="c1"># A policy default, not a limit imposed by any storage, protocol, or model layer:</span>
 <span class="c1"># roughly 16k tokens at 4 characters per token. Large enough that ordinary queries are</span>
@@ -759,6 +759,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># "here is what the names look like, now filter", never as a usable prefix of the table.</span>
 <span class="n">_SCHEMA_SAMPLE_SIZE</span> <span class="o">=</span> <span class="mi">20</span>
 
+<span class="c1"># Longest table or column comment returned, in characters. Comments are free text written by</span>
+<span class="c1"># people, so one pasted paragraph must not be able to dominate the result.</span>
+<div class="viewcode-block" id="DEFAULT_MAX_COMMENT_CHARS">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/query_results/index.html#airflow.providers.common.ai.utils.query_results.DEFAULT_MAX_COMMENT_CHARS">[docs]</a>
+<span class="n">DEFAULT_MAX_COMMENT_CHARS</span> <span class="o">=</span> <span class="mi">200</span></div>
+
+
 <span class="c1"># Tool results are machine-read, so no whitespace. ensure_ascii=False matters as much as</span>
 <span class="c1"># the separators: escaping one CJK character to \uXXXX costs six bytes instead of three,</span>
 <span class="c1"># so an ASCII-escaped result is charged several times over against the budget and</span>
@@ -784,24 +791,56 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1">#: unlike query rows they cannot be silently dropped: the description states the ``name_contains``</span>
 <span class="c1">#: filter and the summary shape so a truncated result is read as "narrow your request", not as a</span>
 <span class="c1">#: small table.</span>
-<div class="viewcode-block" id="GET_SCHEMA_TOOL_DESCRIPTION">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/query_results/index.html#airflow.providers.common.ai.utils.query_results.GET_SCHEMA_TOOL_DESCRIPTION">[docs]</a>
-<span class="n">GET_SCHEMA_TOOL_DESCRIPTION</span> <span class="o">=</span> <span class="p">(</span>
+<span class="n">_GET_SCHEMA_DESCRIPTION_TEMPLATE</span> <span class="o">=</span> <span class="p">(</span>
     <span class="s2">"Get a table's columns. Returns JSON of the form "</span>
-    <span class="s1">'{"columns": [{"name": ..., "type": ...}, ...], "column_count": N}. Pass `name_contains` to '</span>
+    <span class="s1">'{{"columns": [{{"name": ..., "type": ...}}, ...], "column_count": N}}. Pass `name_contains` to '</span>
     <span class="s2">"return only the columns whose name contains that substring (case-insensitive) -- use it to "</span>
     <span class="s2">"find the columns relevant to your question on a wide table. When a table has more columns "</span>
     <span class="s2">"than can be returned at once, the full list is replaced by a summary (`column_count`, and "</span>
     <span class="s2">"where the budget allows a `type_histogram` and a `sample_columns` preview) with `truncated` "</span>
-    <span class="s2">"set, `truncated_by` naming the limit that was hit, and a `hint`. Call get_schema again with "</span>
+    <span class="s2">"set, `truncated_by` naming the limit that was hit, and a `hint`. Call </span><span class="si">{tool_name}</span><span class="s2"> again with "</span>
     <span class="s2">"a `name_contains` substring to retrieve the specific columns you need instead of the whole "</span>
     <span class="s2">"table."</span>
-<span class="p">)</span></div>
+<span class="p">)</span>
+
+<span class="c1"># Appended only for toolsets whose results can carry comments, so the description never promises</span>
+<span class="c1"># keys a toolset does not return.</span>
+<span class="n">_GET_SCHEMA_COMMENTS_DESCRIPTION</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">" Each column carries a `comment`, and the result a `table_comment`, when the database provides "</span>
+    <span class="s2">"one; `comments_omitted` means the column comments were left out to fit."</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="build_get_schema_description">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/query_results/index.html#airflow.providers.common.ai.utils.query_results.build_get_schema_description">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">build_get_schema_description</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"get_schema"</span><span class="p">,</span> <span class="n">include_comments</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Render the ``get_schema`` tool description naming the tool as the model sees it.</span>
+
+<span class="sd">    :param tool_name: The tool name as the model sees it, including any prefix.</span>
+<span class="sd">    :param include_comments: Describe the comment keys; set only for toolsets that return comments.</span>
+<span class="sd">    """</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="n">_GET_SCHEMA_DESCRIPTION_TEMPLATE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_comments</span><span class="p">:</span>
+        <span class="n">description</span> <span class="o">+=</span> <span class="n">_GET_SCHEMA_COMMENTS_DESCRIPTION</span>
+    <span class="k">return</span> <span class="n">description</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
     <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="o">**</span><span class="n">_DUMP_KWARGS</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="truncate_comment">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/utils/query_results/index.html#airflow.providers.common.ai.utils.query_results.truncate_comment">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">truncate_comment</span><span class="p">(</span><span class="n">comment</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">max_chars</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_COMMENT_CHARS</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Mask registered secrets in ``comment``, then cap it to ``max_chars`` characters, marking a cut with a trailing ellipsis."""</span>
+    <span class="c1"># Mask before cutting: a cut secret is a prefix that no longer equals the registered value, so the masker cannot find it.</span>
+    <span class="n">comment</span> <span class="o">=</span> <span class="n">mask_secrets</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_chars</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">comment</span>
+    <span class="k">return</span> <span class="n">comment</span><span class="p">[:</span> <span class="n">max_chars</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\u2026</span><span class="s2">"</span></div>
+
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_size</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -928,6 +967,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">max_columns</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">name_contains</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"get_schema"</span><span class="p">,</span>
+    <span class="n">table_comment</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Render a table's columns as a bounded JSON tool result.</span>
@@ -938,14 +979,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    the way to retrieve specific columns. ``columns`` is assumed to hold distinct names (a table's</span>
 <span class="sd">    introspected columns are unique by construction).</span>
 
-<span class="sd">    :param columns: ``{"name", "type"}`` dicts in table order.</span>
+<span class="sd">    Comments count against the same budget as the columns: each one is capped to</span>
+<span class="sd">    ``DEFAULT_MAX_COMMENT_CHARS`` characters, and when the result does not fit, the column comments</span>
+<span class="sd">    are dropped first (``comments_omitted`` says so) and the full column list is returned. Only if</span>
+<span class="sd">    the columns alone still do not fit does the summary replace them; it likewise carries no column</span>
+<span class="sd">    comments.</span>
+
+<span class="sd">    :param columns: ``{"name", "type"}`` dicts in table order, each optionally with a ``comment``.</span>
 <span class="sd">    :param max_columns: Column count above which a summary replaces the full list.</span>
 <span class="sd">    :param max_result_bytes: Budget for the serialized result.</span>
 <span class="sd">    :param name_contains: Case-insensitive substring. When given (and non-empty), only matching</span>
 <span class="sd">        columns are considered and the value is echoed back so a filtered subset is never mistaken</span>
 <span class="sd">        for the whole table.</span>
+<span class="sd">    :param tool_name: Name of the ``get_schema`` tool as the model sees it (including any</span>
+<span class="sd">        ``tool_prefix``), so hints point at this toolset's own tool.</span>
+<span class="sd">    :param table_comment: The table's comment, returned as ``table_comment`` when non-empty.</span>
 <span class="sd">    """</span>
     <span class="n">name_contains</span> <span class="o">=</span> <span class="n">name_contains</span> <span class="ow">or</span> <span class="kc">None</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span><span class="o">**</span><span class="n">col</span><span class="p">,</span> <span class="s2">"comment"</span><span class="p">:</span> <span class="n">truncate_comment</span><span class="p">(</span><span class="n">col</span><span class="p">[</span><span class="s2">"comment"</span><span class="p">])}</span> <span class="k">if</span> <span class="s2">"comment"</span> <span class="ow">in</span> <span class="n">col</span> <span class="k">else</span> <span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">columns</span>
+    <span class="p">]</span>
     <span class="n">total_columns</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">name_contains</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">needle</span> <span class="o">=</span> <span class="n">name_contains</span><span class="o">.</span><span class="n">casefold</span><span class="p">()</span>
@@ -964,7 +1017,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">advice</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"No columns match name_contains=</span><span class="si">{</span><span class="n">name_contains</span><span class="si">!r}</span><span class="s2">. Call get_schema without "</span>
+                <span class="sa">f</span><span class="s2">"No columns match name_contains=</span><span class="si">{</span><span class="n">name_contains</span><span class="si">!r}</span><span class="s2">. Call </span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2"> without "</span>
                 <span class="sa">f</span><span class="s2">"name_contains to list all </span><span class="si">{</span><span class="n">total_columns</span><span class="si">}</span><span class="s2"> column</span><span class="si">{</span><span class="n">plural</span><span class="si">}</span><span class="s2">."</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="n">_dumps</span><span class="p">(</span>
@@ -978,11 +1031,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
 
     <span class="n">full</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"columns"</span><span class="p">:</span> <span class="n">selected</span><span class="p">,</span> <span class="s2">"column_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">selected</span><span class="p">)}</span>
+    <span class="k">if</span> <span class="n">table_comment</span><span class="p">:</span>
+        <span class="n">full</span><span class="p">[</span><span class="s2">"table_comment"</span><span class="p">]</span> <span class="o">=</span> <span class="n">truncate_comment</span><span class="p">(</span><span class="n">table_comment</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">name_contains</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">full</span><span class="p">[</span><span class="s2">"name_contains"</span><span class="p">]</span> <span class="o">=</span> <span class="n">name_contains</span>
         <span class="n">full</span><span class="p">[</span><span class="s2">"total_columns"</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_columns</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">selected</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_columns</span> <span class="ow">and</span> <span class="n">_size</span><span class="p">(</span><span class="n">full</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_result_bytes</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_dumps</span><span class="p">(</span><span class="n">full</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">selected</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_columns</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_size</span><span class="p">(</span><span class="n">full</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_result_bytes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_dumps</span><span class="p">(</span><span class="n">full</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="s2">"comment"</span> <span class="ow">in</span> <span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">selected</span><span class="p">):</span>
+            <span class="n">without_comments</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="o">**</span><span class="n">full</span><span class="p">,</span>
+                <span class="s2">"columns"</span><span class="p">:</span> <span class="n">_drop_column_comments</span><span class="p">(</span><span class="n">selected</span><span class="p">),</span>
+                <span class="s2">"comments_omitted"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">"hint"</span><span class="p">:</span> <span class="n">_build_comments_omitted_hint</span><span class="p">(</span>
+                    <span class="n">max_result_bytes</span><span class="o">=</span><span class="n">max_result_bytes</span><span class="p">,</span> <span class="n">name_contains</span><span class="o">=</span><span class="n">name_contains</span><span class="p">,</span> <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="n">_size</span><span class="p">(</span><span class="n">without_comments</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_result_bytes</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_dumps</span><span class="p">(</span><span class="n">without_comments</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_summarize_schema</span><span class="p">(</span>
         <span class="n">selected</span><span class="p">,</span>
@@ -990,8 +1057,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">max_columns</span><span class="o">=</span><span class="n">max_columns</span><span class="p">,</span>
         <span class="n">max_result_bytes</span><span class="o">=</span><span class="n">max_result_bytes</span><span class="p">,</span>
         <span class="n">name_contains</span><span class="o">=</span><span class="n">name_contains</span><span class="p">,</span>
+        <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">,</span>
+        <span class="n">table_comment</span><span class="o">=</span><span class="n">full</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"table_comment"</span><span class="p">),</span>
     <span class="p">)</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_drop_column_comments</span><span class="p">(</span><span class="n">columns</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="p">[{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">col</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">"comment"</span><span class="p">}</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_comments_omitted_hint</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">name_contains</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">reason</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Column comments were left out to fit max_result_bytes (</span><span class="si">{</span><span class="n">max_result_bytes</span><span class="si">}</span><span class="s2">)."</span>
+    <span class="k">if</span> <span class="n">name_contains</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2"> Use a more specific name_contains substring to get their comments."</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2"> Call </span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2"> with a name_contains substring to get the comments of the columns you need."</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_summarize_schema</span><span class="p">(</span>
@@ -1001,6 +1081,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">max_columns</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">name_contains</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">table_comment</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Build the bounded summary returned when the full column list does not fit."""</span>
     <span class="c1"># Count is checked before bytes: it is the cheaper, more explainable bound. A bytes-only</span>
@@ -1016,7 +1098,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">move</span> <span class="o">=</span> <span class="p">(</span>
         <span class="s2">"Use a more specific name_contains substring to narrow to the columns you need."</span>
         <span class="k">if</span> <span class="n">name_contains</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="k">else</span> <span class="s2">"Call get_schema with a name_contains substring to return only the columns you need."</span>
+        <span class="k">else</span> <span class="sa">f</span><span class="s2">"Call </span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2"> with a name_contains substring to return only the columns you need."</span>
     <span class="p">)</span>
 
     <span class="n">output</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -1025,6 +1107,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="s2">"truncated_by"</span><span class="p">:</span> <span class="n">truncated_by</span><span class="p">,</span>
         <span class="s2">"hint"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">move</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
     <span class="p">}</span>
+    <span class="k">if</span> <span class="n">table_comment</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"table_comment"</span><span class="p">]</span> <span class="o">=</span> <span class="n">table_comment</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="s2">"comment"</span> <span class="ow">in</span> <span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">selected</span><span class="p">):</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"comments_omitted"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">output</span><span class="p">[</span><span class="s2">"hint"</span><span class="p">]</span> <span class="o">+=</span> <span class="s2">" Column comments are omitted from this summary and are returned with the columns."</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="n">_drop_column_comments</span><span class="p">(</span><span class="n">selected</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">name_contains</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">output</span><span class="p">[</span><span class="s2">"name_contains"</span><span class="p">]</span> <span class="o">=</span> <span class="n">name_contains</span>
         <span class="n">output</span><span class="p">[</span><span class="s2">"total_columns"</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_columns</span>
@@ -1307,7 +1395,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

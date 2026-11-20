@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -513,7 +513,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -714,7 +714,8 @@ window.PAGEFIND_PATH = './_pagefind/pagefind.js';
 <p>Set <code class="docutils literal notranslate"><span class="pre">output_type</span></code> to a Pydantic <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> subclass. The LLM is instructed
 to return structured data, and the model instance is pushed to XCom unchanged
 so downstream tasks can type-hint the class directly
-(<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">downstream(result:</span> <span class="pre">MyModel)</span></code>) and use attribute access (<code class="docutils literal notranslate"><span class="pre">result.field</span></code>).</p>
+(<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">downstream(result:</span> <span class="pre">MyModel)</span></code>) and use attribute access (<code class="docutils literal notranslate"><span class="pre">result.field</span></code>).
+Inside a list of types (<code class="docutils literal notranslate"><span class="pre">[MyModel,</span> <span class="pre">int]</span></code>) the model is pushed as a <code class="docutils literal notranslate"><span class="pre">dict</span></code> instead.</p>
 <p>The declared <code class="docutils literal notranslate"><span class="pre">output_type</span></code> (and any <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> reachable from
 <code class="docutils literal notranslate"><span class="pre">Union</span></code>/<code class="docutils literal notranslate"><span class="pre">Optional</span></code>/<code class="docutils literal notranslate"><span class="pre">list[...]</span></code> types) is registered for XCom deserialization by
 the worker when it loads the Dag, before any task runs – so no edit to
@@ -723,7 +724,9 @@ defined at <strong>module scope</strong> and bound to an attribute matching its 
 classes nested inside a function or <code class="docutils literal notranslate"><span class="pre">&#64;dag</span></code>-decorated body, parameterized
 generics, and dynamically-built classes whose <code class="docutils literal notranslate"><span class="pre">__name__</span></code> does not match the
 attribute they are bound to cannot be re-imported, so they are skipped with a
-warning at worker startup and the value fails to deserialize at the consumer.</p>
+warning at worker startup and the value fails to deserialize at the consumer.
+A list of types (<code class="docutils literal notranslate"><span class="pre">output_type=[MyModel,</span> <span class="pre">int]</span></code>) registers no class, so the operator pushes the
+model as a <code class="docutils literal notranslate"><span class="pre">dict</span></code> even when <code class="docutils literal notranslate"><span class="pre">serialize_output</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 <div class="example-block-wrapper compound">
 <p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_llm.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/ai/example_dags/example_llm.html"><span class="viewcode-link">[source]</span></a></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pydantic output classes must be defined at module scope so they survive</span>
@@ -761,7 +764,8 @@ cache that bypasses operator construction.</p>
 <p>The worker finds no class to register when <code class="docutils literal notranslate"><span class="pre">output_type</span></code> is a list of output
 types such as <code class="docutils literal notranslate"><span class="pre">[Summary,</span> <span class="pre">int]</span></code>, an output marker such as
 <code class="docutils literal notranslate"><span class="pre">ToolOutput(Summary)</span></code>, an output function, a <code class="docutils literal notranslate"><span class="pre">TypeAliasType</span></code> or a
-<code class="docutils literal notranslate"><span class="pre">NewType</span></code>. For these output types, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> push
+<code class="docutils literal notranslate"><span class="pre">NewType</span></code>. For these output types, <code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> push
 each model in the output as a JSON-compatible dict, including models inside a
 list, tuple or dict. A model is pushed as a dict even if its class is listed in
 <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code>, or if another task in the same Dag
@@ -775,10 +779,7 @@ members arrive as their values.</p>
 condition is enough. A plain <code class="docutils literal notranslate"><span class="pre">Enum</span></code> member (one that does not also subclass
 <code class="docutils literal notranslate"><span class="pre">str</span></code> or <code class="docutils literal notranslate"><span class="pre">int</span></code>), an <code class="docutils literal notranslate"><span class="pre">HttpUrl</span></code> or a <code class="docutils literal notranslate"><span class="pre">Path</span></code> in that model then stays a
 Python object. The default XCom backend cannot serialize these objects, so the
-XCom push fails with <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>. Before Airflow 3.3 the worker registers no
-model class. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> therefore push a model
-inside a list, tuple or dict as a JSON-compatible dict for every
-<code class="docutils literal notranslate"><span class="pre">output_type</span></code>, not only for the output types listed above.</p>
+XCom push fails with <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
 <p>Upgrading from common.ai 1.0.0 to 1.1.0 can change the type that a downstream
 task receives:</p>
 <ul class="simple">
@@ -811,9 +812,38 @@ that pulls this XCom only parses its own Dag file, not the producer’s, so the
 class is not auto-registered. Add the class qualified name to
 <code class="docutils literal notranslate"><span class="pre">[core]</span> <span class="pre">allowed_deserialization_classes</span></code> (or a glob that matches it) to make
 that pattern work.</p>
-<p>If a downstream consumer needs the dict shape (e.g. forwarding to an external
-system that expects JSON-style payloads), pass <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> and the
-operator calls <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> before pushing to XCom.</p>
+<section id="when-a-model-arrives-as-a-dict">
+<span id="structured-output-dict-shape"></span><h2>When a model arrives as a dict<a class="headerlink" href="#when-a-model-arrives-as-a-dict" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code>, <code class="docutils literal notranslate"><span class="pre">LLMFileAnalysisOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>
+decide in the same way whether a model is pushed as an instance or dumped. Set
+<code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> when a downstream consumer needs the dict shape (for example to forward
+it to a system that expects JSON-style payloads).</p>
+<ul class="simple">
+<li><p>With <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code>, an output that is itself a model is dumped with <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code>, so
+field types such as <code class="docutils literal notranslate"><span class="pre">date</span></code> and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> are kept.</p></li>
+<li><p>A model inside a list, tuple, set or dict is not dumped when the worker registers its class
+(<code class="docutils literal notranslate"><span class="pre">output_type=list[MyModel]</span></code> on Airflow 3.3 and later). The XCom serializer pushes it as an
+instance, with or without <code class="docutils literal notranslate"><span class="pre">serialize_output</span></code>, unless the output also holds a model whose class
+the worker does not register (see the next bullets).</p></li>
+<li><p>On Airflow 3.3 and later, a model whose class the worker cannot register is dumped to JSON values
+when it is itself the output and <code class="docutils literal notranslate"><span class="pre">serialize_output</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>. With <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> it is dumped with
+<code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> as the first bullet describes. The worker registers the classes it finds by
+reading <code class="docutils literal notranslate"><span class="pre">output_type</span></code> and finds none in a list of types such as <code class="docutils literal notranslate"><span class="pre">output_type=[MyModel,</span> <span class="pre">int]</span></code>.</p></li>
+<li><p>The operator dumps the whole output with <code class="docutils literal notranslate"><span class="pre">to_jsonable_python</span></code>, using field names rather than
+aliases (also for a model that sets <code class="docutils literal notranslate"><span class="pre">serialize_by_alias=True</span></code>), as soon as it holds such a model
+in a list, tuple, set or dict, or as a set member or a dict key. A <code class="docutils literal notranslate"><span class="pre">date</span></code> or <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> next to
+the model becomes a string, a set becomes a list, and a model used as a dict key becomes its
+string form.</p></li>
+<li><p>Before Airflow 3.3 the worker registers no class. A model that is itself the output is then dumped
+with <code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> whether or not <code class="docutils literal notranslate"><span class="pre">serialize_output</span></code> is set, and an output that holds a model
+in a list, tuple, set or dict is dumped as the previous bullet describes, for every
+<code class="docutils literal notranslate"><span class="pre">output_type</span></code>.</p></li>
+</ul>
+<p>In a dump to JSON values, <code class="docutils literal notranslate"><span class="pre">HttpUrl</span></code>, <code class="docutils literal notranslate"><span class="pre">Path</span></code> and <code class="docutils literal notranslate"><span class="pre">Enum</span></code> fields become plain JSON values. A model
+that is itself the output with <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code> keeps its Python field values instead, so an
+<code class="docutils literal notranslate"><span class="pre">HttpUrl</span></code>, a <code class="docutils literal notranslate"><span class="pre">Path</span></code> or a plain <code class="docutils literal notranslate"><span class="pre">Enum</span></code> member in it stays an object that the default XCom backend
+cannot serialize.</p>
+</section>
 </section>
 
 
@@ -891,7 +921,10 @@ operator calls <code class="docutils literal notranslate"><span class="pre">mode
     <nav class="wy-nav-side-toc">
         <div class="wy-menu-vertical">
             <ul>
-<li><a class="reference internal" href="#">Structured output and XCom</a></li>
+<li><a class="reference internal" href="#">Structured output and XCom</a><ul>
+<li><a class="reference internal" href="#when-a-model-arrives-as-a-dict">When a model arrives as a dict</a></li>
+</ul>
+</li>
 </ul>
 
         </div>
@@ -1109,7 +1142,7 @@ operator calls <code class="docutils literal notranslate"><span class="pre">mode
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

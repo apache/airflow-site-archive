@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -734,7 +734,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Literal</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallbackExceptionGroup</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.fallback_exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">FallbackChainExhaustedError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.policies.decision</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_bar</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.decision</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">BARE_OUTPUT_FIELD</span><span class="p">,</span>
@@ -1054,27 +1056,52 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="k">return</span> <span class="n">PydanticAIHook</span><span class="o">.</span><span class="n">get_hook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">,</span> <span class="n">hook_params</span><span class="o">=</span><span class="p">{</span><span class="s2">"model_id"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_id</span><span class="p">})</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">,</span> <span class="n">try_number</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_traceback</span><span class="p">:</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">traceback</span><span class="o">.</span><span class="n">format_exception</span><span class="p">(</span><span class="n">exception</span><span class="p">))</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">keep_tail</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="c1"># Redact before truncating -- truncating first could cut a registered secret in half.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">redactor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">redactor</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_traceback</span><span class="p">:</span>
-                <span class="c1"># Keep the tail: the innermost frames and the final exception line say the most.</span>
-                <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"(truncated) ...</span><span class="si">{</span><span class="n">text</span><span class="p">[</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="w"> </span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">text</span><span class="p">[:</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="p">]</span><span class="si">}</span><span class="s2">... (truncated)"</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_traceback</span><span class="p">:</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">text</span>
+        <span class="k">if</span> <span class="n">keep_tail</span><span class="p">:</span>
+            <span class="c1"># Keep the tail: the innermost frames and the final exception line say the most.</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"(truncated) ...</span><span class="si">{</span><span class="n">text</span><span class="p">[</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="w"> </span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">text</span><span class="p">[:</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">max_exception_length</span><span class="p">]</span><span class="si">}</span><span class="s2">... (truncated)"</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">,</span> <span class="n">try_number</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">include_traceback</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_limit</span><span class="p">(</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">traceback</span><span class="o">.</span><span class="n">format_exception</span><span class="p">(</span><span class="n">exception</span><span class="p">))</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">),</span> <span class="n">keep_tail</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_limit</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exception</span><span class="p">))</span><span class="si">}</span><span class="s2">"</span>
+            <span class="c1"># Each member gets its own limit: one long error must not push the last one, which</span>
+            <span class="c1"># decides ``fallback_rules``, out of the prompt.</span>
+            <span class="n">member_errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_member_errors</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">member_errors</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+                <span class="n">text</span> <span class="o">+=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">chain member </span><span class="si">{</span><span class="n">position</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">member_errors</span><span class="p">)</span><span class="si">}</span><span class="s2">: "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">member</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_limit</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">member</span><span class="p">))</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">progress</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_describe_journal_progress</span><span class="p">(</span><span class="n">exception</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">text</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="si">{</span><span class="n">progress</span><span class="si">}</span><span class="s2">"</span>
         <span class="c1"># ``max_tries`` is the last try number that may still retry (core adds to it on a clear),</span>
         <span class="c1"># so the final attempt is ``max_tries + 1``, as core logs "Starting attempt N of M".</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="s2">"Classify this error from a data pipeline task "</span>
             <span class="sa">f</span><span class="s2">"(attempt </span><span class="si">{</span><span class="n">try_number</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">max_tries</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">):</span><span class="se">\n\n</span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_member_errors</span><span class="p">(</span><span class="n">exception</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="ne">BaseException</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return the error each fallback connection raised, in chain order, or ``()`` for any other error."""</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">exception</span><span class="o">.</span><span class="n">exceptions</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exception</span><span class="p">,</span> <span class="n">FallbackExceptionGroup</span><span class="p">)</span> <span class="k">else</span> <span class="p">()</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_describe_journal_progress</span><span class="p">(</span><span class="n">exception</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Say how far the failed attempt got on the durable journal, or None when it is not known."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">exception</span><span class="p">,</span> <span class="n">FallbackChainExhaustedError</span><span class="p">)</span> <span class="ow">or</span> <span class="n">exception</span><span class="o">.</span><span class="n">replayed_steps</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"Before the chain failed, this attempt replayed </span><span class="si">{</span><span class="n">exception</span><span class="o">.</span><span class="n">replayed_steps</span><span class="si">}</span><span class="s2"> and "</span>
+            <span class="sa">f</span><span class="s2">"recorded </span><span class="si">{</span><span class="n">exception</span><span class="o">.</span><span class="n">recorded_steps</span><span class="si">}</span><span class="s2"> durable journal steps, so a retry resumes from there."</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span>
@@ -1090,11 +1117,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">_rules_decision</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">,</span> <span class="n">try_number</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span> <span class="o">|</span> <span class="kc">None</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RetryDecision</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Return the rules floor's decision: a ``fallback_rules`` match, else the task's own retry behaviour."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fallback_rules</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">ExceptionRetryPolicy</span><span class="p">(</span><span class="n">rules</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fallback_rules</span><span class="p">)</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span>
-                <span class="n">exception</span><span class="p">,</span> <span class="n">try_number</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">,</span> <span class="n">context</span>
-            <span class="p">)</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the rules floor's decision: a ``fallback_rules`` match, else the task's own retry behaviour.</span>
+
+<span class="sd">        When every connection of a fallback chain failed, a rule matches the chain's own error or the</span>
+<span class="sd">        error of its last connection, whichever the rule names, in the order the rules are listed.</span>
+<span class="sd">        The last connection decides when the members disagree: a 400 there is not retried because</span>
+<span class="sd">        an earlier connection was rate limited, and the reverse. The reason of a decision taken on</span>
+<span class="sd">        the last connection's error says so.</span>
+<span class="sd">        """</span>
+        <span class="n">member_errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_member_errors</span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+        <span class="n">targets</span> <span class="o">=</span> <span class="p">[</span><span class="n">exception</span><span class="p">,</span> <span class="n">member_errors</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="k">if</span> <span class="n">member_errors</span> <span class="k">else</span> <span class="p">[</span><span class="n">exception</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">fallback_rules</span> <span class="ow">or</span> <span class="p">():</span>
+            <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
+                <span class="n">decision</span> <span class="o">=</span> <span class="n">ExceptionRetryPolicy</span><span class="p">(</span><span class="n">rules</span><span class="o">=</span><span class="p">[</span><span class="n">rule</span><span class="p">])</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">try_number</span><span class="p">,</span> <span class="n">max_tries</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">decision</span><span class="o">.</span><span class="n">reason</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">target</span> <span class="ow">is</span> <span class="n">exception</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">decision</span>
+                <span class="k">return</span> <span class="n">replace</span><span class="p">(</span><span class="n">decision</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">decision</span><span class="o">.</span><span class="n">reason</span><span class="si">}</span><span class="s2"> (last chain member)"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">RetryDecision</span><span class="o">.</span><span class="n">default</span><span class="p">()</span>
 
 
@@ -1735,7 +1776,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

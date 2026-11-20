@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.2</span>
+        <span class="version-label">Version: </span><span class="version">7.0.3</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -476,7 +476,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">7.0.2</span>
+        <span class="version-label">Version: </span><span class="version">7.0.3</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -674,7 +674,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">tenacity</span><span class="w"> </span><span class="kn">import</span> <span class="n">Retrying</span><span class="p">,</span> <span class="n">stop_after_attempt</span><span class="p">,</span> <span class="n">wait_fixed</span><span class="p">,</span> <span class="n">wait_random</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.connection</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_async_connection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.connection</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_async_connection</span><span class="p">,</span> <span class="n">get_async_extra_dejson</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span><span class="p">,</span> <span class="n">BaseHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.ssh.tunnel</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncSSHTunnel</span><span class="p">,</span> <span class="n">SSHTunnel</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.platform</span><span class="w"> </span><span class="kn">import</span> <span class="n">getuser</span>
@@ -1435,10 +1435,19 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/hooks/ssh/index.html#airflow.providers.ssh.hooks.ssh.SSHHookAsync.keepalive_interval">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">keepalive_interval</span> <span class="o">=</span> <span class="n">keepalive_interval</span></div>
 
+        <span class="c1"># Default value, overridable from Connection, as on SSHHook</span>
+<div class="viewcode-block" id="SSHHookAsync.compress">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/ssh/hooks/ssh/index.html#airflow.providers.ssh.hooks.ssh.SSHHookAsync.compress">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compress</span> <span class="o">=</span> <span class="kc">True</span></div>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_extras</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Parse extra fields from the connection into instance fields."""</span>
-        <span class="n">extra_options</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra_dejson</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parse_extras</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">extra_options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Parse the connection's extra fields into instance fields.</span>
+
+<span class="sd">        :param conn: the connection, for its host</span>
+<span class="sd">        :param extra_options: the connection's extra, already read without a synchronous SDK call</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="s2">"key_file"</span> <span class="ow">in</span> <span class="n">extra_options</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_file</span> <span class="o">==</span> <span class="s2">""</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">key_file</span> <span class="o">=</span> <span class="n">extra_options</span><span class="p">[</span><span class="s2">"key_file"</span><span class="p">]</span>
         <span class="k">if</span> <span class="s2">"known_hosts"</span> <span class="ow">in</span> <span class="n">extra_options</span><span class="p">:</span>
@@ -1451,6 +1460,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="k">if</span> <span class="s2">"private_key"</span> <span class="ow">in</span> <span class="n">extra_options</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">private_key</span> <span class="o">=</span> <span class="n">extra_options</span><span class="p">[</span><span class="s2">"private_key"</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">"compress"</span> <span class="ow">in</span> <span class="n">extra_options</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">extra_options</span><span class="p">[</span><span class="s2">"compress"</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"false"</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">compress</span> <span class="o">=</span> <span class="kc">False</span>
 
         <span class="n">host_key</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"host_key"</span><span class="p">)</span>
         <span class="n">nhkc_raw</span> <span class="o">=</span> <span class="n">extra_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"no_host_key_check"</span><span class="p">)</span>
@@ -1501,7 +1512,9 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="n">conn</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_async_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ssh_conn_id</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">conn</span><span class="o">.</span><span class="n">extra</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_parse_extras</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+            <span class="c1"># extra_dejson masks the secrets with a synchronous SDK call, which raises</span>
+            <span class="c1"># DeadlockImminentError in an async task; read the extra asynchronously.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_parse_extras</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="k">await</span> <span class="n">get_async_extra_dejson</span><span class="p">(</span><span class="n">conn</span><span class="p">))</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_get_value</span><span class="p">(</span><span class="n">self_val</span><span class="p">,</span> <span class="n">conn_val</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">self_val</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1515,6 +1528,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="s2">"port"</span><span class="p">:</span> <span class="n">_get_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">port</span><span class="p">,</span> <span class="n">SSH_PORT</span><span class="p">),</span>
             <span class="s2">"username"</span><span class="p">:</span> <span class="n">_get_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span><span class="p">),</span>
             <span class="s2">"password"</span><span class="p">:</span> <span class="n">_get_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">password</span><span class="p">),</span>
+            <span class="c1"># asyncssh offers "none" first by default; offer zlib first, as paramiko does for SSHHook.</span>
+            <span class="s2">"compression_algs"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"zlib@openssh.com"</span><span class="p">,</span> <span class="s2">"zlib"</span><span class="p">,</span> <span class="s2">"none"</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compress</span> <span class="k">else</span> <span class="p">[</span><span class="s2">"none"</span><span class="p">],</span>
         <span class="p">}</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_file</span><span class="p">:</span>
             <span class="n">conn_config</span><span class="p">[</span><span class="s2">"client_keys"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_file</span>
@@ -1866,7 +1881,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=7c65b01c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=d81d3405"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

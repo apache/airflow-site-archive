@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -723,11 +723,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">AirflowException</span><span class="p">,</span>
     <span class="n">AirflowFailException</span><span class="p">,</span>
     <span class="n">BaseBranchOperator</span><span class="p">,</span>
+    <span class="n">ResumableJobMixin</span><span class="p">,</span>
     <span class="n">conf</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">prune_dict</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">JsonValue</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.openlineage.facet</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.openlineage.extractors.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">OperatorLineage</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
@@ -2100,7 +2103,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="SageMakerTrainingOperator">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">SageMakerTrainingOperator</span><span class="p">(</span><span class="n">SageMakerBaseOperator</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SageMakerTrainingOperator</span><span class="p">(</span><span class="n">ResumableJobMixin</span><span class="p">,</span> <span class="n">SageMakerBaseOperator</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Starts a model training job.</span>
 
@@ -2139,12 +2142,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        This is only relevant if check_if_job_exists is True.</span>
 <span class="sd">    :param deferrable: Run operator in the deferrable mode. This is only effective if wait_for_completion is</span>
 <span class="sd">        set to True.</span>
+<span class="sd">    :param durable: If True (the default), the training job name is persisted to the task state store</span>
+<span class="sd">        before polling, and a retry reconnects to that job instead of submitting a new one. Only applies</span>
+<span class="sd">        to the synchronous path; a deferrable run is unaffected. Needs Airflow 3.3 or later, below it the</span>
+<span class="sd">        operator behaves as with ``durable=False``.</span>
 <span class="sd">    :param cancel_on_kill: If True, the training job is stopped when the task is killed.</span>
 <span class="sd">        Without it the job keeps running, and billing, after the task is gone. A deferred task is</span>
 <span class="sd">        stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only</span>
 <span class="sd">        applies while the task holds a worker slot.</span>
 <span class="sd">    :return Dict: Returns The ARN of the training job created in Amazon SageMaker.</span>
 <span class="sd">    """</span>
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.external_id_key">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.external_id_key">[docs]</a>
+    <span class="n">external_id_key</span> <span class="o">=</span> <span class="s2">"sagemaker_training_job_name"</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -2159,8 +2171,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">action_if_job_exists</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"timestamp"</span><span class="p">,</span>
         <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
         <span class="n">cancel_on_kill</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">durable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
+        <span class="c1"># Named here (not left to **kwargs) so default_args and partial() reach it below 3.3 too.</span>
+        <span class="k">if</span> <span class="n">durable</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">"durable"</span><span class="p">]</span> <span class="o">=</span> <span class="n">durable</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 <div class="viewcode-block" id="SageMakerTrainingOperator.wait_for_completion">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.wait_for_completion">[docs]</a>
@@ -2205,6 +2221,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.serialized_training_data">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">serialized_training_data</span><span class="p">:</span> <span class="nb">dict</span></div>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">_result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="SageMakerTrainingOperator.expand_role">
@@ -2227,6 +2244,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="SageMakerTrainingOperator.execute">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"Setting deferrable to True does not have effect when wait_for_completion is set to False."</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_execute_deferrable</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute_resumable</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_job_result</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.submit_job">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.submit_job">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">submit_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># Not in execute(): on a reconnecting retry the S3Operations uploads would raise on the</span>
+        <span class="c1"># existing key, or overwrite the inputs of the job still running.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">preprocess_config</span><span class="p">()</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_if_job_exists</span><span class="p">:</span>
@@ -2237,86 +2271,127 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
 
         <span class="c1"># Recorded before the submit call so a kill in that window still has a name to stop.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">]</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="s2">"Setting deferrable to True does not have effect when wait_for_completion is set to False."</span>
-            <span class="p">)</span>
-
-        <span class="n">wait_for_completion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
-            <span class="c1"># Set wait_for_completion to False so that it waits for the status in the deferred task.</span>
-            <span class="n">wait_for_completion</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating SageMaker training job </span><span class="si">%s</span><span class="s2">."</span><span class="p">,</span> <span class="n">job_name</span><span class="p">)</span>
 
         <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">create_training_job</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">,</span>
-            <span class="n">wait_for_completion</span><span class="o">=</span><span class="n">wait_for_completion</span><span class="p">,</span>
-            <span class="n">print_log</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">,</span>
+            <span class="n">wait_for_completion</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">print_log</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
             <span class="n">check_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_interval</span><span class="p">,</span>
             <span class="n">max_ingestion_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">response</span><span class="p">[</span><span class="s2">"ResponseMetadata"</span><span class="p">][</span><span class="s2">"HTTPStatusCode"</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">200</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sagemaker Training Job creation failed: </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">:</span>
-            <span class="n">description</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">])</span>
-            <span class="n">status</span> <span class="o">=</span> <span class="n">description</span><span class="p">[</span><span class="s2">"TrainingJobStatus"</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">job_name</span></div>
 
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">:</span>
-                <span class="n">instance_count</span> <span class="o">=</span> <span class="n">description</span><span class="p">[</span><span class="s2">"ResourceConfig"</span><span class="p">][</span><span class="s2">"InstanceCount"</span><span class="p">]</span>
-                <span class="n">last_describe_job_call</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
-                <span class="n">job_already_completed</span> <span class="o">=</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">non_terminal_states</span>
-                <span class="n">_</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">last_describe_job_call</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job_with_log</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">],</span>
-                    <span class="p">{},</span>
-                    <span class="p">[],</span>
-                    <span class="n">instance_count</span><span class="p">,</span>
-                    <span class="n">LogState</span><span class="o">.</span><span class="n">COMPLETE</span> <span class="k">if</span> <span class="n">job_already_completed</span> <span class="k">else</span> <span class="n">LogState</span><span class="o">.</span><span class="n">TAILING</span><span class="p">,</span>
-                    <span class="n">description</span><span class="p">,</span>
-                    <span class="n">last_describe_job_call</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">secondary_training_status_message</span><span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
 
-            <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">failed_states</span><span class="p">:</span>
-                <span class="n">reason</span> <span class="o">=</span> <span class="n">description</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"FailureReason"</span><span class="p">,</span> <span class="s2">"(No reason provided)"</span><span class="p">)</span>
-                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SageMaker job failed because </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">"Completed"</span><span class="p">:</span>
-                <span class="n">log_message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2"> completed successfully."</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">:</span>
-                    <span class="n">billable_seconds</span> <span class="o">=</span> <span class="n">SageMakerHook</span><span class="o">.</span><span class="n">count_billable_seconds</span><span class="p">(</span>
-                        <span class="n">training_start_time</span><span class="o">=</span><span class="n">description</span><span class="p">[</span><span class="s2">"TrainingStartTime"</span><span class="p">],</span>
-                        <span class="n">training_end_time</span><span class="o">=</span><span class="n">description</span><span class="p">[</span><span class="s2">"TrainingEndTime"</span><span class="p">],</span>
-                        <span class="n">instance_count</span><span class="o">=</span><span class="n">instance_count</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="n">log_message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Billable seconds: </span><span class="si">{</span><span class="n">billable_seconds</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">log_message</span><span class="si">}</span><span class="s2">"</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">log_message</span><span class="p">)</span>
-                <span class="k">return</span> <span class="p">{</span><span class="s2">"Training"</span><span class="p">:</span> <span class="n">serialize</span><span class="p">(</span><span class="n">description</span><span class="p">)}</span>
+<div class="viewcode-block" id="SageMakerTrainingOperator.get_job_status">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.get_job_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Query the raw job status; a job name SageMaker no longer knows degrades to NOT_FOUND."""</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">external_id</span><span class="p">))[</span><span class="s2">"TrainingJobStatus"</span><span class="p">]</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s2">"Error"</span><span class="p">][</span><span class="s2">"Code"</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"ValidationException"</span><span class="p">,</span> <span class="s2">"ResourceNotFound"</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">"NOT_FOUND"</span>
+            <span class="k">raise</span></div>
 
-            <span class="n">timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execution_timeout</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">:</span>
-                <span class="n">timeout</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">)</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
-                <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span>
-                <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerTrigger</span><span class="p">(</span>
-                    <span class="n">job_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">],</span>
-                    <span class="n">job_type</span><span class="o">=</span><span class="s2">"Training"</span><span class="p">,</span>
-                    <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_interval</span><span class="p">,</span>
-                    <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_attempts</span><span class="p">,</span>
-                    <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
-                    <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
-                    <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
-                    <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
-                    <span class="n">cancel_on_kill</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span><span class="p">,</span>
-                <span class="p">),</span>
-                <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
+<div class="viewcode-block" id="SageMakerTrainingOperator.is_job_active">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.is_job_active">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_job_active</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># Narrower than non_terminal_states on purpose: wait_for_training_job accepts the "Stopped" a</span>
+        <span class="c1"># "Stopping" job ends in as done when print_log is off, so reconnecting would report success.</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">"InProgress"</span></div>
+
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.is_job_succeeded">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.is_job_succeeded">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_job_succeeded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">"Completed"</span></div>
+
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.poll_until_complete">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.poll_until_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">poll_until_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># A reconnecting retry never calls submit_job, so the name is recorded here too.</span>
+        <span class="n">job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_training_job_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">external_id</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">wait_for_training_job</span><span class="p">(</span>
+            <span class="n">job_name</span><span class="p">,</span>
+            <span class="n">wait_for_completion</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wait_for_completion</span><span class="p">,</span>
+            <span class="n">print_log</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">,</span>
+            <span class="n">check_interval</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_interval</span><span class="p">,</span>
+            <span class="n">max_ingestion_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialize_result</span><span class="p">(</span><span class="n">job_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SageMakerTrainingOperator.get_job_result">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.get_job_result">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_job_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">external_id</span><span class="p">:</span> <span class="n">JsonValue</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialize_result</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">external_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_result</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_execute_deferrable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="n">job_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">submit_job</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">description</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job</span><span class="p">(</span><span class="n">job_name</span><span class="p">)</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="n">description</span><span class="p">[</span><span class="s2">"TrainingJobStatus"</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">:</span>
+            <span class="n">instance_count</span> <span class="o">=</span> <span class="n">description</span><span class="p">[</span><span class="s2">"ResourceConfig"</span><span class="p">][</span><span class="s2">"InstanceCount"</span><span class="p">]</span>
+            <span class="n">last_describe_job_call</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+            <span class="n">job_already_completed</span> <span class="o">=</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">non_terminal_states</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">last_describe_job_call</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">describe_training_job_with_log</span><span class="p">(</span>
+                <span class="n">job_name</span><span class="p">,</span>
+                <span class="p">{},</span>
+                <span class="p">[],</span>
+                <span class="n">instance_count</span><span class="p">,</span>
+                <span class="n">LogState</span><span class="o">.</span><span class="n">COMPLETE</span> <span class="k">if</span> <span class="n">job_already_completed</span> <span class="k">else</span> <span class="n">LogState</span><span class="o">.</span><span class="n">TAILING</span><span class="p">,</span>
+                <span class="n">description</span><span class="p">,</span>
+                <span class="n">last_describe_job_call</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">secondary_training_status_message</span><span class="p">(</span><span class="n">description</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
 
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">serialize_result</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"TrainingJobName"</span><span class="p">])</span></div>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">failed_states</span><span class="p">:</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="n">description</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"FailureReason"</span><span class="p">,</span> <span class="s2">"(No reason provided)"</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SageMaker job failed because </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">"Completed"</span><span class="p">:</span>
+            <span class="n">log_message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2"> completed successfully."</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_log</span><span class="p">:</span>
+                <span class="n">billable_seconds</span> <span class="o">=</span> <span class="n">SageMakerHook</span><span class="o">.</span><span class="n">count_billable_seconds</span><span class="p">(</span>
+                    <span class="n">training_start_time</span><span class="o">=</span><span class="n">description</span><span class="p">[</span><span class="s2">"TrainingStartTime"</span><span class="p">],</span>
+                    <span class="n">training_end_time</span><span class="o">=</span><span class="n">description</span><span class="p">[</span><span class="s2">"TrainingEndTime"</span><span class="p">],</span>
+                    <span class="n">instance_count</span><span class="o">=</span><span class="n">instance_count</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">log_message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Billable seconds: </span><span class="si">{</span><span class="n">billable_seconds</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">log_message</span><span class="si">}</span><span class="s2">"</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">log_message</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">"Training"</span><span class="p">:</span> <span class="n">serialize</span><span class="p">(</span><span class="n">description</span><span class="p">)}</span>
 
+        <span class="n">timeout</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execution_timeout</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">:</span>
+            <span class="n">timeout</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_ingestion_time</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span>
+            <span class="n">trigger</span><span class="o">=</span><span class="n">SageMakerTrigger</span><span class="p">(</span>
+                <span class="n">job_name</span><span class="o">=</span><span class="n">job_name</span><span class="p">,</span>
+                <span class="n">job_type</span><span class="o">=</span><span class="s2">"Training"</span><span class="p">,</span>
+                <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_interval</span><span class="p">,</span>
+                <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_attempts</span><span class="p">,</span>
+                <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
+                <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
+                <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
+                <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                <span class="n">cancel_on_kill</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cancel_on_kill</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
+        <span class="p">)</span>
 
 <div class="viewcode-block" id="SageMakerTrainingOperator.execute_complete">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/sagemaker/index.html#airflow.providers.amazon.aws.operators.sagemaker.SageMakerTrainingOperator.execute_complete">[docs]</a>
@@ -3906,7 +3981,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -14,6 +14,7 @@ Attributes
 
 .. autoapisummary::
 
+   airflow.providers.common.ai.utils.output_type.iter_pydantic_models
    airflow.providers.common.ai.utils.output_type.log
 
 
@@ -22,6 +23,7 @@ Functions
 
 .. autoapisummary::
 
+   airflow.providers.common.ai.utils.output_type.dump_output_for_xcom
    airflow.providers.common.ai.utils.output_type.dump_output_to_json
    airflow.providers.common.ai.utils.output_type.dump_output_for_display
    airflow.providers.common.ai.utils.output_type.rehydrate_pydantic_output
@@ -30,7 +32,22 @@ Functions
 Module Contents
 ---------------
 
+.. py:data:: iter_pydantic_models
+   :value: None
+
+
 .. py:data:: log
+
+.. py:function:: dump_output_for_xcom(output, output_type, *, serialize_output)
+
+   Return the output as it is pushed to XCom.
+
+   With ``serialize_output`` a model output is dumped with ``model_dump()``, as 1.0.0 does, so a ``date``
+   or ``Decimal`` field keeps its type. Any other output is dumped, whole and to JSON values, only when it
+   holds a model the worker registers no class for, with field names rather than aliases, so a ``HttpUrl``,
+   ``Path`` or ``Enum`` field is a string that XCom accepts. Registered models, in a container or not, are
+   left for the serde serializer.
+
 
 .. py:function:: dump_output_to_json(output)
 
@@ -46,7 +63,7 @@ Module Contents
 
    Turn the reviewed string back into ``output_type``.
 
-   ``raw`` is JSON, or bare text for types pydantic builds from a string. ``str`` outputs, output
+   ``raw`` is JSON, or bare text for types pydantic builds from a string. A list of candidate types is validated as their union. ``str`` outputs, output
    functions, pydantic-ai output markers such as ``ToolOutput`` and types pydantic has no schema for
    return ``raw`` unchanged, and so does an unedited output that does not validate back (with a warning).
 

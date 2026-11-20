@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">11.0.0</span>
+        <span class="version-label">Version: </span><span class="version">11.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -440,7 +440,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-cncf-kubernetes/11.0.0/providers/cncf/kubernetes/tests/system/cncf/kubernetes">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-cncf-kubernetes/11.1.0/providers/cncf/kubernetes/tests/system/cncf/kubernetes">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-cncf-kubernetes/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">11.0.0</span>
+        <span class="version-label">Version: </span><span class="version">11.1.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -571,7 +571,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-cncf-kubernetes/11.0.0/providers/cncf/kubernetes/tests/system/cncf/kubernetes">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-cncf-kubernetes/11.1.0/providers/cncf/kubernetes/tests/system/cncf/kubernetes">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-cncf-kubernetes/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -975,30 +975,39 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
     <span class="n">FATAL_STATES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"InvalidImageName"</span><span class="p">,</span> <span class="s2">"ErrImageNeverPull"</span><span class="p">]</span>
     <span class="n">TRANSIENT_STATES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ErrImagePull"</span><span class="p">,</span> <span class="s2">"ImagePullBackOff"</span><span class="p">]</span>
-    <span class="n">ERROR_MESSAGE</span> <span class="o">=</span> <span class="s2">"Image cannot be pulled, unable to start: </span><span class="si">{reason}</span><span class="se">\n</span><span class="si">{message}</span><span class="s2">"</span>
+    <span class="n">ERROR_MESSAGE</span> <span class="o">=</span> <span class="s2">"Image for container '</span><span class="si">{name}</span><span class="s2">' cannot be pulled, unable to start: </span><span class="si">{reason}</span><span class="se">\n</span><span class="si">{message}</span><span class="s2">"</span>
 
     <span class="n">pod_status</span> <span class="o">=</span> <span class="n">pod</span><span class="o">.</span><span class="n">status</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">None</span>
-
-    <span class="k">for</span> <span class="n">container_status</span> <span class="ow">in</span> <span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span><span class="p">:</span>
+    <span class="c1"># ``init_container_statuses`` also lists native sidecars -- init containers with</span>
+    <span class="c1"># ``restartPolicy: Always`` -- which can fail a restart mid-run. Scan init containers</span>
+    <span class="c1"># only until ``Initialized`` is true: one that cannot pull keeps it false, and kubelet</span>
+    <span class="c1"># keeps it true once any main container has started, even while a sidecar restarts.</span>
+    <span class="n">initialized</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="n">condition</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"Initialized"</span> <span class="ow">and</span> <span class="n">condition</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">"True"</span>
+        <span class="k">for</span> <span class="n">condition</span> <span class="ow">in</span> <span class="p">(</span><span class="n">pod_status</span><span class="o">.</span><span class="n">conditions</span> <span class="ow">or</span> <span class="p">[])</span>
+    <span class="p">)</span>
+    <span class="n">container_statuses</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="c1"># Init containers first: while one of them is stuck pulling, the main</span>
+        <span class="c1"># container only reports ``PodInitializing``, which matches no state below.</span>
+        <span class="o">*</span><span class="p">([]</span> <span class="k">if</span> <span class="n">initialized</span> <span class="k">else</span> <span class="p">(</span><span class="n">pod_status</span><span class="o">.</span><span class="n">init_container_statuses</span> <span class="ow">or</span> <span class="p">[])),</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">pod_status</span><span class="o">.</span><span class="n">container_statuses</span> <span class="ow">or</span> <span class="p">[]),</span>
+    <span class="p">]</span>
+    <span class="k">for</span> <span class="n">container_status</span> <span class="ow">in</span> <span class="n">container_statuses</span><span class="p">:</span>
         <span class="n">container_state</span><span class="p">:</span> <span class="n">V1ContainerState</span> <span class="o">=</span> <span class="n">container_status</span><span class="o">.</span><span class="n">state</span>
         <span class="n">container_waiting</span><span class="p">:</span> <span class="n">V1ContainerStateWaiting</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">container_state</span><span class="o">.</span><span class="n">waiting</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">container_waiting</span><span class="p">:</span>
             <span class="k">continue</span>
 
-        <span class="k">if</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span> <span class="ow">in</span> <span class="n">FATAL_STATES</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">ERROR_MESSAGE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                <span class="n">reason</span><span class="o">=</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">""</span>
-            <span class="p">)</span>
+        <span class="n">reason</span> <span class="o">=</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">""</span>
 
-        <span class="k">if</span> <span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span> <span class="ow">in</span> <span class="n">TRANSIENT_STATES</span><span class="p">:</span>
-            <span class="n">message_lower</span> <span class="o">=</span> <span class="p">(</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-            <span class="n">is_transient</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">pattern</span> <span class="ow">in</span> <span class="n">message_lower</span> <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">TRANSIENT_ERROR_PATTERNS</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_transient</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">ERROR_MESSAGE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                    <span class="n">reason</span><span class="o">=</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">reason</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">container_waiting</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">""</span>
-                <span class="p">)</span>
+        <span class="c1"># The message can quote the image name, so a transient pattern can match by</span>
+        <span class="c1"># accident; it only ever excuses a TRANSIENT_STATES reason.</span>
+        <span class="k">if</span> <span class="n">reason</span> <span class="ow">in</span> <span class="n">FATAL_STATES</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="n">reason</span> <span class="ow">in</span> <span class="n">TRANSIENT_STATES</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">pattern</span> <span class="ow">in</span> <span class="n">message</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">TRANSIENT_ERROR_PATTERNS</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="n">ERROR_MESSAGE</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">container_status</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="n">reason</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">)</span>
     <span class="k">return</span> <span class="kc">None</span></div>
 
 
@@ -1883,14 +1892,17 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                 <span class="n">stderr</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">tty</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                 <span class="n">_preload_content</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">binary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Running command... </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">command</span><span class="p">)</span>
             <span class="n">client</span><span class="o">.</span><span class="n">run_forever</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">client</span><span class="o">.</span><span class="n">peek_stderr</span><span class="p">():</span>
-                <span class="n">stderr</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_stderr</span><span class="p">()</span>
+                <span class="n">stderr</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_stderr</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"stderr from command: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">stderr</span><span class="p">)</span>
-            <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_all</span><span class="p">()</span>
+            <span class="n">raw_result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_all</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">raw_result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">raw_result</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span> <span class="o">!=</span> <span class="n">EMPTY_XCOM_RESULT</span><span class="p">:</span>
                 <span class="c1"># Note: result string is parsed to check if its valid json.</span>
                 <span class="c1"># This function still returns a string which is converted into json in the calling method.</span>
@@ -2464,7 +2476,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=ce29b7a2"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=bffcfdfb"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

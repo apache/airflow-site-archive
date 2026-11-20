@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.0.0</span>
+        <span class="version-label">Version: </span><span class="version">4.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -475,7 +475,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.0.0</span>
+        <span class="version-label">Version: </span><span class="version">4.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -761,6 +761,19 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">return</span> <span class="n">broker_transport_options</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_default_postgres_driver</span><span class="p">(</span><span class="n">result_backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Give a driverless ``db+postgresql://`` result backend Airflow's default sync Postgres driver.</span>
+
+<span class="sd">    SQLAlchemy before 2.1 picks psycopg2 for a driverless URL, while Airflow defaults to psycopg (v3);</span>
+<span class="sd">    fall back to psycopg2 without psycopg/SQLAlchemy 2.0, matching PostgresHook's USE_PSYCOPG3 gating.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">result_backend</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"db+postgresql://"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">result_backend</span>
+    <span class="n">driver</span> <span class="o">=</span> <span class="s2">"psycopg"</span> <span class="k">if</span> <span class="n">_USE_PSYCOPG3</span> <span class="k">else</span> <span class="s2">"psycopg2"</span>
+    <span class="k">return</span> <span class="n">result_backend</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"db+postgresql://"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"db+postgresql+</span><span class="si">{</span><span class="n">driver</span><span class="si">}</span><span class="s2">://"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_database_engine_options</span><span class="p">(</span><span class="n">result_backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">result_backend</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"db+"</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">options</span>
@@ -803,14 +816,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="n">result_backend</span> <span class="o">=</span> <span class="n">team_conf</span><span class="o">.</span><span class="n">get_mandatory_value</span><span class="p">(</span><span class="s2">"celery"</span><span class="p">,</span> <span class="s2">"RESULT_BACKEND"</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Value for celery result_backend not found. Using sql_alchemy_conn with db+ prefix."</span><span class="p">)</span>
-        <span class="n">sql_alchemy_conn</span> <span class="o">=</span> <span class="n">team_conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"database"</span><span class="p">,</span> <span class="s2">"SQL_ALCHEMY_CONN"</span><span class="p">)</span>
-        <span class="c1"># Airflow's sync metadata-database driver default is psycopg (v3); mirror that explicitly</span>
-        <span class="c1"># for driverless PostgreSQL URLs instead of relying on SQLAlchemy's own default. Fall back to</span>
-        <span class="c1"># psycopg2 when psycopg/SQLAlchemy 2.0 aren't both available, matching PostgresHook's own</span>
-        <span class="c1"># USE_PSYCOPG3 gating so this doesn't break environments still on the older combination.</span>
-        <span class="n">target_scheme</span> <span class="o">=</span> <span class="s2">"postgresql+psycopg://"</span> <span class="k">if</span> <span class="n">_USE_PSYCOPG3</span> <span class="k">else</span> <span class="s2">"postgresql+psycopg2://"</span>
-        <span class="n">sql_alchemy_conn</span> <span class="o">=</span> <span class="n">sql_alchemy_conn</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"postgresql://"</span><span class="p">,</span> <span class="n">target_scheme</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="n">result_backend</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"db+</span><span class="si">{</span><span class="n">sql_alchemy_conn</span><span class="si">}</span><span class="s2">"</span>
+        <span class="n">result_backend</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"db+</span><span class="si">{</span><span class="n">team_conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'database'</span><span class="p">,</span><span class="w"> </span><span class="s1">'SQL_ALCHEMY_CONN'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">result_backend</span> <span class="o">=</span> <span class="n">_apply_default_postgres_driver</span><span class="p">(</span><span class="n">result_backend</span><span class="p">)</span>
 
     <span class="c1"># Handle result backend transport options (for Redis Sentinel support)</span>
     <span class="n">result_backend_transport_options</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">(</span>
@@ -1216,7 +1223,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=3304f9e4"></script>
+        <script src="../../../../../_static/documentation_options.js?v=977c7dfd"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

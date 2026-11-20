@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -457,6 +457,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -536,7 +537,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -624,6 +625,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -810,10 +812,19 @@ a function, since the SDK checks its arguments only through its own invoker, the
 function tools of an agent reached through <code class="docutils literal notranslate"><span class="pre">handoff()</span></code>, and its model too unless the
 agent’s <code class="docutils literal notranslate"><span class="pre">model</span></code> is a model name or not set, and streamed runs. A tool call that fails,
 including one whose exception <code class="docutils literal notranslate"><span class="pre">failure_error_function</span></code> turns into text for the model,
-is not recorded either, so a retry runs it again. A replayed model call reports no
-usage, since it costs nothing.</p>
+is not recorded either, so a retry runs it again. Once a call has failed the run on two
+attempts in a row, the next retry asks the model again from the request that chose it. A
+failure the model could correct, which an <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> tool answers with
+<code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code>, is recorded, and still counts against the tool’s retry limit when it
+replays; a run that used that limit up asks the model again from its last request on a
+retry. A replayed model call reports no usage, since it costs nothing.</p>
 <p>A <code class="docutils literal notranslate"><span class="pre">session</span></code> makes every retry run live: the SDK adds the failed try’s prompt to it
 before the first model call, so that call no longer asks what it asked then.</p>
+<p>A tool call that needs approval (<code class="docutils literal notranslate"><span class="pre">needs_approval</span></code>) is asked with the standard
+provider’s <code class="docutils literal notranslate"><span class="pre">request_input()</span></code>, which pauses the task in Required Actions. The answer
+resumes the task, the run replays up to the call, and the call is approved, or rejected
+with the reviewer’s reason as its result. Steps are deleted only once a run ends without
+a pending approval.</p>
 <p>Outside a task there is no journal, and this is <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -825,9 +836,15 @@ before the first model call, so that call no longer asks what it asked then.</p>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – When <code class="docutils literal notranslate"><span class="pre">previous_response_id</span></code>, <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code> or
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError" title="(in Python v3.15)"><strong>ValueError</strong></a> – When <code class="docutils literal notranslate"><span class="pre">previous_response_id</span></code>, <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code> or
 <code class="docutils literal notranslate"><span class="pre">auto_previous_response_id</span></code> is passed: a replayed call never reaches the
-conversation OpenAI keeps for them.</p>
+conversation OpenAI keeps for them.</p></li>
+<li><p><a class="reference internal" href="../../exceptions/index.html#airflow.providers.common.ai.exceptions.UnsupportedToolDeferralError" title="airflow.providers.common.ai.exceptions.UnsupportedToolDeferralError"><strong>UnsupportedToolDeferralError</strong></a> – When the run stops for a tool call that needs
+approval and cannot pause for it: before Airflow 3.4 or without a standard provider
+that has <code class="docutils literal notranslate"><span class="pre">request_input()</span></code>, with a <code class="docutils literal notranslate"><span class="pre">session</span></code>, or for a call by an agent whose
+model is not recorded. The task fails without retrying.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -1106,7 +1123,7 @@ conversation OpenAI keeps for them.</p>
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -788,7 +788,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="c1"># Note: exp.Command is sqlglot's fallback for any syntax it doesn't recognize.</span>
 <span class="c1"># Including it makes the denylist fail-closed (safer), but may block legitimate</span>
 <span class="c1"># vendor-specific SQL that sqlglot can't parse. Callers who need such syntax can</span>
-<span class="c1"># provide custom allowed_types to bypass the deep scan entirely.</span>
+<span class="c1"># add exp.Command to a custom allowed_types, which also turns the deep scan off.</span>
 <span class="n">_DATA_MODIFYING_NODES</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">[</span><span class="n">exp</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
     <span class="n">exp</span><span class="o">.</span><span class="n">Insert</span><span class="p">,</span>
     <span class="n">exp</span><span class="o">.</span><span class="n">Update</span><span class="p">,</span>
@@ -1151,7 +1151,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param allowed_types: Tuple of sqlglot expression types to permit.</span>
 <span class="sd">        Defaults to ``(Select, Union, Intersect, Except)``. When supplied, the</span>
 <span class="sd">        caller takes full control of the allow-list and ``allow_read_only_metadata``</span>
-<span class="sd">        is ignored.</span>
+<span class="sd">        is ignored. The deep scan for data-modifying nodes still runs unless the</span>
+<span class="sd">        allow-list admits a write, directly (``exp.Insert``) or through a base class</span>
+<span class="sd">        (``exp.DML``).</span>
 <span class="sd">    :param dialect: SQL dialect for parsing (``postgres``, ``mysql``, etc.).</span>
 <span class="sd">    :param allow_multiple_statements: Whether to allow multiple semicolon-separated</span>
 <span class="sd">        statements. Default ``False``.</span>
@@ -1163,18 +1165,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :raises SQLSafetyError: If the SQL is empty, contains disallowed statement types,</span>
 <span class="sd">        or has multiple statements when not permitted.</span>
 <span class="sd">    """</span>
-    <span class="c1"># A caller-supplied ``allowed_types`` is an explicit opt-out of the curated</span>
-    <span class="c1"># read-only defaults (and the data-modifying deep scan). Otherwise we use the</span>
-    <span class="c1"># read-only defaults, optionally widened with metadata statements, and keep</span>
-    <span class="c1"># the deep scan on.</span>
     <span class="k">if</span> <span class="n">allowed_types</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">types</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">[</span><span class="n">exp</span><span class="o">.</span><span class="n">Expr</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_ALLOWED_TYPES</span>
         <span class="k">if</span> <span class="n">allow_read_only_metadata</span><span class="p">:</span>
             <span class="n">types</span> <span class="o">=</span> <span class="n">types</span> <span class="o">+</span> <span class="n">READ_ONLY_METADATA_TYPES</span>
-        <span class="n">run_data_modifying_scan</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">types</span> <span class="o">=</span> <span class="n">allowed_types</span>
-        <span class="n">run_data_modifying_scan</span> <span class="o">=</span> <span class="n">types</span> <span class="o">==</span> <span class="n">DEFAULT_ALLOWED_TYPES</span>
+    <span class="c1"># Only an allow-list that admits a write opts out of the deep scan, whether it names</span>
+    <span class="c1"># the write type (``exp.Insert``) or a base of it (``exp.DML``). Comparing to</span>
+    <span class="c1"># DEFAULT_ALLOWED_TYPES would also switch it off for a narrower or reordered</span>
+    <span class="c1"># read-only list such as ``(exp.Select,)``, letting ``WITH d AS (DELETE ...)</span>
+    <span class="c1"># SELECT ...`` through. Scanning a list that admits writes would instead reject the</span>
+    <span class="c1"># writes it allows: MERGE nests Insert and Update, ALTER ... DROP COLUMN nests Drop.</span>
+    <span class="n">run_data_modifying_scan</span> <span class="o">=</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="nb">issubclass</span><span class="p">(</span><span class="n">allowed</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">allowed</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">allowed</span> <span class="ow">in</span> <span class="n">types</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">_DATA_MODIFYING_NODES</span>
+    <span class="p">)</span>
 
     <span class="n">parsed</span> <span class="o">=</span> <span class="n">parse_sql</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">dialect</span><span class="o">=</span><span class="n">dialect</span><span class="p">,</span> <span class="n">allow_multiple_statements</span><span class="o">=</span><span class="n">allow_multiple_statements</span><span class="p">)</span>
 
@@ -1186,9 +1193,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
 
     <span class="c1"># Deep scan: reject data-modifying nodes hidden inside otherwise-allowed statements</span>
-    <span class="c1"># (e.g. data-modifying CTEs, SELECT INTO, EXPLAIN &lt;write&gt;). Runs for the curated</span>
-    <span class="c1"># read-only allow-list — callers who provide custom allowed_types have explicitly</span>
-    <span class="c1"># opted into non-read-only operations.</span>
+    <span class="c1"># (e.g. data-modifying CTEs, SELECT INTO, EXPLAIN &lt;write&gt;).</span>
     <span class="k">if</span> <span class="n">run_data_modifying_scan</span><span class="p">:</span>
         <span class="n">_check_for_data_modifying_nodes</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span>
 
@@ -1473,7 +1478,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

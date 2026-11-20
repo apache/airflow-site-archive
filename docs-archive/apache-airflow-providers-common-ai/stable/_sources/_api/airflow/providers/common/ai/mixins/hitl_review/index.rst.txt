@@ -31,7 +31,7 @@ Module Contents
    Bases: :py:obj:`Protocol`
 
 
-   Attributes that the host operator must provide.
+   The host operator's attributes and hooks, and the mixin methods that call each other.
 
 
    .. py:attribute:: enable_hitl_review
@@ -63,22 +63,41 @@ Module Contents
 
 
 
+   .. py:method:: regenerate_with_feedback(*, feedback, message_history)
+
+
+   .. py:method:: dump_review_state(message_history)
+
+
+   .. py:method:: load_review_state(context, state)
+
+
+   .. py:method:: complete_hitl_review(context, approved_output, *, state)
+
+
 .. py:class:: HITLReviewMixin
 
-   Mixin that drives an iterative HITL review loop inside ``execute()``.
+   Mixin that drives an iterative HITL review after the operator generates its first output.
 
-   After the operator generates its first output, the mixin:
+   Each round, the mixin pushes session metadata and the agent output to XCom and waits for the
+   reviewer to act in the ``hitl_review`` plugin:
 
-   1. Pushes session metadata and the first agent output to XCom.
-   2. Polls the human action XCom (``airflow_hitl_review_human_action``) at ``hitl_poll_interval`` seconds.
-   3. When a human sets action to ``changes_requested`` (via the plugin API),
-      calls :meth:`regenerate_with_feedback` and pushes the new agent output.
-   4. When a human sets action to ``approved``, returns the output.
-   5. When a human sets action to ``rejected``, raises a `HITLRejectException`
+   - ``changes_requested``: calls :meth:`regenerate_with_feedback` and starts the next round.
+   - ``approved``: returns the output.
+   - ``rejected``: raises ``HITLRejectException``.
 
-   The loop stops after ``hitl_timeout`` or ``max_hitl_iterations``. It also stops, by
-   re-raising the underlying exception, when polling the human action XCom fails
-   ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row, even if ``hitl_timeout`` is ``None``.
+   **How it waits:** on Airflow 3.3+ each round is also a Human-in-the-loop request on the task
+   instance, and the task parks in the ``awaiting_input`` state, holding no worker or pool slot.
+   The plugin answers the request and resumes the task in :meth:`resume_hitl_review`, which runs
+   the next round in a new process; the conversation needed to regenerate is kept in the task
+   state store through :meth:`dump_review_state` and :meth:`load_review_state`. On older Airflow
+   the task stays running and polls the human action XCom (``airflow_hitl_review_human_action``)
+   every ``hitl_poll_interval`` seconds.
+
+   The review stops after ``hitl_timeout``, one wall-clock budget for all rounds combined, or
+   ``max_hitl_iterations``. When polling, it also stops, by re-raising the underlying exception,
+   when pulling the human action XCom fails ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row,
+   even if ``hitl_timeout`` is ``None``.
 
    **Max iterations:** ``iteration`` counts outputs shown to the reviewer
    (1 = initial, 2 = first regeneration, etc.). When the reviewer requests
@@ -99,12 +118,17 @@ Module Contents
    - ``hitl_poll_interval`` (``float``, seconds)
    - ``prompt`` (``str`` or ``Sequence[UserContent]``)
 
-   And must implement: meth:`regenerate_with_feedback`.
+   And must implement :meth:`regenerate_with_feedback`. To park between rounds on Airflow 3.3+,
+   it also implements :meth:`dump_review_state` and :meth:`load_review_state`; without them the
+   review polls, as on older Airflow.
 
 
    .. py:method:: run_hitl_review(context, output, *, message_history = None)
 
-      Execute the full HITL review loop.
+      Start the HITL review of *output*.
+
+      On Airflow 3.3+ this parks the task and never returns; the review continues in
+      :meth:`resume_hitl_review`. Otherwise it blocks until the review ends.
 
       :param context: Airflow task context.
       :param output: Initial LLM output (any pydantic-serializable value).
@@ -112,11 +136,26 @@ Module Contents
           pydantic-ai ``list[ModelMessage]``).  Passed to
           :meth:`regenerate_with_feedback` on each iteration.
       :returns: The approved output as a string (JSON for non-str values pydantic can serialize).
+      :raises TaskAwaitingInput: When the review parks the task until the reviewer acts.
       :raises HITLMaxIterationsError: When max iterations reached without approval.
       :raises HITLRejectException: When the reviewer rejects the output.
       :raises HITLTimeoutError: When hitl_timeout elapses with no response.
       :raises Exception: The last XCom pull exception, when pulling the human action
           fails ``_MAX_CONSECUTIVE_XCOM_PULL_FAILURES`` times in a row.
+
+
+
+   .. py:method:: resume_hitl_review(context, iteration, deadline, state_sha256, event)
+
+      Continue a review parked by :meth:`run_hitl_review` with the reviewer's answer.
+
+      Approving returns :meth:`complete_hitl_review`; requesting changes regenerates and parks
+      the task again for the next round.
+
+      :raises HITLRejectException: When the reviewer rejects the output.
+      :raises HITLMaxIterationsError: When changes are requested on the last allowed iteration.
+      :raises HITLTimeoutError: When ``hitl_timeout`` elapsed before the reviewer answered.
+      :raises HITLTriggerEventError: When the resume event reports another error.
 
 
 
@@ -129,6 +168,40 @@ Module Contents
       :param feedback: The reviewer's feedback text.
       :param message_history: Provider-specific conversation state.
       :returns: ``(new_output_string, updated_message_history)``.
+
+
+
+   .. py:method:: dump_review_state(message_history)
+      :abstractmethod:
+
+
+      Serialize what :meth:`load_review_state` needs to regenerate after the task resumes.
+
+      Called on Airflow 3.3+ before every park; the string is kept in the task state store.
+
+      :param message_history: Provider-specific conversation state.
+
+
+
+   .. py:method:: load_review_state(context, state)
+      :abstractmethod:
+
+
+      Restore what :meth:`dump_review_state` saved, in the resumed task.
+
+      Called before each regeneration.
+
+      :returns: The ``message_history`` to pass to :meth:`regenerate_with_feedback`.
+
+
+
+   .. py:method:: complete_hitl_review(context, approved_output, *, state)
+
+      Return the task's result once the review is approved.
+
+      :param approved_output: The approved output as the reviewer read it.
+      :param state: What :meth:`dump_review_state` saved for the approved round, when the task
+          resumed after parking; ``None`` when the review ran in this process.
 
 
 

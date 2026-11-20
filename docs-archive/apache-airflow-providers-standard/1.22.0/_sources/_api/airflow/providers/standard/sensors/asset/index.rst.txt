@@ -1,0 +1,207 @@
+airflow.providers.standard.sensors.asset
+========================================
+
+.. py:module:: airflow.providers.standard.sensors.asset
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.standard.sensors.asset.AssetEventTimeBound
+   airflow.providers.standard.sensors.asset.RunStart
+   airflow.providers.standard.sensors.asset.RunAfter
+   airflow.providers.standard.sensors.asset.LogicalDate
+   airflow.providers.standard.sensors.asset.DataIntervalStart
+   airflow.providers.standard.sensors.asset.DataIntervalEnd
+   airflow.providers.standard.sensors.asset.AssetEventSensor
+
+
+Module Contents
+---------------
+
+.. py:class:: AssetEventTimeBound
+
+   Bases: :py:obj:`Protocol`
+
+
+   A time bound that Airflow resolves during template rendering.
+
+   Implement ``resolve(context)`` to return a datetime or ISO string. Custom
+   objects do not need to inherit this protocol.
+   The result must stay fixed across reschedules of the same Dag run.
+
+
+   .. py:method:: resolve(context)
+
+      Return the event timestamp bound for this task's runtime context.
+
+
+
+.. py:class:: RunStart(*, offset = timedelta(0))
+
+   Bases: :py:obj:`_ContextTimeBound`
+
+
+   Bound events by the Dag run's actual start time, including for backfills.
+
+   :param offset: Signed duration to add to ``dag_run.start_date``.
+
+
+.. py:class:: RunAfter(*, offset = timedelta(0))
+
+   Bases: :py:obj:`_ContextTimeBound`
+
+
+   Bound events by the Dag run's earliest allowed start time.
+
+   This timestamp stays fixed when tasks are cleared. With ``after``, an event
+   at this timestamp is included, even if it triggered the run.
+
+   :param offset: Signed duration to add to ``dag_run.run_after``.
+
+
+.. py:class:: LogicalDate(*, offset = timedelta(0))
+
+   Bases: :py:obj:`_ContextTimeBound`
+
+
+   Bound events by the Dag run's logical date.
+
+   :param offset: Signed duration to add to ``logical_date``.
+
+
+.. py:class:: DataIntervalStart(*, offset = timedelta(0))
+
+   Bases: :py:obj:`_ContextTimeBound`
+
+
+   Bound events by the start of the Dag run's data interval.
+
+   :param offset: Signed duration to add to ``data_interval_start``.
+
+
+.. py:class:: DataIntervalEnd(*, offset = timedelta(0))
+
+   Bases: :py:obj:`_ContextTimeBound`
+
+
+   Bound events by the end of the Dag run's data interval.
+
+   :param offset: Signed duration to add to ``data_interval_end``.
+
+
+.. py:class:: AssetEventSensor(*, asset, after = None, before = None, ascending = True, limit = None, partition_key = None, partition_key_regexp_pattern = None, extra = None, expected_count = 1, count_policy = 'minimum', process_result = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseSensorOperator`
+
+
+   Wait for asset events matching the given filters to reach an expected count.
+
+   The sensor fetches events of an asset, asset reference, or asset alias
+   matching the supplied filters, optionally applies a ``process_result``
+   callable to transform, deduplicate or filter them, and succeeds once the
+   resulting number of events satisfies ``expected_count``.
+
+   At least one of ``after``, ``before``, ``partition_key``,
+   ``partition_key_regexp_pattern``, or non-empty ``extra`` is required.
+
+   This sensor requires Apache Airflow 3.2+. The ``partition_key``,
+   ``partition_key_regexp_pattern`` and ``extra`` filters require Airflow 3.4+.
+
+   :param asset: The :class:`~airflow.sdk.Asset`, :meth:`~airflow.sdk.Asset.ref`,
+       or :class:`~airflow.sdk.AssetAlias` to wait on. It is declared as an
+       inlet. A reference must resolve to an existing asset when the task
+       starts. The target is static; event filters can be templated.
+   :param after: Only include events at or after this timestamp.
+   :param before: Only include events at or before this timestamp.
+       Both bounds accept a datetime, ISO string, any object implementing
+       :class:`AssetEventTimeBound`, or a template callable accepting
+       ``context`` and ``jinja_env``. Airflow
+       resolves them before polling. Custom callables must return stable
+       bounds across reschedules.
+   :param ascending: Whether events are returned in ascending timestamp order.
+   :param limit: Positive maximum number of events to fetch, before applying
+       ``process_result``.
+   :param partition_key: Filter by exact partition key match.
+   :param partition_key_regexp_pattern: Filter by partition key regexp pattern.
+   :param extra: Filter by key/value pairs contained in the event ``extra``.
+   :param expected_count: The non-negative number of processed events required
+       to succeed. Defaults to 1. If ``process_result`` is omitted, ``limit``
+       must not be smaller, or must be greater with the ``"exact"`` policy.
+   :param count_policy: ``"minimum"`` (the default) waits for at least
+       ``expected_count`` events; ``"exact"`` requires exactly that number. To
+       check for no events, use ``"exact"`` and zero.
+   :param process_result: A callable applied to the fetched events before the
+       count check, to transform, deduplicate or filter them. It receives the
+       list of asset events and must return a list. It runs on every poke, so
+       it should be idempotent and free of side-effects. Its return value must
+       be JSON-serializable to be pushed into XCom.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('partition_key', 'partition_key_regexp_pattern', 'extra', 'after', 'before')
+
+
+
+   .. py:attribute:: asset
+
+
+   .. py:attribute:: after
+      :value: None
+
+
+
+   .. py:attribute:: before
+      :value: None
+
+
+
+   .. py:attribute:: ascending
+      :value: True
+
+
+
+   .. py:attribute:: limit
+      :value: None
+
+
+
+   .. py:attribute:: partition_key
+      :value: None
+
+
+
+   .. py:attribute:: partition_key_regexp_pattern
+      :value: None
+
+
+
+   .. py:attribute:: extra
+      :value: None
+
+
+
+   .. py:attribute:: expected_count
+      :value: 1
+
+
+
+   .. py:attribute:: count_policy
+      :value: 'minimum'
+
+
+
+   .. py:attribute:: process_result
+      :value: None
+
+
+
+   .. py:method:: poke(context)
+
+      Override when deriving this class.
+
+
+

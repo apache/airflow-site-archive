@@ -1,0 +1,196 @@
+airflow.providers.common.ai.toolsets.sql
+========================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.sql
+
+.. autoapi-nested-parse::
+
+   Curated SQL toolset wrapping DbApiHook for agentic database workflows.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sql.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.sql.SQLToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: SQLToolset(db_conn_id, *, allowed_tables = _UNSET, allowed_functions = None, schema = None, allow_writes = False, max_rows = 50, max_result_bytes = DEFAULT_MAX_RESULT_BYTES, max_columns = DEFAULT_MAX_COLUMNS, tool_prefix = '', max_retries = None, include_table_comments = False, search_backend = None, max_listed_tables = 100)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.tool_prefix.ToolPrefixMixin`, :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Curated toolset that gives an LLM agent safe access to a SQL database.
+
+   Provides four tools — ``list_tables``, ``get_schema``, ``query``, and
+   ``check_query`` — inspired by LangChain's ``SQLDatabaseToolkit`` pattern.
+
+   Uses a :class:`~airflow.providers.common.sql.hooks.sql.DbApiHook` resolved
+   lazily from the given ``db_conn_id``.
+
+   When the statement fails, the database's error message is returned to the agent as
+   a retry (:class:`pydantic_ai.ModelRetry`) so the model can correct its SQL within
+   the run, bounded by the tool's ``max_retries``. When the toolset cannot reach the
+   database -- the connection is missing or misconfigured, the host is unreachable,
+   the credentials are rejected, or SQLAlchemy reports the connection lost -- the
+   error is raised instead, failing the attempt for Airflow to retry: no change to
+   the SQL can fix it. Under durable execution a raised call is not recorded, so the
+   retry runs it against the database again rather than replaying the failure.
+
+   :param db_conn_id: Airflow connection ID for the database. Templated when the
+       toolset is passed to ``AgentOperator`` / ``@task.agent``, so each task
+       instance can reach its own database, e.g. one connection per customer.
+   :param allowed_tables: Restrict the agent to a fixed set of tables. Omit the
+       argument (the default) to expose every table in ``schema``. No *value* means
+       allow-all: ``None`` and an empty list both raise ``ValueError``, so an allow-list
+       built at runtime (a ``Variable.get`` with a ``None`` default, a config lookup, a
+       filtered comprehension) that resolves to nothing fails at import instead of
+       silently handing the agent the whole schema. Entries may be
+       schema-qualified (``"SCHEMA.TABLE"``) to span multiple schemas in one database
+       -- common on warehouses such as Snowflake. ``list_tables`` introspects each referenced
+       schema and returns the matching tables fully qualified, and ``get_schema``
+       routes to the table's own schema. Unqualified entries use ``schema``.
+       Matching is case-insensitive, since databases reflect identifiers in their
+       own case.
+
+       When set, the list is enforced on the ``query`` and ``check_query`` tools as
+       well as on discovery: every table a query reaches -- through subqueries, CTEs,
+       JOINs, set operations, ``DESCRIBE``, catalog views such as
+       ``information_schema``, or DML -- must be on the list, resolved with its
+       database/catalog, or the query is rejected before it runs. CTE references are
+       excluded by lexical scope (a same-named CTE in another scope never hides a real
+       table). Constructs the list cannot describe are rejected outright while it is
+       active: table-valued functions (``dblink``), ``TABLE('name')`` row sources, the
+       ``TABLE <name>`` shorthand, ``SHOW``, dynamic SQL, ``COPY`` (file/program I/O),
+       **inline comments** (where parser-vs-engine differences such as MySQL
+       ``/*! ... */`` executable comments hide), and **any function the parser cannot
+       recognize** -- the channel through which ``pg_read_file`` (a file),
+       ``query_to_xml`` (SQL over another table), or a scalar ``dblink`` (a remote
+       database) reach data with no table node for the walk to catch. Ordinary builtins
+       (``count``, ``lower``) are recognized and pass; a legitimate function sqlglot does
+       not recognize (``json_build_object``, a bespoke UDF) is rejected unless named in
+       ``allowed_functions``.
+
+       .. note::
+           This is an application-level guardrail, enforced by parsing the SQL with
+           sqlglot. It is strong defense-in-depth but not a substitute for database
+           permissions: an engine or query that sqlglot parses differently is a residual
+           gap. For a hard guarantee, point ``db_conn_id`` at a least-privilege role whose
+           ``SELECT`` grants are limited to the same tables -- the database role is the
+           boundary that holds even when the parser cannot see through a function.
+
+   :param allowed_functions: Names of functions that sqlglot does not recognize as
+       builtins but that are safe to run while ``allowed_tables`` is active -- e.g.
+       ``["json_build_object"]`` or a project UDF. Matching is case-insensitive. Only
+       consulted when ``allowed_tables`` is set; ``None`` (default) rejects every
+       unrecognized function.
+
+   :param schema: Default schema/namespace for table listing and introspection,
+       used for unqualified ``allowed_tables`` entries and unqualified
+       ``get_schema`` calls. Schema-qualified ``allowed_tables`` entries override
+       it per table.
+   :param allow_writes: Allow data-modifying SQL (INSERT, UPDATE, DELETE, etc.).
+       Default ``False`` — only SELECT-family statements are permitted.
+   :param max_rows: Maximum number of rows returned from the ``query`` tool.
+       Default ``50``. Rows beyond it are not pulled out of the cursor. How much that
+       saves is the driver's call, not this toolset's: a client-buffering driver
+       (psycopg2's default cursor, MySQLdb) has already received the whole result by
+       the time the first row is read, so only the per-row Python conversion is
+       skipped. Treat this as a bound on what the agent is shown, not as a guarantee
+       that ``SELECT * FROM huge_table`` is cheap.
+   :param max_result_bytes: Budget for the serialized ``query`` result, in bytes, and the
+       byte backstop that also triggers the ``get_schema`` summary (see ``max_columns``).
+       Default 64 KiB. ``max_rows`` bounds rows, which says nothing about size: one
+       row of a 3000-column table is larger than a thousand rows of a narrow one, and
+       a tool result stays in the model's message history for the rest of the run, so
+       its cost is re-paid on every subsequent request. Rows are returned as a
+       contiguous prefix, stopping at the first that does not fit the remaining budget
+       rather than skipping it and packing later ones, so one wide row early in the
+       result ends it. The result reports which limit it hit so the agent can narrow
+       its projection rather than page through the table.
+   :param max_columns: Maximum number of columns ``get_schema`` returns in full. Default
+       ``100``. Above it -- or when the serialized columns exceed ``max_result_bytes`` --
+       the full list is replaced by a bounded summary (column count, a type histogram, a
+       sample of columns) that points the agent at the ``name_contains`` filter, so a
+       several-thousand-column table cannot exhaust the context before a query is written.
+   :param tool_prefix: Optional prefix joined to each tool name with an underscore
+       (e.g. ``"pg"`` produces ``"pg_query"``). Must be a valid Python identifier. Set it
+       when one agent has another toolset with the same tool names, such as a second
+       ``SQLToolset``, since duplicate tool names are rejected.
+   :param max_retries: How many times the model may correct a failed call to one of these
+       tools before the run fails. ``None`` (the default) uses the agent's tool retry
+       budget, its ``retries``, as pydantic-ai's own toolsets do.
+   :param include_table_comments: When ``True``, ``list_tables`` returns
+       ``{"name": ..., "comment": ...}`` objects instead of bare names, with ``comment``
+       present only for tables that have one (each capped to 200 characters). Without a
+       ``search_backend`` the list has no size limit: the total is not bound by
+       ``max_result_bytes``. Default ``False`` keeps the list of names. ``get_schema`` always
+       returns table and column comments where the database reports them, regardless of this flag.
+   :param search_backend: Registers a ``search_tables`` tool that finds tables by a free-text
+       query, for databases with too many tables to list. Pass
+       :class:`~airflow.providers.common.ai.utils.sql_search.KeywordTableSearchBackend` for a
+       keyword match over table names and comments, or any object implementing
+       :class:`~airflow.providers.common.ai.utils.sql_search.SQLTableSearchBackend`. Whatever it
+       returns is filtered through ``allowed_tables``. ``None`` (the default) registers no search tool.
+   :param max_listed_tables: With a ``search_backend``, ``list_tables`` returns only the number of
+       tables and a pointer to ``search_tables`` once there are more than this many. Default ``100``.
+       Without a ``search_backend`` there is no limit.
+
+
+   .. py:attribute:: agent_template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('_db_conn_id',)
+
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+

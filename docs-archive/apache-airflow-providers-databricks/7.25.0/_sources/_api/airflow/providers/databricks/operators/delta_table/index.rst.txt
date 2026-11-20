@@ -1,0 +1,217 @@
+airflow.providers.databricks.operators.delta_table
+==================================================
+
+.. py:module:: airflow.providers.databricks.operators.delta_table
+
+.. autoapi-nested-parse::
+
+   Produce asset events for Delta table versions committed outside of Airflow.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.operators.delta_table.CHECKPOINT_KEY_EXTRA
+   airflow.providers.databricks.operators.delta_table.DEFAULT_IGNORED_OPERATIONS
+   airflow.providers.databricks.operators.delta_table.ChangeKind
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.databricks.operators.delta_table.DeltaCheckpoint
+   airflow.providers.databricks.operators.delta_table.DatabricksDeltaTableVersionProducerOperator
+
+
+Module Contents
+---------------
+
+.. py:data:: CHECKPOINT_KEY_EXTRA
+   :value: 'databricks_delta_checkpoint_key'
+
+
+   Asset event ``extra`` key that marks an event as a checkpoint written by this producer.
+
+
+.. py:data:: DEFAULT_IGNORED_OPERATIONS
+   :value: ('OPTIMIZE', 'VACUUM START', 'VACUUM END')
+
+
+.. py:data:: ChangeKind
+
+.. py:class:: DeltaCheckpoint
+
+   Last Delta version this producer published for a table, read back from an asset event.
+
+
+   .. py:attribute:: version
+      :type:  int
+
+
+   .. py:attribute:: table_id
+      :type:  str | None
+
+
+.. py:class:: DatabricksDeltaTableVersionProducerOperator(*, unity_table, checkpoint_key = None, baseline_version = None, ignored_operations = None, max_history_rows = 1000, on_recreation = 'publish', databricks_conn_id = DatabricksSqlHook.default_conn_name, http_path = None, sql_warehouse_name = None, session_configuration = None, http_headers = None, client_parameters = None, query_tags = None, include_airflow_query_tags = True, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Publish an asset event when a Unity Catalog Delta table gets a newer committed version.
+
+   Use this operator in a recurring producer Dag to turn Delta commits made by other jobs or
+   systems into Airflow asset events. Downstream Dags schedule on ``unity_table.to_asset()``.
+
+   Each run reads the newest Delta version, compares it with the checkpoint, and either publishes
+   one asset event for the newest version or skips. Several commits between two runs are coalesced
+   into one event for the newest version. Intermediate commits are not delivered one by one.
+
+   The checkpoint is the newest asset event that this producer published for the asset, found by
+   ``checkpoint_key`` in the event ``extra``. Airflow records the event when the task succeeds, so
+   publishing the event and advancing the checkpoint are the same write. Delivery is at least
+   once: concurrent runs or a cleared run can publish the same version again. Consumers that must
+   not process a version twice deduplicate on ``extra["dedup_id"]``.
+
+   An event for version N does not pin downstream reads to N. A consumer that needs a
+   reproducible read queries ``VERSION AS OF`` ``extra["version"]``.
+
+   .. seealso::
+       For more information on how to use this operator, take a look at the guide:
+       :ref:`howto/operator:DatabricksDeltaTableVersionProducerOperator`
+
+   :param unity_table: Static identity of the observed table. It is added to ``inlets`` (to read
+       the checkpoint) and, when ``outlets`` is omitted, ``outlets`` is ``[unity_table.to_asset()]``.
+       Explicit ``outlets`` must include ``unity_table.to_asset()``, because the checkpoint is the
+       event published on that asset.
+   :param checkpoint_key: Scope of the checkpoint. Producers with different keys keep separate
+       checkpoints for the same asset. Defaults to ``"<dag_id>.<task_id>"``. Changing it starts a
+       new enrollment.
+   :param baseline_version: Version treated as already delivered when no checkpoint exists. When
+       ``None`` (the default), the first run publishes an ``enrollment`` event for the current version.
+   :param ignored_operations: Delta history operations that do not count as a change. Defaults to
+       ``OPTIMIZE``, ``VACUUM START`` and ``VACUUM END``. Pass an empty collection to publish for
+       every commit.
+   :param max_history_rows: Largest ``DESCRIBE HISTORY`` window read to prove that all commits after
+       the checkpoint are ignored operations. When the window or the retained history does not
+       reach the checkpoint, the operator publishes rather than risk missing a data change.
+   :param on_recreation: What to do when the table id differs from the checkpoint, or the version
+       moved backwards, which means the table was dropped and recreated or replaced by a rename.
+       ``"publish"`` publishes a ``recreated`` event and checkpoints the new table. ``"fail"``
+       raises and leaves the checkpoint untouched.
+   :param databricks_conn_id: Reference to :ref:`Databricks connection id<howto/connection:databricks>`.
+   :param http_path: HTTP path of a Databricks SQL warehouse or all-purpose cluster.
+   :param sql_warehouse_name: Name of a Databricks SQL warehouse, used when ``http_path`` is not set.
+   :param session_configuration: Spark session parameters.
+   :param http_headers: (k, v) pairs set as HTTP headers on every request.
+   :param client_parameters: Additional Databricks SQL connector parameters.
+   :param query_tags: Query tags attached to the Databricks SQL queries. (templated)
+   :param include_airflow_query_tags: If True, add Airflow Dag/task/run metadata as query tags.
+
+
+   .. py:attribute:: template_fields
+      :type:  collections.abc.Sequence[str]
+      :value: ('databricks_conn_id', 'http_headers', 'query_tags')
+
+
+
+   .. py:attribute:: unity_table
+
+
+   .. py:attribute:: baseline_version
+      :value: None
+
+
+
+   .. py:attribute:: ignored_operations
+      :value: ('OPTIMIZE', 'VACUUM START', 'VACUUM END')
+
+
+
+   .. py:attribute:: max_history_rows
+      :value: 1000
+
+
+
+   .. py:attribute:: on_recreation
+      :value: 'publish'
+
+
+
+   .. py:attribute:: databricks_conn_id
+      :value: 'databricks_default'
+
+
+
+   .. py:attribute:: http_path
+      :value: None
+
+
+
+   .. py:attribute:: sql_warehouse_name
+      :value: None
+
+
+
+   .. py:attribute:: session_configuration
+      :value: None
+
+
+
+   .. py:attribute:: http_headers
+      :value: None
+
+
+
+   .. py:attribute:: client_parameters
+
+
+   .. py:attribute:: query_tags
+
+
+   .. py:attribute:: include_airflow_query_tags
+      :value: True
+
+
+
+   .. py:property:: checkpoint_key
+      :type: str
+
+
+
+   .. py:property:: asset
+      :type: airflow.providers.common.compat.assets.Asset
+
+
+
+   .. py:property:: table_name
+      :type: str
+
+
+
+   .. py:property:: hook
+      :type: airflow.providers.databricks.hooks.databricks_sql.DatabricksSqlHook
+
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: read_checkpoint(context)
+
+      Return the newest checkpoint for ``checkpoint_key`` from the asset's events, if any.
+
+
+

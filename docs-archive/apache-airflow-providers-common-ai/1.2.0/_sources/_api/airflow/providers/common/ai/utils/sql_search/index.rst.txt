@@ -1,0 +1,73 @@
+airflow.providers.common.ai.utils.sql_search
+============================================
+
+.. py:module:: airflow.providers.common.ai.utils.sql_search
+
+.. autoapi-nested-parse::
+
+   Table search for :class:`~airflow.providers.common.ai.toolsets.sql.SQLToolset`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_search.TableEntry
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.utils.sql_search.SQLTableSearchBackend
+   airflow.providers.common.ai.utils.sql_search.KeywordTableSearchBackend
+
+
+Module Contents
+---------------
+
+.. py:data:: TableEntry
+
+.. py:class:: SQLTableSearchBackend
+
+   Bases: :py:obj:`Protocol`
+
+
+   Finds tables relevant to a free-text query, for the ``search_tables`` tool.
+
+   The toolset filters whatever a backend returns through ``allowed_tables`` before the agent
+   sees it, so a backend that knows about more tables than the agent may use cannot widen access.
+   It can still waste its own ``limit``, so an index built for the agent should cover only the
+   tables the agent may use.
+
+
+   .. py:method:: search_tables(query, limit, *, get_catalog)
+
+      Return up to ``limit`` tables, best match first.
+
+      :param query: The agent's free-text query.
+      :param limit: Maximum number of results wanted.
+      :param get_catalog: Lists the tables the toolset exposes, introspected with the same
+          connection the agent queries with and cached for the toolset's lifetime. Comments
+          are the full text, not cut to the length the agent sees, with the secrets Airflow has
+          registered already masked as ``***``; the toolset cuts comments when it returns them
+          to the agent. A backend with its own index (a vector store, a search service)
+          ignores it.
+
+
+
+.. py:class:: KeywordTableSearchBackend
+
+   Default backend: case-insensitive substring match of each query word against table names (without their schema) and comments.
+
+   Query words are split on whitespace. A table's score is the number of words found in its table name
+   (the part after any schema) weighted at ``_NAME_WEIGHT`` plus the number found in its comment; tables scoring zero are
+   dropped, and ties are broken by name.
+
+
+   .. py:method:: search_tables(query, limit, *, get_catalog)
+
+

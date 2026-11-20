@@ -42,9 +42,9 @@ Module Contents
 
 
 
-.. py:class:: AzureDataFactoryRunPipelineOperator(*, pipeline_name, azure_data_factory_conn_id = AzureDataFactoryHook.default_conn_name, resource_group_name, factory_name, wait_for_termination = True, reference_pipeline_run_id = None, is_recovery = None, start_activity_name = None, start_from_failure = None, parameters = None, timeout = 60 * 60 * 24 * 7, check_interval = 60, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), **kwargs)
+.. py:class:: AzureDataFactoryRunPipelineOperator(*, pipeline_name, azure_data_factory_conn_id = AzureDataFactoryHook.default_conn_name, resource_group_name, factory_name, wait_for_termination = True, reference_pipeline_run_id = None, is_recovery = None, start_activity_name = None, start_from_failure = None, parameters = None, timeout = 60 * 60 * 24 * 7, check_interval = 60, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), durable = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
 
    Execute a data factory pipeline.
@@ -80,6 +80,14 @@ Module Contents
    :param check_interval: Time in seconds to check on a pipeline run's status for non-asynchronous waits.
        Used only if ``wait_for_termination`` is True.
    :param deferrable: Run operator in deferrable mode.
+   :param durable: Keep the pipeline run id in the task state store, so that a retry reconnects to the
+       run still in progress, or returns when it has succeeded, instead of starting a new one (default
+       is True). Needs Airflow 3.3 or later; below it the operator behaves as with ``durable=False``.
+
+
+   .. py:attribute:: external_id_key
+      :value: 'azure_data_factory_pipeline_run_id'
+
 
 
    .. py:attribute:: template_fields
@@ -156,6 +164,12 @@ Module Contents
    .. py:attribute:: deferrable
 
 
+   .. py:attribute:: run_id
+      :type:  str | None
+      :value: None
+
+
+
    .. py:property:: hook
       :type: airflow.providers.microsoft.azure.hooks.data_factory.AzureDataFactoryHook
 
@@ -172,6 +186,56 @@ Module Contents
       as when rendering jinja templates.
 
       Refer to get_template_context for more context.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
 
 
 

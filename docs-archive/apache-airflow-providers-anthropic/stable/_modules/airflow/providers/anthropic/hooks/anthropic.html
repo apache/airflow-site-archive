@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.2.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -478,7 +478,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.2.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -677,6 +677,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">AnthropicBedrock</span><span class="p">,</span>
     <span class="n">AnthropicFoundry</span><span class="p">,</span>
     <span class="n">AnthropicVertex</span><span class="p">,</span>
+    <span class="n">APIStatusError</span><span class="p">,</span>
     <span class="n">AsyncAnthropic</span><span class="p">,</span>
     <span class="n">AsyncAnthropicAWS</span><span class="p">,</span>
     <span class="n">AsyncAnthropicBedrock</span><span class="p">,</span>
@@ -778,6 +779,23 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/anthropic/hooks/anthropic/index.html#airflow.providers.anthropic.hooks.anthropic.MAX_CONSECUTIVE_POLL_FAILURES">[docs]</a>
 <span class="n">MAX_CONSECUTIVE_POLL_FAILURES</span> <span class="o">=</span> <span class="mi">5</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_permanent_poll_error</span><span class="p">(</span><span class="n">error</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return whether a failed poll is an API error that retrying will not fix.</span>
+
+<span class="sd">    Follows the SDK's own retry rule: an ``x-should-retry`` response header decides when</span>
+<span class="sd">    present, otherwise 408, 409, 429 and 5xx are retryable and any other status is not.</span>
+<span class="sd">    Errors without an HTTP status (network failures, timeouts) count as transient.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">APIStatusError</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">should_retry</span> <span class="o">=</span> <span class="n">error</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"x-should-retry"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">should_retry</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"true"</span><span class="p">,</span> <span class="s2">"false"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">should_retry</span> <span class="o">==</span> <span class="s2">"false"</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">error</span><span class="o">.</span><span class="n">status_code</span>
+    <span class="k">return</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">408</span><span class="p">,</span> <span class="mi">409</span><span class="p">,</span> <span class="mi">429</span><span class="p">)</span> <span class="ow">and</span> <span class="n">status</span> <span class="o">&lt;</span> <span class="mi">500</span>
 
 
 <div class="viewcode-block" id="BatchStatus">
@@ -1466,7 +1484,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="c1"># results remain recoverable for 29 days.</span>
                 <span class="n">consecutive_failures</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="k">if</span> <span class="p">(</span>
-                    <span class="n">consecutive_failures</span> <span class="o">&gt;=</span> <span class="n">MAX_CONSECUTIVE_POLL_FAILURES</span>
+                    <span class="n">_is_permanent_poll_error</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                    <span class="ow">or</span> <span class="n">consecutive_failures</span> <span class="o">&gt;=</span> <span class="n">MAX_CONSECUTIVE_POLL_FAILURES</span>
                     <span class="ow">or</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span> <span class="o">&gt;</span> <span class="n">timeout</span>
                 <span class="p">):</span>
                     <span class="k">raise</span>
@@ -2089,7 +2108,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=6efca38a"></script>
+        <script src="../../../../../_static/documentation_options.js?v=ca842793"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

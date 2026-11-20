@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -744,7 +744,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.observability</span><span class="w"> </span><span class="kn">import</span> <span class="n">_content_capture_enabled</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowTool</span><span class="p">,</span> <span class="n">ToolCallError</span><span class="p">,</span> <span class="n">_collect_tools</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools._from_toolset</span><span class="w"> </span><span class="kn">import</span> <span class="n">tool_call_scope</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools._from_toolset</span><span class="w"> </span><span class="kn">import</span> <span class="n">retry_count_restorer</span><span class="p">,</span> <span class="n">tool_call_scope</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.tracing</span><span class="w"> </span><span class="kn">import</span> <span class="n">_task_identity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span><span class="p">,</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_definition</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_for_llm</span>
@@ -758,7 +758,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">opentelemetry.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Span</span> <span class="k">as</span> <span class="n">OtelSpan</span><span class="p">,</span> <span class="n">TracerProvider</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolProvider</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolSource</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools._from_toolset</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryCount</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"AirflowTools"</span><span class="p">,</span> <span class="s2">"AirflowTraceProcessor"</span><span class="p">]</span>
 
@@ -766,6 +767,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="s2">"Pass the server to the agent's mcp_servers with one of the SDK's MCPServer classes, "</span>
     <span class="s2">"such as MCPServerStreamableHttp, instead."</span>
 <span class="p">)</span>
+
+<span class="c1"># Set on a tool call's context: the count the call left in its tool's retry budget, for durable</span>
+<span class="c1"># execution to record with the result.</span>
+<span class="n">_RETRY_COUNT</span> <span class="o">=</span> <span class="s2">"_airflow_retry_count"</span>
+<span class="c1"># Set on each function tool these tools become: given the count a call the durable journal</span>
+<span class="c1"># replays left in the tool's retry budget, restores it.</span>
+<span class="n">_REPLAY_RETRY</span> <span class="o">=</span> <span class="s2">"_airflow_replay_retry"</span>
 
 
 <div class="viewcode-block" id="AirflowTools">
@@ -776,7 +784,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="sd">    Pass toolsets that implement</span>
 <span class="sd">    :class:`~airflow.providers.common.ai.tools.ToolProvider`, such as ``SQLToolset``</span>
-<span class="sd">    and ``HookToolset``, or individual</span>
+<span class="sd">    and ``HookToolset``, optionally wrapped with ``.filtered()``,</span>
+<span class="sd">    ``.prefixed()`` or ``.renamed()`` (a ``.filtered()`` function runs once, when this</span>
+<span class="sd">    is built, with ``ctx.deps`` set to ``None``), or individual</span>
 <span class="sd">    :class:`~airflow.providers.common.ai.tools.AirflowTool` objects. The agent, its</span>
 <span class="sd">    model and its runner stay plain OpenAI Agents SDK.</span>
 
@@ -794,13 +804,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    It is a list of ``FunctionTool`` objects typed as ``Agent.tools`` is, so add your own</span>
 <span class="sd">    tools with ``[*AirflowTools(warehouse), my_tool]``.</span>
 
-<span class="sd">    Each tool keeps the source tool's name, description and argument schema, and every</span>
+<span class="sd">    Each tool keeps its source's name, description and argument schema, and every</span>
 <span class="sd">    result passes through Airflow's secret masker first. The schema is passed as it is,</span>
 <span class="sd">    with ``strict_json_schema=False``: the SDK's strict mode would make every argument</span>
 <span class="sd">    required. A failure the model can correct, such as a query naming a missing column,</span>
 <span class="sd">    reaches it as ``{"error": ...}``, counted against the tool's retry limit afresh on</span>
-<span class="sd">    every run of the agent. Arguments that are not a JSON object also come back as</span>
-<span class="sd">    ``{"error": ...}``, bounded by the run's ``max_turns`` rather than that limit. A tool</span>
+<span class="sd">    every run of the agent; a retry of a durable run counts the ones it replays as well.</span>
+<span class="sd">    Arguments that are not a JSON object also come back as ``{"error": ...}``, bounded by</span>
+<span class="sd">    the run's ``max_turns`` rather than that limit. A tool</span>
 <span class="sd">    still failing once the limit is used up, or any other failure, raises</span>
 <span class="sd">    :class:`~airflow.providers.common.ai.tools.ToolCallError` out of ``Runner.run``, so</span>
 <span class="sd">    the task fails and Airflow retries it. Tools a toolset marks sequential, such as the</span>
@@ -813,7 +824,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param sources: Toolsets and tools to add, in order.</span>
 <span class="sd">    """</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">sources</span><span class="p">:</span> <span class="n">ToolProvider</span> <span class="o">|</span> <span class="n">AirflowTool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">sources</span><span class="p">:</span> <span class="n">ToolSource</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">_to_function_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">_collect_tools</span><span class="p">(</span><span class="n">sources</span><span class="p">,</span> <span class="n">mcp_hint</span><span class="o">=</span><span class="n">_MCP_HINT</span><span class="p">))</span></div>
 
 
@@ -848,6 +859,15 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_usage</span><span class="p">)</span>
 
 
+<span class="k">class</span><span class="w"> </span><span class="nc">_RetryLimitReached</span><span class="p">(</span><span class="n">_FailedToolCall</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    A tool kept failing in ways the model could correct until its retry limit ran out.</span>
+
+<span class="sd">    The model's answers used the limit up, not the call, so durable execution asks the model</span>
+<span class="sd">    again on a retry rather than replaying them into the same failure.</span>
+<span class="sd">    """</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_to_function_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">:</span> <span class="n">AirflowTool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FunctionTool</span><span class="p">:</span>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">call_airflow_tool</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">arguments</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="c1"># The SDK passes the model's arguments as it sent them, without parsing them first.</span>
@@ -858,17 +878,30 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">serialize_for_llm</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="s2">"The arguments must be a JSON object."</span><span class="p">})</span>
         <span class="c1"># The SDK does not identify the model turn, so calls that run at the same time count once.</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="k">with</span> <span class="n">calling_framework</span><span class="p">(</span><span class="s2">"openai_agents"</span><span class="p">),</span> <span class="n">tool_call_scope</span><span class="p">(</span><span class="n">run</span><span class="o">=</span><span class="n">_SameRun</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">usage</span><span class="p">)):</span>
+        <span class="k">with</span> <span class="p">(</span>
+            <span class="n">calling_framework</span><span class="p">(</span><span class="s2">"openai_agents"</span><span class="p">),</span>
+            <span class="n">tool_call_scope</span><span class="p">(</span><span class="n">run</span><span class="o">=</span><span class="n">_SameRun</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">usage</span><span class="p">),</span> <span class="n">function</span><span class="o">=</span><span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="p">)</span> <span class="k">as</span> <span class="n">scope</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
                 <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">tool</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ToolCallError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="c1"># Already masked, and logged to the task log with its traceback by AirflowTool.call.</span>
-            <span class="k">raise</span> <span class="n">_FailedToolCall</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+            <span class="k">except</span> <span class="n">ToolCallError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># Already masked, and logged to the task log with its traceback by AirflowTool.call.</span>
+                <span class="n">error</span> <span class="o">=</span> <span class="n">_RetryLimitReached</span> <span class="k">if</span> <span class="n">scope</span><span class="o">.</span><span class="n">limit_reached</span> <span class="k">else</span> <span class="n">_FailedToolCall</span>
+                <span class="k">raise</span> <span class="n">error</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">_RETRY_COUNT</span><span class="p">,</span> <span class="n">scope</span><span class="o">.</span><span class="n">counted</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_error</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">serialize_for_llm</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">content</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">serialize_for_llm</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">FunctionTool</span><span class="p">(</span>
+    <span class="n">restore</span> <span class="o">=</span> <span class="n">retry_count_restorer</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">replay_retry</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">count</span><span class="p">:</span> <span class="n">RetryCount</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># A tool without a retry budget, such as one a Dag edit swapped in since the count was</span>
+        <span class="c1"># recorded, has nothing to restore; the recorded result still replays as it is.</span>
+        <span class="k">if</span> <span class="n">restore</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">restore</span><span class="p">(</span><span class="n">_SameRun</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">usage</span><span class="p">),</span> <span class="n">count</span><span class="p">)</span>
+
+    <span class="n">function_tool</span> <span class="o">=</span> <span class="n">FunctionTool</span><span class="p">(</span>
         <span class="n">name</span><span class="o">=</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
         <span class="n">description</span><span class="o">=</span><span class="n">tool</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
         <span class="c1"># The source schema can be a toolset's module-level constant, so hand over a copy.</span>
@@ -876,6 +909,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">on_invoke_tool</span><span class="o">=</span><span class="n">call_airflow_tool</span><span class="p">,</span>
         <span class="n">strict_json_schema</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">function_tool</span><span class="p">,</span> <span class="n">_REPLAY_RETRY</span><span class="p">,</span> <span class="n">replay_retry</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">function_tool</span>
 
 
 <div class="viewcode-block" id="AirflowTraceProcessor">
@@ -1368,7 +1403,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

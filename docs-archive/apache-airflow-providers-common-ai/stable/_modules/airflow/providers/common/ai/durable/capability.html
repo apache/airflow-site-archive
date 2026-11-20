@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -707,20 +707,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Awaitable</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Mapping</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextvars</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextVar</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">cast</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">TypeAlias</span><span class="p">,</span> <span class="n">TypeGuard</span><span class="p">,</span> <span class="n">cast</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.durable_exec</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">JSON_CODEC</span><span class="p">,</span>
     <span class="n">BaseDurabilityCapability</span><span class="p">,</span>
+    <span class="n">CallableOperationBackend</span><span class="p">,</span>
     <span class="n">CapabilityOperationId</span><span class="p">,</span>
+    <span class="n">DurabilityCodec</span><span class="p">,</span>
     <span class="n">DurabilityEngineSpec</span><span class="p">,</span>
     <span class="n">DurableOperationId</span><span class="p">,</span>
-    <span class="n">JournalCallableOperationBackend</span><span class="p">,</span>
+    <span class="n">JournalOperationNamer</span><span class="p">,</span>
     <span class="n">ModelRequestId</span><span class="p">,</span>
     <span class="n">RoleBasedOperationConfig</span><span class="p">,</span>
     <span class="n">ToolsetCallToolId</span><span class="p">,</span>
@@ -734,18 +740,29 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">UnexpectedModelBehavior</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelResponse</span><span class="p">,</span> <span class="n">ToolReturn</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentDepsT</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">DynamicToolset</span><span class="p">,</span> <span class="n">FunctionToolset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentDepsT</span><span class="p">,</span> <span class="n">DeferredToolRequests</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractToolset</span><span class="p">,</span> <span class="n">DynamicToolset</span><span class="p">,</span> <span class="n">FunctionToolset</span><span class="p">,</span> <span class="n">ToolsetTool</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets.wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">WrapperToolset</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticSerializationError</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.fingerprint</span><span class="w"> </span><span class="kn">import</span> <span class="n">fingerprint_model_request</span><span class="p">,</span> <span class="n">fingerprint_tool_call</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">current_journal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">TOOL_CONFIG_KEY</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.fingerprint</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">fingerprint_deferred_tool_requests</span><span class="p">,</span>
+    <span class="n">fingerprint_model_request</span><span class="p">,</span>
+    <span class="n">fingerprint_tool_call</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">Unrecordable</span><span class="p">,</span> <span class="n">current_journal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.replay_usage</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReplayUsageLedger</span><span class="p">,</span> <span class="n">is_successful_tool_payload</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableJournalError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableJournalError</span><span class="p">,</span> <span class="n">DurableToolMetadataError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">record_tool_call</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowToolset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">iter_toolsets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_3_PLUS</span>
+
+<span class="k">if</span> <span class="n">AIRFLOW_V_3_3_PLUS</span><span class="p">:</span>
+    <span class="c1"># Waiting for input parks a task in the awaiting_input state, which older Airflow versions do not have.</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">TaskAwaitingInput</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.agent</span><span class="w"> </span><span class="kn">import</span> <span class="n">EventStreamHandler</span>
@@ -755,11 +772,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.durable_exec._operation</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableOperation</span><span class="p">,</span> <span class="n">ParamsT</span><span class="p">,</span> <span class="n">ResultT</span><span class="p">,</span> <span class="n">WireT</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.durable_exec._operation_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">BoundDurableOperation</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelMessage</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">ModelRequestParameters</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Model</span><span class="p">,</span> <span class="n">ModelRequestContext</span><span class="p">,</span> <span class="n">ModelRequestParameters</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.run</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentRunResult</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelSettings</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunContext</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">AbstractToolset</span><span class="p">,</span> <span class="n">ToolsetTool</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunContext</span><span class="p">,</span> <span class="n">ToolDefinition</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolsetFunc</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">JournalStep</span><span class="p">,</span> <span class="n">StepKind</span>
 
@@ -767,11 +784,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="c1"># What pydantic-ai's durable backend passes as ``cache_key``: a projection of the</span>
 <span class="c1"># operation's parameters that it types as an opaque tuple. These spell out the shapes</span>
-<span class="c1"># of the two projections fingerprinted here.</span>
+<span class="c1"># of the projections fingerprinted here.</span>
 <span class="n">_ModelRequestKey</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="p">(</span>
     <span class="s2">"tuple[str | None, list[ModelMessage], ModelSettings | None, ModelRequestParameters, RunContext[Any]]"</span>
 <span class="p">)</span>
 <span class="n">_ToolCallKey</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="s2">"tuple[str, dict[str, Any], RunContext[Any]]"</span>
+<span class="n">_CapabilityOperationKey</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="s2">"tuple[str | None, dict[str, Any], RunContext[Any]]"</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPToolset</span>
@@ -781,12 +799,137 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">DURABLE_UNIT_TOOLSETS</span> <span class="o">=</span> <span class="p">(</span><span class="n">FunctionToolset</span><span class="p">,</span> <span class="n">DynamicToolset</span><span class="p">,</span> <span class="n">MCPToolset</span><span class="p">)</span>
 <span class="sd">"""Leaf toolsets pydantic-ai's durable backend runs as durable units; each needs a unique ``id``."""</span>
 
+<span class="c1"># Airflow imports a Dag file as a module named ``unusual_prefix_&lt;sha1 of the file's path&gt;_&lt;file name&gt;``</span>
+<span class="c1"># (``get_unique_dag_module_name`` in the shared ``module_loading`` library, which providers cannot import).</span>
+<span class="n">_DAG_MODULE_PREFIX</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"^unusual_prefix_[0-9a-f]</span><span class="si">{40}</span><span class="s2">_"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_callable_toolset_id</span><span class="p">(</span><span class="n">function</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the id of a toolset that ``function`` builds per run: its module and qualified name.</span>
+
+<span class="sd">    The hash of the file's path that Airflow puts in a Dag file's module name is left out,</span>
+<span class="sd">    because the path can differ between workers and bundle versions. ``None`` for a callable</span>
+<span class="sd">    without a qualified name, such as a ``functools.partial``.</span>
+<span class="sd">    """</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="s2">"__module__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">qualname</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="s2">"__qualname__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">qualname</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_DAG_MODULE_PREFIX</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s1">''</span><span class="p">,</span><span class="w"> </span><span class="n">module</span><span class="p">)</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">qualname</span><span class="si">}</span><span class="s2">"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_chosen_toolset_id</span><span class="p">(</span><span class="n">leaf</span><span class="p">:</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the id pydantic-ai names a leaf toolset's durable steps after, or ``None`` when it has none.</span>
+
+<span class="sd">    An ``MCPToolset`` without an id derives one from its server's hostname, but durable steps</span>
+<span class="sd">    are only named after an id that was chosen for the toolset.</span>
+<span class="sd">    """</span>
+    <span class="c1"># Before ``_explicit_id`` (pydantic-ai 2.62) no toolset derived its id, so ``id`` is the chosen one.</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="s2">"_explicit_id"</span><span class="p">,</span> <span class="n">leaf</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+
+<span class="c1"># The id ``_give_durable_ids`` gives the n-th ``FunctionToolset`` without one. The same agent gets the</span>
+<span class="c1"># same ids on every attempt, so its requests to the model match the recorded ones. The dunder prefix</span>
+<span class="c1"># keeps it apart from ids people choose. pydantic-ai keeps ids in angle brackets for roles it fills</span>
+<span class="c1"># itself (``&lt;agent&gt;``), and rejects a colon in a toolset id because it builds instruction ids from it.</span>
+<span class="n">_ASSIGNED_ID_PREFIX</span> <span class="o">=</span> <span class="s2">"__airflow_function_toolset_"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_assigned_toolset_id</span><span class="p">(</span><span class="n">number</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_ASSIGNED_ID_PREFIX</span><span class="si">}{</span><span class="n">number</span><span class="si">}</span><span class="s2">"</span>
+
+
+<span class="c1"># Each leaf ``_give_durable_ids`` copied, keyed by ``id()``, with its copy. The leaf is kept so</span>
+<span class="c1"># that its ``id()`` cannot be reused by another object while the map is in use.</span>
+<span class="n">_GivenIds</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="s2">"dict[int, tuple[AbstractToolset[Any], AbstractToolset[Any]]]"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_give_durable_ids</span><span class="p">(</span>
+    <span class="n">toolset</span><span class="p">:</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">ToolsetFunc</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">given</span><span class="p">:</span> <span class="n">_GivenIds</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return ``toolset`` with an id on each leaf pydantic-ai runs as durable steps, where one can be given.</span>
+
+<span class="sd">    pydantic-ai runs a ``FunctionToolset`` or ``DynamicToolset`` as durable steps only when</span>
+<span class="sd">    it has an id. An id-less ``FunctionToolset`` gets one numbered in the order the toolsets</span>
+<span class="sd">    are given, which its step names leave out (a function tool's step is named after the</span>
+<span class="sd">    tool); a function that builds a toolset per run, or an id-less ``DynamicToolset``, gets</span>
+<span class="sd">    ``_get_callable_toolset_id``. A leaf that already has an id, and an ``MCPToolset``, are</span>
+<span class="sd">    left as they are. Leaves are copied, not changed, and ``given`` maps each leaf to its</span>
+<span class="sd">    copy so a toolset listed twice stays one toolset to pydantic-ai.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">toolset</span><span class="p">,</span> <span class="n">AbstractToolset</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">DynamicToolset</span><span class="p">(</span><span class="n">toolset</span><span class="p">,</span> <span class="nb">id</span><span class="o">=</span><span class="n">_get_callable_toolset_id</span><span class="p">(</span><span class="n">toolset</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">_lacks_id</span><span class="p">(</span><span class="n">leaf</span><span class="p">)</span> <span class="k">for</span> <span class="n">leaf</span> <span class="ow">in</span> <span class="n">iter_toolsets</span><span class="p">(</span><span class="n">toolset</span><span class="p">)):</span>
+        <span class="c1"># Rebuilding wrappers via visit_and_replace breaks wrapper subclasses with their own __init__.</span>
+        <span class="k">return</span> <span class="n">toolset</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">give</span><span class="p">(</span><span class="n">leaf</span><span class="p">:</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_lacks_id</span><span class="p">(</span><span class="n">leaf</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">leaf</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">entry</span> <span class="o">:=</span> <span class="n">given</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">leaf</span><span class="p">)))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">copied</span><span class="p">:</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">DynamicToolset</span><span class="p">):</span>
+                <span class="n">copied</span> <span class="o">=</span> <span class="n">DynamicToolset</span><span class="p">(</span>
+                    <span class="n">leaf</span><span class="o">.</span><span class="n">toolset_func</span><span class="p">,</span>
+                    <span class="n">per_run_step</span><span class="o">=</span><span class="n">leaf</span><span class="o">.</span><span class="n">per_run_step</span><span class="p">,</span>
+                    <span class="nb">id</span><span class="o">=</span><span class="n">_get_callable_toolset_id</span><span class="p">(</span><span class="n">leaf</span><span class="o">.</span><span class="n">toolset_func</span><span class="p">),</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">numbered</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">FunctionToolset</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">other</span> <span class="ow">in</span> <span class="n">given</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+                <span class="n">function_toolset</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">leaf</span><span class="p">)</span>
+                <span class="c1"># FunctionToolset takes its id only in the constructor and keeps it here.</span>
+                <span class="n">function_toolset</span><span class="o">.</span><span class="n">_id</span> <span class="o">=</span> <span class="n">_assigned_toolset_id</span><span class="p">(</span><span class="n">numbered</span><span class="p">)</span>
+                <span class="n">copied</span> <span class="o">=</span> <span class="n">function_toolset</span>
+            <span class="n">entry</span> <span class="o">=</span> <span class="n">given</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">leaf</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">copied</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">entry</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">toolset</span><span class="o">.</span><span class="n">visit_and_replace</span><span class="p">(</span><span class="n">give</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_lacks_id</span><span class="p">(</span><span class="n">leaf</span><span class="p">:</span> <span class="n">AbstractToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">TypeGuard</span><span class="p">[</span><span class="n">FunctionToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">DynamicToolset</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">FunctionToolset</span> <span class="o">|</span> <span class="n">DynamicToolset</span><span class="p">)</span> <span class="ow">and</span> <span class="n">leaf</span><span class="o">.</span><span class="n">id</span> <span class="ow">is</span> <span class="kc">None</span>
+
+
 <span class="c1"># Why a recorded step that matched is run live anyway: it was written by a version whose</span>
 <span class="c1"># types have changed since, so replaying it would fail on every retry.</span>
 <span class="n">_UNLOADABLE</span> <span class="o">=</span> <span class="s2">"the recorded result no longer loads, so it was written by another version"</span>
 
-<span class="n">_NO_CONFIG</span><span class="p">:</span> <span class="n">RoleBasedOperationConfig</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">RoleBasedOperationConfig</span><span class="p">(</span>
-    <span class="n">model</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">capability</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tool</span><span class="o">=</span><span class="kc">None</span>
+<span class="c1"># How an operation's step is run: looked up in the journal and recorded, or always run live.</span>
+<span class="n">_StepMode</span><span class="p">:</span> <span class="n">TypeAlias</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"journal"</span><span class="p">,</span> <span class="s2">"live"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_tool_journaled</span><span class="p">(</span><span class="n">tool_def</span><span class="p">:</span> <span class="n">ToolDefinition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Whether calls of a tool are journaled; ``metadata={"airflow": False}`` runs them live on every attempt."""</span>
+    <span class="n">setting</span> <span class="o">=</span> <span class="p">(</span><span class="n">tool_def</span><span class="o">.</span><span class="n">metadata</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">TOOL_CONFIG_KEY</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">setting</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">setting</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">setting</span>
+    <span class="k">raise</span> <span class="n">DurableToolMetadataError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"Tool </span><span class="si">{</span><span class="n">tool_def</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> has invalid </span><span class="si">{</span><span class="n">TOOL_CONFIG_KEY</span><span class="si">!r}</span><span class="s2"> metadata: expected True or False, "</span>
+        <span class="sa">f</span><span class="s2">"got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">setting</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">."</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_tool_step_mode</span><span class="p">(</span>
+    <span class="n">operation_id</span><span class="p">:</span> <span class="n">DurableOperationId</span><span class="p">,</span> <span class="n">tool</span><span class="p">:</span> <span class="nb">object</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">tool_name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_StepMode</span><span class="p">:</span>
+    <span class="c1"># Never pydantic-ai's ``False``, which would take the call out of the backend: a live call still</span>
+    <span class="c1"># takes its position, so the steps after it keep theirs, and a failure is still the step's own.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">ToolsetTool</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_is_tool_journaled</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">tool_def</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">"live"</span>
+    <span class="k">return</span> <span class="s2">"journal"</span>
+
+
+<span class="n">_STEP_MODES</span><span class="p">:</span> <span class="n">RoleBasedOperationConfig</span><span class="p">[</span><span class="n">_StepMode</span><span class="p">]</span> <span class="o">=</span> <span class="n">RoleBasedOperationConfig</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"journal"</span><span class="p">,</span>
+    <span class="n">event</span><span class="o">=</span><span class="s2">"journal"</span><span class="p">,</span>
+    <span class="n">capability</span><span class="o">=</span><span class="s2">"journal"</span><span class="p">,</span>
+    <span class="n">tool</span><span class="o">=</span><span class="s2">"journal"</span><span class="p">,</span>
+    <span class="n">resolve_tool</span><span class="o">=</span><span class="n">_resolve_tool_step_mode</span><span class="p">,</span>
 <span class="p">)</span>
 
 
@@ -810,11 +953,100 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">_ACTIVE_RUN</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_not_journalable</span><span class="p">(</span><span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="ne">BaseException</span><span class="p">:</span>
-    <span class="c1"># The same value fails the same way on every retry, so retrying the task cannot help.</span>
-    <span class="k">return</span> <span class="n">DurableJournalError</span><span class="p">(</span>
-        <span class="sa">f</span><span class="s2">"durable execution could not record a step's result, because it is not JSON-serializable: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span>
+<span class="c1"># A recorded ``bytes`` value: a dict whose only key is this, holding the bytes as base64.</span>
+<span class="n">_BYTES_KEY</span> <span class="o">=</span> <span class="s2">"__airflow_bytes__"</span>
+
+<span class="c1"># The kinds of pydantic-ai's recorded tool call result that hold the tool's value in ``result``.</span>
+<span class="n">_TOOL_RESULT_KINDS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"tool_return"</span><span class="p">,</span> <span class="s2">"tool_content_result"</span><span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_tag_bytes</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Replace the ``bytes`` in a tool result with base64 the journal can hold.</span>
+
+<span class="sd">    The model sees bytes as base64 (pydantic-ai's ``tool_return_ta``), but ``JSON_CODEC``</span>
+<span class="sd">    encodes them as UTF-8 text: it fails on bytes that are not UTF-8 and turns the rest into</span>
+<span class="sd">    ``str``, so the retry would show the model something else. Tagged, they load back as the</span>
+<span class="sd">    same bytes. Only the parts of a result that a tool fills freely are walked; a typed value</span>
+<span class="sd">    such as ``BinaryContent`` encodes its own bytes.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">_BYTES_KEY</span><span class="p">:</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"ascii"</span><span class="p">)}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">_tag_bytes</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_tag_bytes</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ToolReturn</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+            <span class="n">value</span><span class="p">,</span> <span class="n">return_value</span><span class="o">=</span><span class="n">_tag_bytes</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">return_value</span><span class="p">),</span> <span class="n">metadata</span><span class="o">=</span><span class="n">_tag_bytes</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">metadata</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">"kind"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TOOL_RESULT_KINDS</span>
+        <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">attribute</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">"result"</span> <span class="ow">and</span> <span class="n">attribute</span><span class="o">.</span><span class="n">init</span> <span class="k">for</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+    <span class="p">):</span>
+        <span class="c1"># pydantic-ai's recorded tool call result, a shape its journals keep loading across versions.</span>
+        <span class="k">return</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="n">_tag_bytes</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">"result"</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">value</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_untag_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Turn what :func:`_tag_bytes` recorded back into bytes.</span>
+
+<span class="sd">    A payload without tags loads as it is, and so does a dict a tool built that only looks</span>
+<span class="sd">    like one, with a value that is not base64.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">encoded</span> <span class="o">:=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_BYTES_KEY</span><span class="p">),</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>  <span class="c1"># binascii.Error, or a value that is not ASCII</span>
+                <span class="k">return</span> <span class="n">payload</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">_untag_bytes</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">payload</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_untag_bytes</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">payload</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_mask_payload</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Mask the secrets in an encoded payload, including inside its bytes, which base64 hides from the masker."""</span>
+    <span class="k">return</span> <span class="n">_tag_bytes</span><span class="p">(</span><span class="n">mask_secrets</span><span class="p">(</span><span class="n">_untag_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">)))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_model_response</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># Bytes are never tagged in a model response, so text the model wrote, such as tool call</span>
+    <span class="c1"># arguments, is never read as a tag. The second shape is a streamed response from</span>
+    <span class="c1"># pydantic-ai before 2.60, recorded with its events.</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span>
+        <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"kind"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"response"</span> <span class="ow">or</span> <span class="p">(</span><span class="s2">"response"</span> <span class="ow">in</span> <span class="n">payload</span> <span class="ow">and</span> <span class="s2">"events"</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">)</span>
     <span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_JournalCodec</span><span class="p">(</span><span class="n">DurabilityCodec</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    pydantic-ai's ``JSON_CODEC``, recording bytes as base64 and returning failures instead of raising them.</span>
+
+<span class="sd">    A result that does not encode comes back as :class:`Unrecordable`, so the journal decides</span>
+<span class="sd">    whether that fails the task (:meth:`JournalStep.cannot_record`), and ``load`` hands the</span>
+<span class="sd">    live value on to the run either way.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tp</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">JSON_CODEC</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span> <span class="n">_tag_bytes</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">PydanticSerializationError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RecursionError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="c1"># RecursionError: a result that contains itself, or is nested too deep to walk.</span>
+            <span class="k">return</span> <span class="n">Unrecordable</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tp</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">Unrecordable</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">payload</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">return</span> <span class="n">JSON_CODEC</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span> <span class="n">payload</span> <span class="k">if</span> <span class="n">_is_model_response</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span> <span class="k">else</span> <span class="n">_untag_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">))</span>
+
+
+<span class="n">_JOURNAL_CODEC</span> <span class="o">=</span> <span class="n">_JournalCodec</span><span class="p">()</span>
 
 
 <div class="viewcode-block" id="AirflowDurability">
@@ -852,9 +1084,19 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    soon as the run succeeds, so that clearing the task later starts it fresh: a task that</span>
 <span class="sd">    runs several agents replays only the run that failed, and runs the ones before it again.</span>
 
+<span class="sd">    A tool that must run on every attempt, such as one that reads the current time or</span>
+<span class="sd">    creates a temporary table, opts out with ``metadata={"airflow": False}``; for tools of</span>
+<span class="sd">    a toolset you do not define, such as ``SQLToolset``, add the capability</span>
+<span class="sd">    ``SetToolMetadata(tools=[...], airflow=False)``. pydantic-ai's own ``MCPToolset`` refuses the</span>
+<span class="sd">    opt-out; the provider's ``MCPToolset`` accepts it.</span>
+
 <span class="sd">    Toolsets the agent calls through pydantic-ai's durable backend need a unique ``id``</span>
 <span class="sd">    (``FunctionToolset(id=...)``, ``MCPToolset(..., id=...)``), as do capabilities that</span>
 <span class="sd">    contribute ``@durable_operation`` methods; the ids name the steps in the journal.</span>
+<span class="sd">    ``AgentOperator`` and ``@task.agent`` fill in the ids of a ``FunctionToolset`` or a</span>
+<span class="sd">    function that builds a toolset passed in ``toolsets`` or ``agent_params["toolsets"]``,</span>
+<span class="sd">    and of a ``FunctionToolset`` held directly by a ``Toolset`` capability</span>
+<span class="sd">    (:ref:`durable-toolset-ids`); in a plain ``@task`` you set them.</span>
 
 <span class="sd">    :param models: Extra models the run may switch to, keyed by id; see pydantic-ai's</span>
 <span class="sd">        ``BaseDurabilityCapability``.</span>
@@ -869,8 +1111,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">engine_name</span><span class="o">=</span><span class="s2">"Airflow"</span><span class="p">,</span>
         <span class="n">durable_unit_noun</span><span class="o">=</span><span class="s2">"step"</span><span class="p">,</span>
         <span class="n">durable_container_noun</span><span class="o">=</span><span class="s2">"task"</span><span class="p">,</span>
-        <span class="n">codec</span><span class="o">=</span><span class="n">JSON_CODEC</span><span class="p">,</span>
-        <span class="n">serialization_failure</span><span class="o">=</span><span class="n">_not_journalable</span><span class="p">,</span>
+        <span class="n">codec</span><span class="o">=</span><span class="n">_JOURNAL_CODEC</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -897,6 +1138,20 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/durable/capability/index.html#airflow.providers.common.ai.durable.capability.AirflowDurability.get_durable_operation_backend">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_durable_operation_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_AirflowOperationBackend</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_AirflowOperationBackend</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AirflowDurability.before_model_request">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/durable/capability/index.html#airflow.providers.common.ai.durable.capability.AirflowDurability.before_model_request">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">before_model_request</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">RunContext</span><span class="p">[</span><span class="n">AgentDepsT</span><span class="p">],</span> <span class="n">request_context</span><span class="p">:</span> <span class="n">ModelRequestContext</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelRequestContext</span><span class="p">:</span>
+        <span class="c1"># A bad ``airflow`` metadata value fails the task here, before the model is first asked,</span>
+        <span class="c1"># rather than when the model calls the tool, which every retry would reach again. The</span>
+        <span class="c1"># request's tool definitions carry the metadata other capabilities set on the toolsets.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_durable_context</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">tool_def</span> <span class="ow">in</span> <span class="n">request_context</span><span class="o">.</span><span class="n">model_request_parameters</span><span class="o">.</span><span class="n">function_tools</span><span class="p">:</span>
+                <span class="n">_is_tool_journaled</span><span class="p">(</span><span class="n">tool_def</span><span class="p">)</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">before_model_request</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">request_context</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="AirflowDurability.get_wrapper_toolset">
@@ -941,6 +1196,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">with</span> <span class="n">_active_run</span><span class="p">(</span><span class="n">_ActiveRun</span><span class="p">(</span><span class="n">durable_run</span><span class="p">,</span> <span class="n">ledger</span><span class="p">)):</span>
                 <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">wrap_run</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">handler</span><span class="o">=</span><span class="n">handler</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">BaseException</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">AIRFLOW_V_3_3_PLUS</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">TaskAwaitingInput</span><span class="p">):</span>
+                <span class="c1"># A step is waiting for a person, such as a tool approval: the task resumes from here.</span>
+                <span class="n">durable_run</span><span class="o">.</span><span class="n">pause</span><span class="p">()</span>
+                <span class="k">raise</span>
             <span class="c1"># pydantic-ai raises UnexpectedModelBehavior when the model's answers fail its checks</span>
             <span class="c1"># too often (a tool's ModelRetry, output validation): the answers are recorded, so a</span>
             <span class="c1"># retry has to ask the model again rather than replay them into the same error.</span>
@@ -950,6 +1209,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">ledger</span><span class="o">.</span><span class="n">settle</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">journal</span><span class="o">.</span><span class="n">clean_up_after_run</span><span class="p">:</span>
             <span class="n">durable_run</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># The task keeps the journal past the run (until its own work is done, or across a review).</span>
+            <span class="n">durable_run</span><span class="o">.</span><span class="n">complete</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">result</span></div>
 
 
@@ -966,12 +1228,37 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">_AirflowOperationBackend</span><span class="p">(</span><span class="n">JournalCallableOperationBackend</span><span class="p">[</span><span class="kc">None</span><span class="p">]):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_AirflowOperationNamer</span><span class="p">(</span><span class="n">JournalOperationNamer</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    pydantic-ai's journal step names, without an id Airflow gave a function toolset.</span>
+
+<span class="sd">    A function tool's step name ends in the tool's name, so the id Airflow numbered the</span>
+<span class="sd">    toolset by adds nothing to it and would only make the name harder to read in the task</span>
+<span class="sd">    log. An id the Dag author chose stays in the name, so steps recorded under it before</span>
+<span class="sd">    this naming existed replay as they did. Only a tool call is journaled under its name:</span>
+<span class="sd">    ``execute`` runs argument validation live.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">operation_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">operation_id</span><span class="p">:</span> <span class="n">DurableOperationId</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">operation_name</span><span class="p">(</span><span class="n">operation_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">operation_id</span><span class="p">,</span> <span class="n">ToolsetCallToolId</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">operation_id</span><span class="o">.</span><span class="n">toolset_kind</span> <span class="o">==</span> <span class="s2">"function"</span>
+            <span class="ow">and</span> <span class="n">operation_id</span><span class="o">.</span><span class="n">toolset_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_ASSIGNED_ID_PREFIX</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">f</span><span class="s2">"__</span><span class="si">{</span><span class="n">operation_id</span><span class="o">.</span><span class="n">toolset_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">name</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_AirflowOperationBackend</span><span class="p">(</span><span class="n">CallableOperationBackend</span><span class="p">[</span><span class="n">_StepMode</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">"""Runs each durable operation through the task's durable journal."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">durability</span><span class="p">:</span> <span class="n">AirflowDurability</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-            <span class="n">agent_name</span><span class="o">=</span><span class="n">durability</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">default_model_id</span><span class="o">=</span><span class="n">durability</span><span class="o">.</span><span class="n">default_model_id</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">_NO_CONFIG</span>
+            <span class="n">namer</span><span class="o">=</span><span class="n">_AirflowOperationNamer</span><span class="p">(</span>
+                <span class="n">durability</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">default_model_id</span><span class="o">=</span><span class="n">durability</span><span class="o">.</span><span class="n">default_model_id</span> <span class="ow">or</span> <span class="s2">"default"</span>
+            <span class="p">),</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">_STEP_MODES</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_durability</span> <span class="o">=</span> <span class="n">durability</span>
         <span class="c1"># How pydantic-ai decodes each operation's result, by operation.</span>
@@ -1014,7 +1301,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">body</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="nb">object</span><span class="p">]],</span>
         <span class="n">cache_key</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
-        <span class="n">config</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">config</span><span class="p">:</span> <span class="n">_StepMode</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">object</span><span class="p">:</span>
         <span class="n">active</span> <span class="o">=</span> <span class="n">_ACTIVE_RUN</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">active</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1030,18 +1317,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
                     <span class="n">name</span><span class="p">,</span>
                     <span class="n">_tool_fingerprint</span><span class="p">(</span><span class="n">cache_key</span><span class="p">),</span>
                     <span class="n">valid_payload</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_loads</span><span class="p">,</span> <span class="n">operation_id</span><span class="p">),</span>
+                    <span class="n">replayable</span><span class="o">=</span><span class="n">config</span> <span class="o">==</span> <span class="s2">"journal"</span><span class="p">,</span>
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">replayed</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span>
                 <span class="c1"># The masking wrapper AgentOperator adds sits outside this durable unit, so mask</span>
                 <span class="c1"># before recording: secrets must not reach the journal any more than the model.</span>
-                <span class="k">return</span> <span class="k">await</span> <span class="n">step</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">to_record</span><span class="o">=</span><span class="n">mask_secrets</span><span class="p">)</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="n">step</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">to_record</span><span class="o">=</span><span class="n">_mask_payload</span><span class="p">)</span>
             <span class="k">case</span> <span class="n">ToolsetValidateToolArgumentsId</span><span class="p">():</span>
                 <span class="c1"># Local validation of the arguments the recorded call was made with: nothing to</span>
                 <span class="c1"># save by replaying it, and it is the same on every attempt, so it takes no position.</span>
                 <span class="k">return</span> <span class="k">await</span> <span class="n">body</span><span class="p">()</span>
             <span class="k">case</span> <span class="n">CapabilityOperationId</span><span class="p">():</span>
-                <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_claim</span><span class="p">(</span><span class="n">active</span><span class="p">,</span> <span class="n">operation_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"other"</span><span class="p">,</span> <span class="n">fingerprint</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+                <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_claim</span><span class="p">(</span>
+                    <span class="n">active</span><span class="p">,</span>
+                    <span class="n">operation_id</span><span class="p">,</span>
+                    <span class="n">name</span><span class="p">,</span>
+                    <span class="n">kind</span><span class="o">=</span><span class="s2">"other"</span><span class="p">,</span>
+                    <span class="n">fingerprint</span><span class="o">=</span><span class="n">_fingerprint_capability_operation</span><span class="p">(</span><span class="n">cache_key</span><span class="p">),</span>
+                <span class="p">)</span>
                 <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">replayed</span><span class="p">:</span>
                     <span class="n">active</span><span class="o">.</span><span class="n">ledger</span><span class="o">.</span><span class="n">record_capability_replay</span><span class="p">(</span><span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="p">)</span>
                     <span class="k">return</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span>
@@ -1081,7 +1375,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span>
         <span class="n">ledger</span><span class="o">.</span><span class="n">record_live_model_request</span><span class="p">(</span><span class="n">had_request_credit</span><span class="o">=</span><span class="n">had_request_credit</span><span class="p">)</span>
         <span class="n">payload</span> <span class="o">=</span> <span class="k">await</span> <span class="n">step</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
-        <span class="n">ledger</span><span class="o">.</span><span class="n">track_chain</span><span class="p">(</span><span class="n">_load_model_response</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">streaming</span><span class="o">=</span><span class="n">streaming</span><span class="p">),</span> <span class="n">parameters</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">Unrecordable</span><span class="p">):</span>
+            <span class="c1"># Left unrecorded by a journal that does not fail on it: the live response is the value.</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">value</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ModelResponse</span><span class="p">)</span> <span class="k">else</span> <span class="n">payload</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">response</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">_load_model_response</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">streaming</span><span class="o">=</span><span class="n">streaming</span><span class="p">)</span>
+        <span class="n">ledger</span><span class="o">.</span><span class="n">track_chain</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">payload</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_fingerprint_model_request</span><span class="p">(</span>
@@ -1113,8 +1412,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    Results, and the control-flow exceptions a tool raises for the model (``ModelRetry``,</span>
 <span class="sd">    ``ToolFailed``, ``ApprovalRequired``, ``CallDeferred``), are recorded as values, so a</span>
 <span class="sd">    retry replays them exactly. Any other exception is recorded as a failure and the call</span>
-<span class="sd">    runs again on retry. A result that is not JSON-serializable fails the task, as it does</span>
-<span class="sd">    for the toolsets pydantic-ai runs as durable steps.</span>
+<span class="sd">    runs again on retry. Results are encoded as for the toolsets pydantic-ai runs as durable</span>
+<span class="sd">    steps, bytes included, and one that cannot be encoded is handled the same way.</span>
 <span class="sd">    """</span>
 
     <span class="n">durability</span><span class="p">:</span> <span class="n">AirflowDurability</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">kw_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -1139,8 +1438,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">fingerprint_tool_call</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">),</span>
             <span class="n">valid_payload</span><span class="o">=</span><span class="n">_is_journaled_tool_payload</span><span class="p">,</span>
             <span class="c1"># A toolset whose calls act on a system Airflow cannot observe, such as a managed</span>
-            <span class="c1"># agent, runs them again on every attempt.</span>
-            <span class="n">replayable</span><span class="o">=</span><span class="n">leaf</span><span class="o">.</span><span class="n">replayable</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">AirflowToolset</span><span class="p">)</span> <span class="k">else</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># agent, runs them again on every attempt, and so does a tool opted out by its metadata.</span>
+            <span class="n">replayable</span><span class="o">=</span><span class="p">(</span><span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">AirflowToolset</span><span class="p">)</span> <span class="ow">or</span> <span class="n">leaf</span><span class="o">.</span><span class="n">replayable</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">_is_tool_journaled</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">tool_def</span><span class="p">),</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">replayed</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">AirflowToolset</span><span class="p">):</span>
@@ -1193,16 +1493,17 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_record_tool_payload</span><span class="p">(</span><span class="n">step</span><span class="p">:</span> <span class="n">JournalStep</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">encoded</span> <span class="o">=</span> <span class="n">JSON_CODEC</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
-    <span class="k">except</span> <span class="p">(</span><span class="n">PydanticSerializationError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
-        <span class="c1"># As for the toolsets pydantic-ai runs as durable steps: the same value fails the same</span>
-        <span class="c1"># way on every attempt, and the model could not have read it either.</span>
-        <span class="k">raise</span> <span class="n">_not_journalable</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
-    <span class="n">step</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">mask_secrets</span><span class="p">(</span><span class="n">encoded</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">step</span><span class="o">.</span><span class="n">replayable</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">encoded</span> <span class="o">=</span> <span class="n">_JOURNAL_CODEC</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="n">Unrecordable</span><span class="p">):</span>
+        <span class="n">step</span><span class="o">.</span><span class="n">cannot_record</span><span class="p">(</span><span class="n">encoded</span><span class="o">.</span><span class="n">error</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">step</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">_mask_payload</span><span class="p">(</span><span class="n">encoded</span><span class="p">))</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_decode_tool_payload</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">_untag_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
     <span class="n">kind</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"kind"</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">match</span> <span class="n">kind</span><span class="p">:</span>
         <span class="k">case</span> <span class="s2">"tool_return"</span> <span class="k">if</span> <span class="s2">"tool_return"</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">:</span>
@@ -1235,19 +1536,31 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">False</span>
     <span class="k">match</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"kind"</span><span class="p">):</span>
-        <span class="k">case</span> <span class="s2">"tool_return"</span> <span class="k">if</span> <span class="s2">"tool_return"</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">:</span>
+        <span class="k">case</span> <span class="s2">"tool_return"</span> <span class="k">if</span> <span class="s2">"tool_return"</span> <span class="ow">in</span> <span class="n">payload</span> <span class="ow">or</span> <span class="s2">"result"</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">JSON_CODEC</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">ToolReturn</span><span class="p">,</span> <span class="n">payload</span><span class="p">[</span><span class="s2">"tool_return"</span><span class="p">])</span>
+                <span class="n">_decode_tool_payload</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
             <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
                 <span class="k">return</span> <span class="kc">False</span>
             <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">case</span> <span class="s2">"tool_return"</span><span class="p">:</span>
-            <span class="k">return</span> <span class="s2">"result"</span> <span class="ow">in</span> <span class="n">payload</span>
         <span class="k">case</span> <span class="s2">"model_retry"</span> <span class="o">|</span> <span class="s2">"tool_failed"</span><span class="p">:</span>
             <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"message"</span><span class="p">),</span> <span class="nb">str</span><span class="p">)</span>
         <span class="k">case</span> <span class="s2">"approval_required"</span> <span class="o">|</span> <span class="s2">"call_deferred"</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
     <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_fingerprint_capability_operation</span><span class="p">(</span><span class="n">cache_key</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Fingerprint a capability operation that settles deferred tool calls, such as an approval, by those calls.</span>
+
+<span class="sd">    Its answer is about these calls, so it must not replay for others. Any other capability</span>
+<span class="sd">    operation has no fingerprint, and replays by name and position.</span>
+<span class="sd">    """</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">cast</span><span class="p">(</span><span class="s2">"_CapabilityOperationKey"</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">argument</span> <span class="ow">in</span> <span class="n">arguments</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument</span><span class="p">,</span> <span class="n">DeferredToolRequests</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">fingerprint_deferred_tool_requests</span><span class="p">(</span><span class="n">argument</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">None</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_tool_fingerprint</span><span class="p">(</span><span class="n">cache_key</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">object</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
@@ -1513,7 +1826,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.12.0</span>
+        <span class="version-label">Version: </span><span class="version">0.13.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -485,7 +485,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.12.0</span>
+        <span class="version-label">Version: </span><span class="version">0.13.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -742,6 +742,30 @@ Views over records beyond the Dags a caller can read – audit log entries not t
 import errors for files with no registered Dag, reparsing such files, and Dag bundles (from Airflow 3.4.1) – are checked against the
 <code class="docutils literal notranslate"><span class="pre">AdminView</span></code> resource, which the CLI grants to <code class="docutils literal notranslate"><span class="pre">SuperAdmin</span></code> only. The other views are checked against
 the <code class="docutils literal notranslate"><span class="pre">View</span></code> resource, which every team role can read.</p>
+</section>
+<section id="listing-resources-when-permissions-are-granted-per-team">
+<h3>Listing resources when permissions are granted per team<a class="headerlink" href="#listing-resources-when-permissions-are-granted-per-team" title="Link to this heading">¶</a></h3>
+<p>Whenever Airflow lists Dags, assets, connections, pools or variables, the auth manager asks Keycloak which
+of them the user may access. By default it sends one request per resource, with the id of the resource as a
+claim, so that a Keycloak policy can grant access to individual resources. With many resources this makes
+pages that list them slow: the Dag list sends one request per Dag and, from Airflow 3.4.0, one per asset.</p>
+<p>The permissions created by the CLI are granted by role and group only, and no policy reads the id of the
+resource. Keycloak then gives the same answer for every Dag of a team. When that holds for your realm, enable
+<code class="docutils literal notranslate"><span class="pre">team_level_authorization</span></code> in the <code class="docutils literal notranslate"><span class="pre">[keycloak_auth_manager]</span></code> section:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[keycloak_auth_manager]</span>
+<span class="na">team_level_authorization</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">True</span>
+</pre></div>
+</div>
+<p>The auth manager then sends one request per team and resource type and applies the answer to all resources of
+that type in the team. Assets do not belong to a team, so one request decides for all assets. When multi-team
+is disabled, one request decides for each resource type.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Do not enable this setting when a policy of the realm grants or denies access to individual resources, for
+example a JavaScript or regex policy that reads the <code class="docutils literal notranslate"><span class="pre">resource_id</span></code> claim. Such a policy would then be
+evaluated for one resource only and its answer applied to all the others.</p>
+</div>
+<p>Checks of a single resource, such as opening or triggering one Dag, are not affected by this setting.</p>
 <p>More resources about permissions can be found in the official documentation of Keycloak:</p>
 <p>1- <a class="reference external" href="https://www.keycloak.org/docs/latest/authorization_services/index.html#the-authorization-process">Keycloak Authorization Process</a></p>
 <p>2- <a class="reference external" href="https://www.keycloak.org/docs/latest/authorization_services/index.html#_permission_overview">Keycloak Permission Overview</a></p>
@@ -830,6 +854,7 @@ the <code class="docutils literal notranslate"><span class="pre">View</span></co
 <li><a class="reference internal" href="#one-go-creation-of-permissions">One-go creation of permissions</a></li>
 <li><a class="reference internal" href="#step-by-step-creation-of-permissions">Step-by-step creation of permissions</a></li>
 <li><a class="reference internal" href="#managing-teams-with-keycloak">Managing teams with Keycloak</a></li>
+<li><a class="reference internal" href="#listing-resources-when-permissions-are-granted-per-team">Listing resources when permissions are granted per team</a></li>
 </ul>
 </li>
 </ul>
@@ -1051,7 +1076,7 @@ the <code class="docutils literal notranslate"><span class="pre">View</span></co
     <script src="../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../_static/documentation_options.js?v=61ccb1f1"></script>
+        <script src="../../_static/documentation_options.js?v=1019fba8"></script>
         <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>

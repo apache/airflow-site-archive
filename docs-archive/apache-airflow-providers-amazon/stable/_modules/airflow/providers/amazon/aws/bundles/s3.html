@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -694,7 +694,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tarfile</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">abstractmethod</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">structlog</span>
 
@@ -703,10 +708,144 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.s3</span><span class="w"> </span><span class="kn">import</span> <span class="n">S3Hook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowException</span>
 
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">structlog.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FilteringBoundLogger</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_require_tar_data_filter</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">tarfile</span><span class="p">,</span> <span class="s2">"data_filter"</span><span class="p">):</span>
+        <span class="k">return</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"Archive Dag bundles require Python 3.11.4 or later (tarfile filter='data')."</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_extract_archive</span><span class="p">(</span><span class="n">archive_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">unpack_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Unpack a bundle archive without writing outside ``unpack_dir``."""</span>
+    <span class="k">with</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">archive_path</span><span class="p">,</span> <span class="s2">"r:*"</span><span class="p">)</span> <span class="k">as</span> <span class="n">tar</span><span class="p">:</span>
+        <span class="n">tar</span><span class="o">.</span><span class="n">extractall</span><span class="p">(</span><span class="n">unpack_dir</span><span class="p">,</span> <span class="nb">filter</span><span class="o">=</span><span class="s2">"data"</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_S3DagBundleBase</span><span class="p">(</span><span class="n">BaseDagBundle</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    S3 connection, local directory, and console URL shared by the S3 bundle classes.</span>
+
+<span class="sd">    :meta private:</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">aws_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">AwsBaseHook</span><span class="o">.</span><span class="n">default_conn_name</span><span class="p">,</span>
+        <span class="n">bucket_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span> <span class="o">=</span> <span class="n">aws_conn_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span> <span class="o">=</span> <span class="n">bucket_name</span>
+        <span class="c1"># Local path where S3 Dags are downloaded</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_logger</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span><span class="p">:</span> <span class="n">S3Hook</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_log_bindings</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return log context shared by every S3 Dag bundle."""</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"bundle_name"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s2">"version"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
+            <span class="s2">"bucket_name"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
+            <span class="s2">"aws_conn_id"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_logger</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FilteringBoundLogger</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return a logger bound with the context common to every S3 Dag bundle."""</span>
+        <span class="k">return</span> <span class="n">structlog</span><span class="o">.</span><span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_log_bindings</span><span class="p">())</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_view_url_key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_remote</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Check the remote source before the first refresh."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating local Dags directory: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Local Dags path: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="si">}</span><span class="s2"> is not a directory."</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">check_for_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"S3 bucket '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">' does not exist."</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_validate_remote</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize</span><span class="p">()</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">s3_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span><span class="p">:</span> <span class="n">S3Hook</span> <span class="o">=</span> <span class="n">S3Hook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">)</span>  <span class="c1"># Initialize S3 hook.</span>
+            <span class="k">except</span> <span class="n">AirflowException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Could not create S3Hook for connection </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_current_version</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the current version of the Dag bundle. Currently not supported."""</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the local path to the Dag files."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span>  <span class="c1"># Path where Dags are downloaded.</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">view_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return a URL for viewing the Dags in S3. Currently, versioning is not supported.</span>
+
+<span class="sd">        This method is deprecated and will be removed when the minimum supported Airflow version is 3.1.</span>
+<span class="sd">        Use `view_url_template` instead.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_url_template</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">view_url_template</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return a URL for viewing the Dags in S3. Currently, versioning is not supported."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">"S3 url with version is not supported"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_view_url_template"</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view_url_template</span><span class="p">:</span>
+            <span class="c1"># Because we use this method in the view_url method, we need to handle</span>
+            <span class="c1"># backward compatibility for Airflow versions that doesn't have the</span>
+            <span class="c1"># _view_url_template attribute. Should be removed when we drop support for Airflow 3.0</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view_url_template</span>
+        <span class="c1"># https://&lt;bucket-name&gt;.s3.&lt;region&gt;.amazonaws.com/&lt;object-key&gt;</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">.s3"</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">region_name</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">".</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">region_name</span><span class="si">}</span><span class="s2">"</span>
+        <span class="n">url</span> <span class="o">+=</span> <span class="s2">".amazonaws.com"</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view_url_key</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">key</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"/</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span>
+
+        <span class="k">return</span> <span class="n">url</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Refresh the Dag bundle by updating the local Dag files from S3."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">"Refreshing a specific version is not supported"</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_refresh_locked</span><span class="p">()</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_refresh_locked</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Stage the bundle while the bundle lock is held."""</span>
+
 
 <div class="viewcode-block" id="S3DagBundle">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">S3DagBundle</span><span class="p">(</span><span class="n">BaseDagBundle</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">S3DagBundle</span><span class="p">(</span><span class="n">_S3DagBundleBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    S3 Dag bundle - exposes a directory in S3 as a Dag bundle.</span>
 
@@ -732,75 +871,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-<div class="viewcode-block" id="S3DagBundle.aws_conn_id">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.aws_conn_id">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span> <span class="o">=</span> <span class="n">aws_conn_id</span></div>
-
-<div class="viewcode-block" id="S3DagBundle.bucket_name">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.bucket_name">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span> <span class="o">=</span> <span class="n">bucket_name</span></div>
-
 <div class="viewcode-block" id="S3DagBundle.prefix">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.prefix">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span> <span class="o">=</span> <span class="n">prefix</span></div>
 
-        <span class="c1"># Local path where S3 Dags are downloaded</span>
-<div class="viewcode-block" id="S3DagBundle.s3_dags_dir">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.s3_dags_dir">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span></div>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">bucket_name</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_logger</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FilteringBoundLogger</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return a logger bound with this prefix bundle's context."""</span>
+        <span class="k">return</span> <span class="n">structlog</span><span class="o">.</span><span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_log_bindings</span><span class="p">(),</span> <span class="n">prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">)</span>
 
-        <span class="n">log</span> <span class="o">=</span> <span class="n">structlog</span><span class="o">.</span><span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_log</span> <span class="o">=</span> <span class="n">log</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span>
-            <span class="n">bundle_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-            <span class="n">version</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
-            <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
-            <span class="n">prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span>
-            <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span><span class="p">:</span> <span class="n">S3Hook</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_view_url_key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">():</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Creating local Dags directory: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
-                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Local Dags path: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="si">}</span><span class="s2"> is not a directory."</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">check_for_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"S3 bucket '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">' does not exist."</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">:</span>
-                <span class="c1"># don't check when prefix is ""</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">check_for_prefix</span><span class="p">(</span>
-                    <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s2">"/"</span>
-                <span class="p">):</span>
-                    <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"S3 prefix 's3://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">' does not exist."</span>
-                    <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span>
-
-<div class="viewcode-block" id="S3DagBundle.initialize">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.initialize">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize</span><span class="p">()</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span></div>
-
-
-    <span class="nd">@property</span>
-<div class="viewcode-block" id="S3DagBundle.s3_hook">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.s3_hook">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">s3_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span><span class="p">:</span> <span class="n">S3Hook</span> <span class="o">=</span> <span class="n">S3Hook</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">)</span>  <span class="c1"># Initialize S3 hook.</span>
-            <span class="k">except</span> <span class="n">AirflowException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Could not create S3Hook for connection </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s3_hook</span></div>
-
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_remote</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">:</span>
+            <span class="c1"># don't check when prefix is ""</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">check_for_prefix</span><span class="p">(</span>
+                <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s2">"/"</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="sa">f</span><span class="s2">"S3 prefix 's3://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">' does not exist."</span><span class="p">)</span>
 
 <div class="viewcode-block" id="S3DagBundle.__repr__">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.__repr__">[docs]</a>
@@ -815,76 +905,157 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="S3DagBundle.get_current_version">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.get_current_version">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_current_version</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Return the current version of the Dag bundle. Currently not supported."""</span>
-        <span class="k">return</span> <span class="kc">None</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_refresh_locked</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">"Downloading Dags from s3://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span>
+        <span class="p">)</span>
+        <span class="n">sync_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span>
+        <span class="k">if</span> <span class="n">sync_prefix</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">sync_prefix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"/"</span><span class="p">):</span>
+            <span class="n">sync_prefix</span> <span class="o">+=</span> <span class="s2">"/"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">sync_to_local_dir</span><span class="p">(</span>
+            <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
+            <span class="n">s3_prefix</span><span class="o">=</span><span class="n">sync_prefix</span><span class="p">,</span>
+            <span class="n">local_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">,</span>
+            <span class="n">delete_stale</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
-    <span class="nd">@property</span>
-<div class="viewcode-block" id="S3DagBundle.path">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.path">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Return the local path to the Dag files."""</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span>  <span class="c1"># Path where Dags are downloaded.</span></div>
+
+<div class="viewcode-block" id="S3ArchiveDagBundle">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">S3ArchiveDagBundle</span><span class="p">(</span><span class="n">_S3DagBundleBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    S3 Dag bundle staged from a single ``.tar.gz`` object.</span>
+
+<span class="sd">    The archive is the only source of the Dags. Members are extracted relative to the</span>
+<span class="sd">    bundle root, for example ``tar -C &lt;dags_dir&gt; -czf dags.tar.gz .``. Requires Python</span>
+<span class="sd">    3.11.4 or later.</span>
+
+<span class="sd">    :param aws_conn_id: Airflow connection ID for AWS.  Defaults to AwsBaseHook.default_conn_name.</span>
+<span class="sd">    :param bucket_name: The name of the S3 bucket containing the archive.</span>
+<span class="sd">    :param archive_key: S3 key of the ``.tar.gz`` archive holding the Dag files.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="S3ArchiveDagBundle.supports_versioning">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle.supports_versioning">[docs]</a>
+    <span class="n">supports_versioning</span> <span class="o">=</span> <span class="kc">False</span></div>
 
 
-<div class="viewcode-block" id="S3DagBundle.refresh">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.refresh">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Refresh the Dag bundle by re-downloading the Dags from S3."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">"Refreshing a specific version is not supported"</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">aws_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">AwsBaseHook</span><span class="o">.</span><span class="n">default_conn_name</span><span class="p">,</span>
+        <span class="n">bucket_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">archive_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_require_tar_data_filter</span><span class="p">()</span>
+<div class="viewcode-block" id="S3ArchiveDagBundle.archive_key">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle.archive_key">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span> <span class="o">=</span> <span class="n">archive_key</span></div>
 
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">():</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">aws_conn_id</span><span class="o">=</span><span class="n">aws_conn_id</span><span class="p">,</span> <span class="n">bucket_name</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># Keep the Dag tree and its staging dirs under the bundle's own base_dir.</span>
+<div class="viewcode-block" id="S3ArchiveDagBundle.s3_dags_dir">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle.s3_dags_dir">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span> <span class="o">/</span> <span class="s2">"dags"</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_logger</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FilteringBoundLogger</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return a logger bound with this archive bundle's context."""</span>
+        <span class="k">return</span> <span class="n">structlog</span><span class="o">.</span><span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">_log_bindings</span><span class="p">(),</span> <span class="n">archive_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_view_url_key</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span>
+
+<div class="viewcode-block" id="S3ArchiveDagBundle.__repr__">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3ArchiveDagBundle.__repr__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"&lt;S3ArchiveDagBundle("</span>
+            <span class="sa">f</span><span class="s2">"name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">, "</span>
+            <span class="sa">f</span><span class="s2">"bucket_name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">!r}</span><span class="s2">, "</span>
+            <span class="sa">f</span><span class="s2">"archive_key=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="si">!r}</span><span class="s2">, "</span>
+            <span class="sa">f</span><span class="s2">"version=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="si">!r}</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">")&gt;"</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_archive_etag_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return the ETag marker path inside the staged Dag tree."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span> <span class="o">/</span> <span class="s2">".archive_etag"</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remove_stale_archive_staging_dirs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+            <span class="k">return</span>
+        <span class="k">for</span> <span class="n">leftover</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span><span class="o">.</span><span class="n">iterdir</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">leftover</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span> <span class="ow">and</span> <span class="n">leftover</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"archive-staging-"</span><span class="p">):</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">leftover</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_download_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">archive_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">etag</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Download the archive object named by ``etag``."""</span>
+        <span class="n">request</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"Bucket"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="s2">"Key"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">etag</span><span class="p">:</span>
+            <span class="n">request</span><span class="p">[</span><span class="s2">"IfMatch"</span><span class="p">]</span> <span class="o">=</span> <span class="n">etag</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="o">**</span><span class="n">request</span><span class="p">)</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s2">"Body"</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">archive_path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">handle</span><span class="p">,</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">body</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ETag"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_refresh_locked</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_remove_stale_archive_staging_dirs</span><span class="p">()</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">get_conn</span><span class="p">()</span>
+        <span class="n">head</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">head_object</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="p">)</span>
+        <span class="n">etag</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">head</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ETag"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+
+        <span class="n">marker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_archive_etag_path</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">etag</span> <span class="ow">and</span> <span class="n">marker</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="ow">and</span> <span class="n">marker</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span> <span class="o">==</span> <span class="n">etag</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                <span class="s2">"Downloading Dags from s3://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span>
+                <span class="s2">"Dag bundle archive 's3://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">' is unchanged (ETag </span><span class="si">%s</span><span class="s2">), skipping staging"</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="p">,</span>
+                <span class="n">etag</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">sync_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span>
-            <span class="k">if</span> <span class="n">sync_prefix</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">sync_prefix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"/"</span><span class="p">):</span>
-                <span class="n">sync_prefix</span> <span class="o">+=</span> <span class="s2">"/"</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">sync_to_local_dir</span><span class="p">(</span>
-                <span class="n">bucket_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
-                <span class="n">s3_prefix</span><span class="o">=</span><span class="n">sync_prefix</span><span class="p">,</span>
-                <span class="n">local_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">,</span>
-                <span class="n">delete_stale</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="p">)</span></div>
+            <span class="k">return</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">staging_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="nb">dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">base_dir</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">"archive-staging-"</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">archive_path</span> <span class="o">=</span> <span class="n">staging_dir</span> <span class="o">/</span> <span class="s2">"_bundle_archive"</span>
+            <span class="n">downloaded_etag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_download_archive</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">archive_path</span><span class="p">,</span> <span class="n">etag</span><span class="p">)</span>
 
-<div class="viewcode-block" id="S3DagBundle.view_url">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.view_url">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">view_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""</span>
-<span class="sd">        Return a URL for viewing the Dags in S3. Currently, versioning is not supported.</span>
+            <span class="n">unpack_dir</span> <span class="o">=</span> <span class="n">staging_dir</span> <span class="o">/</span> <span class="s2">"unpacked"</span>
+            <span class="n">unpack_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">()</span>
+            <span class="n">_extract_archive</span><span class="p">(</span><span class="n">archive_path</span><span class="p">,</span> <span class="n">unpack_dir</span><span class="p">)</span>
+            <span class="n">archive_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
 
-<span class="sd">        This method is deprecated and will be removed when the minimum supported Airflow version is 3.1.</span>
-<span class="sd">        Use `view_url_template` instead.</span>
-<span class="sd">        """</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_url_template</span><span class="p">()</span></div>
+            <span class="n">backup_dir</span> <span class="o">=</span> <span class="n">staging_dir</span> <span class="o">/</span> <span class="s2">"previous"</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">backup_dir</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">unpack_dir</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">backup_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+                    <span class="n">backup_dir</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">)</span>
+                <span class="k">raise</span>
 
+            <span class="n">marker_etag</span> <span class="o">=</span> <span class="n">downloaded_etag</span> <span class="ow">or</span> <span class="n">etag</span>
+            <span class="k">if</span> <span class="n">marker_etag</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_get_archive_etag_path</span><span class="p">()</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">marker_etag</span><span class="p">)</span>
 
-<div class="viewcode-block" id="S3DagBundle.view_url_template">
-<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/bundles/s3/index.html#airflow.providers.amazon.aws.bundles.s3.S3DagBundle.view_url_template">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">view_url_template</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Return a URL for viewing the Dags in S3. Currently, versioning is not supported."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">AirflowException</span><span class="p">(</span><span class="s2">"S3 url with version is not supported"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_view_url_template"</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view_url_template</span><span class="p">:</span>
-            <span class="c1"># Because we use this method in the view_url method, we need to handle</span>
-            <span class="c1"># backward compatibility for Airflow versions that doesn't have the</span>
-            <span class="c1"># _view_url_template attribute. Should be removed when we drop support for Airflow 3.0</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_view_url_template</span>
-        <span class="c1"># https://&lt;bucket-name&gt;.s3.&lt;region&gt;.amazonaws.com/&lt;object-key&gt;</span>
-        <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="si">}</span><span class="s2">.s3"</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">region_name</span><span class="p">:</span>
-            <span class="n">url</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">".</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">s3_hook</span><span class="o">.</span><span class="n">region_name</span><span class="si">}</span><span class="s2">"</span>
-        <span class="n">url</span> <span class="o">+=</span> <span class="s2">".amazonaws.com"</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">:</span>
-            <span class="n">url</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">"</span>
-
-        <span class="k">return</span> <span class="n">url</span></div>
-</div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">"Staged Dag bundle from archive 's3://</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">' (</span><span class="si">%s</span><span class="s2"> bytes) to </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bucket_name</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">archive_key</span><span class="p">,</span>
+                <span class="n">head</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ContentLength"</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">s3_dags_dir</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">staging_dir</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
 
 </pre></div>
 
@@ -1145,7 +1316,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

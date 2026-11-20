@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -503,7 +503,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -716,12 +716,14 @@ Pydantic AI toolsets, but the Pydantic AI class they inherit from can change.</p
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> and <a class="reference internal" href="_api/airflow/providers/common/ai/operators/llm/index.html#airflow.providers.common.ai.operators.llm.LLMOperator" title="airflow.providers.common.ai.operators.llm.LLMOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMOperator</span></code></a></p></td>
 <td><p>Sends the prompt to the model from <code class="docutils literal notranslate"><span class="pre">llm_conn_id</span></code> and returns the output as the
 task’s return value: a string by default, or an instance of <code class="docutils literal notranslate"><span class="pre">output_type</span></code>,
-dumped to a dict when <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code>. Before Airflow 3.3 an instance is
-always dumped to a dict. <code class="docutils literal notranslate"><span class="pre">decision_policy</span></code> is experimental; see below.</p></td>
+dumped to a dict when <code class="docutils literal notranslate"><span class="pre">serialize_output=True</span></code>. Some models arrive as dicts without it;
+see <a class="reference internal" href="structured_output.html#structured-output-dict-shape"><span class="std std-ref">When a model arrives as a dict</span></a>.
+<code class="docutils literal notranslate"><span class="pre">decision_policy</span></code> is experimental; see below.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> and <a class="reference internal" href="_api/airflow/providers/common/ai/operators/agent/index.html#airflow.providers.common.ai.operators.agent.AgentOperator" title="airflow.providers.common.ai.operators.agent.AgentOperator"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentOperator</span></code></a></p></td>
 <td><p>Runs an agent with the model from <code class="docutils literal notranslate"><span class="pre">llm_conn_id</span></code> and the given toolsets, and
-returns its output under the same rules as <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code>. Code mode is
+returns its output as the task’s return value. Some models arrive as dicts; see
+<a class="reference internal" href="structured_output.html#structured-output-dict-shape"><span class="std std-ref">When a model arrives as a dict</span></a>. Code mode is
 experimental; see below.</p></td>
 </tr>
 <tr class="row-even"><td><p>Per-tool approval on <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> (<a class="reference internal" href="tool_approval.html"><span class="doc">Approve an agent’s tool calls</span></a>)</p></td>
@@ -775,8 +777,9 @@ are sent to the model with the options. <code class="docutils literal notranslat
 <td><p>Generates SQL from the prompt and returns it without running it. With
 <code class="docutils literal notranslate"><span class="pre">validate_sql=True</span></code>, the default, the task fails unless the output is a single
 statement that parses for <code class="docutils literal notranslate"><span class="pre">dialect</span></code> and is one of <code class="docutils literal notranslate"><span class="pre">allowed_sql_types</span></code>
-(<code class="docutils literal notranslate"><span class="pre">SELECT</span></code>, <code class="docutils literal notranslate"><span class="pre">UNION</span></code>, <code class="docutils literal notranslate"><span class="pre">INTERSECT</span></code> and <code class="docutils literal notranslate"><span class="pre">EXCEPT</span></code> by default); with the default
-types, a write nested inside the statement fails it too. A reviewer’s edit under
+(<code class="docutils literal notranslate"><span class="pre">SELECT</span></code>, <code class="docutils literal notranslate"><span class="pre">UNION</span></code>, <code class="docutils literal notranslate"><span class="pre">INTERSECT</span></code> and <code class="docutils literal notranslate"><span class="pre">EXCEPT</span></code> by default); unless
+<code class="docutils literal notranslate"><span class="pre">allowed_sql_types</span></code> admits a write, a write nested inside the statement fails it
+too. A reviewer’s edit under
 <code class="docutils literal notranslate"><span class="pre">allow_modifications=True</span></code> is checked the same way. <code class="docutils literal notranslate"><span class="pre">db_conn_id</span></code> with
 <code class="docutils literal notranslate"><span class="pre">table_names</span></code>, <code class="docutils literal notranslate"><span class="pre">schema_context</span></code> or <code class="docutils literal notranslate"><span class="pre">datasource_config</span></code> give the model the
 schema. <code class="docutils literal notranslate"><span class="pre">datasource_config</span></code> reads object storage through the DataFusion engine of
@@ -823,7 +826,8 @@ connection types</p></td>
 keeps producing the same model.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset" title="airflow.providers.common.ai.toolsets.sql.SQLToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SQLToolset</span></code></a></p></td>
-<td><p>Exposes <code class="docutils literal notranslate"><span class="pre">list_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schema</span></code>, <code class="docutils literal notranslate"><span class="pre">query</span></code> and <code class="docutils literal notranslate"><span class="pre">check_query</span></code>. Read-only
+<td><p>Exposes <code class="docutils literal notranslate"><span class="pre">list_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">get_schema</span></code>, <code class="docutils literal notranslate"><span class="pre">query</span></code> and <code class="docutils literal notranslate"><span class="pre">check_query</span></code>, each named
+<code class="docutils literal notranslate"><span class="pre">&lt;tool_prefix&gt;_&lt;name&gt;</span></code> when <code class="docutils literal notranslate"><span class="pre">tool_prefix</span></code> is set. Read-only
 unless <code class="docutils literal notranslate"><span class="pre">allow_writes=True</span></code>. When <code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code> is set, other tables are
 refused. <code class="docutils literal notranslate"><span class="pre">query</span></code> returns at most <code class="docutils literal notranslate"><span class="pre">max_rows</span></code> rows, and keeps the rows and column
 names within <code class="docutils literal notranslate"><span class="pre">max_result_bytes</span></code> bytes. When <code class="docutils literal notranslate"><span class="pre">query</span></code> fails or refuses a
@@ -934,7 +938,7 @@ before their 1.0 releases.</p></td>
 still open.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_api/airflow/providers/common/ai/toolsets/sandbox/index.html#airflow.providers.common.ai.toolsets.sandbox.SandboxToolset" title="airflow.providers.common.ai.toolsets.sandbox.SandboxToolset"><code class="xref py py-class docutils literal notranslate"><span class="pre">SandboxToolset</span></code></a> and its
-backends (<a class="reference internal" href="sandbox/index.html"><span class="doc">Sandboxed execution for agents</span></a>)</p></td>
+backends (<a class="reference internal" href="sandbox/index.html"><span class="doc">Sandboxes</span></a>)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> cannot be used with it yet, the <code class="docutils literal notranslate"><span class="pre">sbx</span></code> backend leaves its sandbox
 behind when the worker is killed, and the backend contract is still gaining
 capabilities, such as attaching to a sandbox another task owns.</p></td>
@@ -1294,7 +1298,7 @@ changing; the metric’s tags may change as more frameworks get adapters.</p></t
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

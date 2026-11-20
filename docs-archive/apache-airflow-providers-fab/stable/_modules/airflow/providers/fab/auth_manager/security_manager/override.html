@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.11.0</span>
+        <span class="version-label">Version: </span><span class="version">3.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -487,7 +487,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">3.11.0</span>
+        <span class="version-label">Version: </span><span class="version">3.11.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -2590,8 +2590,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">password</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">hashed_password</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">groups</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Group</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">"""Create a user."""</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a user; return ``None`` if it cannot be saved."""</span>
         <span class="n">roles</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Role</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">if</span> <span class="n">role</span><span class="p">:</span>
             <span class="n">roles</span> <span class="o">=</span> <span class="n">role</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">role</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="n">role</span><span class="p">]</span>
@@ -2617,8 +2617,33 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">const</span><span class="o">.</span><span class="n">LOGMSG_ERR_SEC_ADD_USER</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
-            <span class="k">raise</span> <span class="n">FabException</span><span class="p">(</span><span class="n">const</span><span class="o">.</span><span class="n">LOGMSG_ERR_SEC_ADD_USER</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
+            <span class="k">return</span> <span class="kc">None</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_register_user_on_login</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">first_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">last_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">role</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Role</span><span class="p">]</span> <span class="o">|</span> <span class="n">Role</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Create a user on first login; return ``None`` if no active user can be used.</span>
+
+<span class="sd">        A parallel first login for the same username can win the insert, so the</span>
+<span class="sd">        user it created is used instead of denying this login.</span>
+<span class="sd">        """</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_user</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span> <span class="n">first_name</span><span class="o">=</span><span class="n">first_name</span><span class="p">,</span> <span class="n">last_name</span><span class="o">=</span><span class="n">last_name</span><span class="p">,</span> <span class="n">email</span><span class="o">=</span><span class="n">email</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="n">role</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_user</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"User </span><span class="si">%s</span><span class="s2"> was registered by a parallel login, using that user"</span><span class="p">,</span> <span class="n">username</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_active</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">user</span>
 
 <div class="viewcode-block" id="FabAirflowSecurityManagerOverride.load_user">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/fab/auth_manager/security_manager/override/index.html#airflow.providers.fab.auth_manager.security_manager.override.FabAirflowSecurityManagerOverride.load_user">[docs]</a>
@@ -3315,7 +3340,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
             <span class="c1"># If the user is new, register them</span>
             <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">user</span><span class="p">)</span> <span class="ow">and</span> <span class="n">user_attributes</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_user_registration</span><span class="p">:</span>
-                <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_user</span><span class="p">(</span>
+                <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_register_user_on_login</span><span class="p">(</span>
                     <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
                     <span class="n">first_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ldap_extract</span><span class="p">(</span><span class="n">user_attributes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_ldap_firstname_field</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
                     <span class="n">last_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ldap_extract</span><span class="p">(</span><span class="n">user_attributes</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_ldap_lastname_field</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
@@ -3492,7 +3517,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="c1"># If the user is new, register them</span>
         <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">user</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_user_registration</span><span class="p">:</span>
-            <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_user</span><span class="p">(</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_register_user_on_login</span><span class="p">(</span>
                 <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
                 <span class="n">first_name</span><span class="o">=</span><span class="n">userinfo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"first_name"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
                 <span class="n">last_name</span><span class="o">=</span><span class="n">userinfo</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"last_name"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
@@ -3679,7 +3704,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="c1"># User does not exist, create one if auto user registration.</span>
         <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_user_registration</span><span class="p">:</span>
-            <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_user</span><span class="p">(</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_register_user_on_login</span><span class="p">(</span>
                 <span class="c1"># All we have is REMOTE_USER, so we set</span>
                 <span class="c1"># the other fields to blank.</span>
                 <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
@@ -3690,8 +3715,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
 
         <span class="c1"># If user does not exist on the DB and not auto user registration,</span>
-        <span class="c1"># or user is inactive, go away.</span>
-        <span class="k">elif</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_active</span><span class="p">):</span>
+        <span class="c1"># registration failed, or user is inactive, go away.</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">is_active</span><span class="p">):</span>
             <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">LOGMSG_WAR_SEC_LOGIN_FAILED</span><span class="p">,</span> <span class="n">username</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
@@ -4534,7 +4559,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=8905d4f5"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=2d7d50ec"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

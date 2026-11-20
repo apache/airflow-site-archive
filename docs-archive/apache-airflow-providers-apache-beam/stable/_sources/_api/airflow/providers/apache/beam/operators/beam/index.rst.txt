@@ -172,6 +172,24 @@ Module Contents
        For more information on how to use this operator, take a look at the guide:
        :ref:`howto/operator:BeamRunPythonPipelineOperator`
 
+   .. warning::
+       When running with the ``DataflowRunner``, the operator stops reading from and waiting
+       on the local Python subprocess as soon as the Dataflow Job ID is detected, and monitors
+       the job via the Dataflow API instead (or defers when ``deferrable=True``).
+
+       This means any **additional code** in your ``py_file`` that is written to execute
+       *after* the pipeline block (e.g., local post-processing, file uploads, or local logging
+       on the Airflow worker) is not waited on and may not be executed, especially in
+       deferrable mode where the worker task yields immediately upon deferral.
+
+       If you require local post-processing, split the post-processing into a separate
+       Airflow task (e.g., using ``PythonOperator``).
+
+       Also note that when ``dataflow_config.append_job_name=False`` and the launcher does not
+       log a Job ID within 5 seconds, the fallback lookup by job name may attach to an already
+       running job with the same name from a concurrent run instead of waiting for the launcher
+       to fail with a duplicate job name error.
+
    .. seealso::
        For more detail on Apache Beam have a look at the reference:
        https://beam.apache.org/documentation/
@@ -275,6 +293,24 @@ Module Contents
    .. seealso::
        For more information on how to use this operator, take a look at the guide:
        :ref:`howto/operator:BeamRunJavaPipelineOperator`
+
+   .. warning::
+       When running with the ``DataflowRunner``, the operator stops reading from and waiting
+       on the local Java subprocess as soon as the Dataflow Job ID is detected, and monitors
+       the job via the Dataflow API instead (or defers when ``deferrable=True``).
+
+       This means any **additional code** in your self-executing ``jar`` that is written to
+       execute locally *after* the pipeline finishes on the worker is not waited on and may
+       not be executed, especially in deferrable mode where the worker task yields immediately
+       upon deferral.
+
+       If you require local post-processing, split the post-processing into a separate
+       Airflow task.
+
+       Also note that when ``dataflow_config.append_job_name=False`` and the launcher does not
+       log a Job ID within 5 seconds, the fallback lookup by job name may attach to an already
+       running job with the same name from a concurrent run instead of waiting for the launcher
+       to fail with a duplicate job name error.
 
    .. seealso::
        For more detail on Apache Beam have a look at the reference:

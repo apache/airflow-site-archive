@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.0.0</span>
+        <span class="version-label">Version: </span><span class="version">4.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -475,7 +475,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.0.0</span>
+        <span class="version-label">Version: </span><span class="version">4.0.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -679,9 +679,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">celery</span><span class="w"> </span><span class="kn">import</span> <span class="n">Celery</span><span class="p">,</span> <span class="n">states</span> <span class="k">as</span> <span class="n">celery_states</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">celery.backends.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseKeyValueStoreBackend</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">celery.backends.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseBackend</span><span class="p">,</span> <span class="n">Task</span> <span class="k">as</span> <span class="n">TaskDb</span><span class="p">,</span> <span class="n">retry</span><span class="p">,</span> <span class="n">session_cleanup</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">celery.backends.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseBackend</span><span class="p">,</span> <span class="n">Task</span> <span class="k">as</span> <span class="n">TaskDb</span><span class="p">,</span> <span class="n">session_cleanup</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">celery.signals</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_modules</span> <span class="k">as</span> <span class="n">celery_import_modules</span><span class="p">,</span> <span class="n">worker_ready</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.exc</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabaseError</span><span class="p">,</span> <span class="n">InterfaceError</span><span class="p">,</span> <span class="n">InvalidRequestError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm.exc</span><span class="w"> </span><span class="kn">import</span> <span class="n">StaleDataError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tenacity</span><span class="w"> </span><span class="kn">import</span> <span class="n">before_sleep_log</span><span class="p">,</span> <span class="n">retry</span><span class="p">,</span> <span class="n">retry_if_exception_type</span><span class="p">,</span> <span class="n">stop_after_attempt</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.executors.base_executor</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseExecutor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.celery.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -985,6 +988,16 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">log_path</span><span class="o">=</span><span class="n">workload</span><span class="o">.</span><span class="n">log_path</span><span class="p">,</span>
                 <span class="n">subprocess_logs_to_stdout</span><span class="o">=</span><span class="n">subprocess_logs_to_stdout</span><span class="p">,</span>
             <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">AIRFLOW_V_3_2_PLUS</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">workload</span><span class="p">,</span> <span class="n">workloads</span><span class="o">.</span><span class="n">ExecuteCallback</span><span class="p">):</span>
+            <span class="c1"># Airflow 3.3 runs callbacks in BaseExecutor.run_workload(). Airflow 3.2 still</span>
+            <span class="c1"># queues deadline alerts as ExecuteCallback and provides execute_callback_workload.</span>
+            <span class="n">execute_callback_workload</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">import_module</span><span class="p">(</span><span class="s2">"airflow.executors.workloads.callback"</span><span class="p">),</span>
+                <span class="s2">"execute_callback_workload"</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">success</span><span class="p">,</span> <span class="n">error_msg</span> <span class="o">=</span> <span class="n">execute_callback_workload</span><span class="p">(</span><span class="n">workload</span><span class="o">.</span><span class="n">callback</span><span class="p">,</span> <span class="n">log</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">success</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">error_msg</span> <span class="ow">or</span> <span class="s2">"Callback execution failed"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CeleryExecutor does not know how to handle </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">workload</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1251,7 +1264,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_state_and_info_by_task_dict</span><span class="p">(</span><span class="n">task_ids</span><span class="p">,</span> <span class="n">task_results_by_task_id</span><span class="p">)</span>
 
-    <span class="nd">@retry</span>
+    <span class="nd">@retry</span><span class="p">(</span>
+        <span class="n">retry</span><span class="o">=</span><span class="n">retry_if_exception_type</span><span class="p">((</span><span class="n">DatabaseError</span><span class="p">,</span> <span class="n">InterfaceError</span><span class="p">,</span> <span class="n">InvalidRequestError</span><span class="p">,</span> <span class="n">StaleDataError</span><span class="p">)),</span>
+        <span class="n">stop</span><span class="o">=</span><span class="n">stop_after_attempt</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+        <span class="n">before_sleep</span><span class="o">=</span><span class="n">before_sleep_log</span><span class="p">(</span><span class="n">log</span><span class="p">,</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">),</span>
+        <span class="n">reraise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_query_task_cls_from_db_backend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_ids</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">celery_app</span><span class="o">.</span><span class="n">backend</span><span class="o">.</span><span class="n">ResultSession</span><span class="p">()</span>
         <span class="n">task_cls</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">celery_app</span><span class="o">.</span><span class="n">backend</span><span class="p">,</span> <span class="s2">"task_cls"</span><span class="p">,</span> <span class="n">TaskDb</span><span class="p">)</span>
@@ -1568,7 +1586,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=3304f9e4"></script>
+        <script src="../../../../../_static/documentation_options.js?v=977c7dfd"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

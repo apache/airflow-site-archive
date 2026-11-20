@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -733,8 +733,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">attempt -- a ``datetime`` or ``Decimal`` tool argument, a dataclass in</span>
 <span class="sd">``tool_choice`` -- still produces a usable fingerprint.</span>
 <span class="sd">The ``capability_id`` of a tool from a capability without an ``id`` is left out</span>
-<span class="sd">of the request parameters, since it is random per run, and so is</span>
-<span class="sd">``deferred_capability_ids`` (see ``_normalize_params``).</span>
+<span class="sd">of the request parameters, since it is random per run, and so are</span>
+<span class="sd">``deferred_capability_ids`` and the ``airflow`` key of a tool's metadata, which</span>
+<span class="sd">only decides whether the tool replays (see ``_normalize_params``).</span>
 
 <span class="sd">That rendering is hashed as it is, with two exceptions.  Both are found by</span>
 <span class="sd">dumping the payload a second time in pydantic's python mode, which has the same</span>
@@ -794,8 +795,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">TypeAdapter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelMessagesTypeAdapter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelRequestParameters</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_jsonable_python</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticSerializationError</span><span class="p">,</span> <span class="n">to_jsonable_python</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">TOOL_CONFIG_KEY</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.prompt_cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">PROMPT_CACHE_SETTING_NAMES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.task_logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_logger</span>
@@ -805,6 +807,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelMessage</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelSettings</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeferredToolRequests</span>
 
 <div class="viewcode-block" id="log">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/durable/fingerprint/index.html#airflow.providers.common.ai.durable.fingerprint.log">[docs]</a>
@@ -909,11 +912,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_normalize_params</span><span class="p">(</span><span class="n">params_dump</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Drop capability ids and sort set-valued fields from dumped request parameters.</span>
+<span class="sd">    Drop capability ids and the replay opt-out, and sort set-valued fields, in dumped request parameters.</span>
 
 <span class="sd">    A capability without an explicit ``id`` gets a random one per run (``&lt;toolset:d0d75e&gt;``),</span>
 <span class="sd">    stamped on its tools' ``capability_id``, so hashing it would make every retry miss the</span>
-<span class="sd">    cache. A set dumps in iteration order, which differs between processes (``PYTHONHASHSEED``),</span>
+<span class="sd">    cache. A tool's ``airflow`` metadata decides only whether the tool replays, and the model</span>
+<span class="sd">    never sees it, so turning it on or off between attempts leaves the requests' fingerprints</span>
+<span class="sd">    as they were. A set dumps in iteration order, which differs between processes (``PYTHONHASHSEED``),</span>
 <span class="sd">    and a retry runs in a new process, so ``revealed_tool_names`` is sorted.</span>
 <span class="sd">    ``deferred_capability_ids`` is a set of explicit ids and is dropped rather than sorted: a</span>
 <span class="sd">    deferred capability's id reaches the model through the capability catalog in the</span>
@@ -922,7 +927,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">cleaned</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">params_dump</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">"deferred_capability_ids"</span><span class="p">}</span>
     <span class="n">cleaned</span><span class="p">[</span><span class="s2">"revealed_tool_names"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">cleaned</span><span class="p">[</span><span class="s2">"revealed_tool_names"</span><span class="p">])</span>
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"function_tools"</span><span class="p">,</span> <span class="s2">"output_tools"</span><span class="p">):</span>
-        <span class="n">cleaned</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tool</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">"capability_id"</span><span class="p">}</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span>
+        <span class="n">cleaned</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">_normalize_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span>
+    <span class="k">return</span> <span class="n">cleaned</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalize_tool</span><span class="p">(</span><span class="n">tool</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="n">cleaned</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tool</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">"capability_id"</span><span class="p">}</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">cleaned</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"metadata"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="c1"># Empty metadata hashes like none, so ``{}`` and ``{"airflow": False}`` match too.</span>
+        <span class="n">cleaned</span><span class="p">[</span><span class="s2">"metadata"</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">metadata</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="n">TOOL_CONFIG_KEY</span><span class="p">}</span> <span class="ow">or</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">cleaned</span>
 
 
@@ -1165,6 +1179,12 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">guide</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">dump_python</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">False</span>
+    <span class="k">except</span> <span class="n">PydanticSerializationError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="c1"># pydantic-ai 2.66 serializes a tool return through a wrapping field serializer, and pydantic</span>
+        <span class="c1"># re-raises the ``TypeError`` from inside it as this error, keeping only its message.</span>
+        <span class="k">if</span> <span class="s2">"unhashable type"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">):</span>
+            <span class="k">raise</span>
+        <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">False</span>
     <span class="k">return</span> <span class="n">guide</span><span class="p">,</span> <span class="n">_check_guide</span><span class="p">(</span><span class="n">guide</span><span class="p">)</span>
 
 
@@ -1226,7 +1246,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    The ``ModelRequestParameters`` object is hashed (tool definitions, output</span>
 <span class="sd">    mode and schema, native tools, ...) so any change to what is sent to the</span>
 <span class="sd">    model invalidates the cached response; only each tool's ``capability_id`` and</span>
-<span class="sd">    ``deferred_capability_ids`` are left out.</span>
+<span class="sd">    ``airflow`` metadata key, and ``deferred_capability_ids``, are left out.</span>
 
 <span class="sd">    Returns ``None`` when the request cannot be fingerprinted. The journal then</span>
 <span class="sd">    replays the step without verification, and only right after a step that</span>
@@ -1319,6 +1339,28 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">step</span><span class="o">=</span><span class="n">step</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="fingerprint_deferred_tool_requests">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/durable/fingerprint/index.html#airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fingerprint_deferred_tool_requests</span><span class="p">(</span><span class="n">requests</span><span class="p">:</span> <span class="n">DeferredToolRequests</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Fingerprint tool calls waiting to be settled, such as approved, from each call's :func:`fingerprint_tool_call`.</span>
+
+<span class="sd">    The answer recorded for these calls then replays only for calls with the same names,</span>
+<span class="sd">    arguments and call ids, which a replayed model response keeps. ``None`` when any call</span>
+<span class="sd">    cannot be fingerprinted.</span>
+<span class="sd">    """</span>
+    <span class="n">calls</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">kind</span><span class="p">:</span> <span class="p">[</span>
+            <span class="n">fingerprint_tool_call</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span> <span class="n">call</span><span class="o">.</span><span class="n">args_as_dict</span><span class="p">(),</span> <span class="n">call</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">call</span> <span class="ow">in</span> <span class="n">pending</span>
+        <span class="p">]</span>
+        <span class="k">for</span> <span class="n">kind</span><span class="p">,</span> <span class="n">pending</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"approvals"</span><span class="p">,</span> <span class="n">requests</span><span class="o">.</span><span class="n">approvals</span><span class="p">),</span> <span class="p">(</span><span class="s2">"calls"</span><span class="p">,</span> <span class="n">requests</span><span class="o">.</span><span class="n">calls</span><span class="p">))</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">fingerprint</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">pending</span> <span class="ow">in</span> <span class="n">calls</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">for</span> <span class="n">fingerprint</span> <span class="ow">in</span> <span class="n">pending</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">_digest</span><span class="p">(</span><span class="n">calls</span><span class="p">)</span></div>
 
 </pre></div>
 
@@ -1579,7 +1621,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
