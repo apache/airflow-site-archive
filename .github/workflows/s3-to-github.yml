@@ -249,29 +249,57 @@ jobs:
       - name: Committing live changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: main
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
           git config user.email "actions@users.noreply.github.com"
           echo "Running git add"
           git add --verbose .
+          if git diff --cached --quiet; then
+            echo -e "\e[32mNo changes to commit\e[0m"
+            exit 0
+          fi
           echo "Running git commit"
-          git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+          git commit -m "Sync S3 to GitHub"
+          # The branch can move during the hours-long sync, so replay the commit onto its tip.
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin "${BRANCH}"
+            git rebase --onto FETCH_HEAD HEAD~1
+            if git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            echo "Push to ${BRANCH} rejected (attempt ${attempt}/3)"
+          done
+          exit 1
         working-directory: /mnt/cloned-airflow-site-archive
         if: inputs.commit-changes == true && github.ref == 'refs/heads/main' && inputs.source == 'live'
 
       - name: Committing staging changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: staging
         run: |
           echo "Running git config"
           git config user.name "GitHub Actions"
           git config user.email "actions@users.noreply.github.com"
           echo "Running git add"
           git add --verbose .
+          if git diff --cached --quiet; then
+            echo -e "\e[32mNo changes to commit\e[0m"
+            exit 0
+          fi
           echo "Running git commit"
-          git commit -m "Sync S3 to GitHub" || echo -e "\e[32mNo changes to commit\e[0m"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:staging
+          git commit -m "Sync S3 to GitHub"
+          # The branch can move during the hours-long sync, so replay the commit onto its tip.
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin "${BRANCH}"
+            git rebase --onto FETCH_HEAD HEAD~1
+            if git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            echo "Push to ${BRANCH} rejected (attempt ${attempt}/3)"
+          done
+          exit 1
         working-directory: /mnt/cloned-airflow-site-archive
         if: inputs.commit-changes == true && github.ref == 'refs/heads/staging' && inputs.source == 'staging'
