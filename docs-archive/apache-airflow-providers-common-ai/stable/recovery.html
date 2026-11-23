@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -510,7 +510,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -732,7 +732,8 @@ completed. To decide whether a failure is worth retrying at all, see
 tool result, and continues the run.</p></td>
 </tr>
 <tr class="row-odd"><td><p>Every connection in the chain fails, and the task raises
-<code class="docutils literal notranslate"><span class="pre">pydantic_ai.exceptions.FallbackExceptionGroup</span></code></p></td>
+<code class="docutils literal notranslate"><span class="pre">FallbackChainExhaustedError</span></code> (a <code class="docutils literal notranslate"><span class="pre">pydantic_ai.exceptions.FallbackExceptionGroup</span></code>;
+see <a class="reference internal" href="provider_fallback.html"><span class="doc">Provider fallback</span></a> for which tasks raise it)</p></td>
 <td><p>Airflow <code class="docutils literal notranslate"><span class="pre">retries</span></code> with <code class="docutils literal notranslate"><span class="pre">durable=True</span></code></p></td>
 <td><p>Replayed. The retry replays the steps an earlier attempt recorded, whichever
 connection answered them, and continues on the first connection that answers now.</p></td>
@@ -827,10 +828,12 @@ primary’s <code class="docutils literal notranslate"><span class="pre">timeout
 <section id="retries-after-the-whole-chain-fails">
 <h2>Retries after the whole chain fails<a class="headerlink" href="#retries-after-the-whole-chain-fails" title="Link to this heading">¶</a></h2>
 <p>With <code class="docutils literal notranslate"><span class="pre">durable=True</span></code>, each step is recorded in the task instance’s journal whichever
-connection answered it. When every connection fails, the task raises
-<code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code> and Airflow retries it. The retry replays the recorded steps,
-then sends its first live request through the chain from the top. The run continues on
-the first connection that answers, whether or not that is the one that answered before.</p>
+connection answered it. When every connection fails, the operator (or <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> /
+<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>) raises <code class="docutils literal notranslate"><span class="pre">FallbackChainExhaustedError</span></code>, and a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> with
+<code class="docutils literal notranslate"><span class="pre">AirflowDurability</span></code> raises the bare <code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code> (see
+<a class="reference internal" href="provider_fallback.html"><span class="doc">Provider fallback</span></a>). Airflow retries either one. The retry replays the recorded steps,
+then sends its first live request through the chain from the top. The run continues on the
+first connection that answers, whether or not that is the one that answered before.</p>
 <p>A recorded model step replays only if the retry’s request has the same fingerprint, and
 for a chain the model in the fingerprint is the whole chain, whichever connection
 answered. Adding, removing or reordering a connection in <code class="docutils literal notranslate"><span class="pre">fallback_conn_ids</span></code>, or
@@ -845,11 +848,18 @@ not. “How a retry replays” in <a class="reference internal" href="durable_ex
 whose worker died before its result was recorded. Make such tools idempotent; see
 “Side effects and idempotency” in <a class="reference internal" href="durable_execution.html"><span class="doc">Durable execution</span></a>.</p></li>
 <li><p>A request every provider rejects, such as a malformed one that each returns a 400
-for, walks the whole chain on every attempt. A <code class="docutils literal notranslate"><span class="pre">RetryRule</span></code> cannot stop those retries
-without stopping outage retries too: once a chain is configured, both raise
-<code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code>, and a rule compares only that top-level type. Retry
-policies need Airflow 3.3 or later; see “When the connection also carries a fallback
-chain” in <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a>.</p></li>
+for, walks the whole chain on every attempt. The error the task raises is a
+<code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code>: <code class="docutils literal notranslate"><span class="pre">FallbackChainExhaustedError</span></code>, carrying each connection’s
+error in <code class="docutils literal notranslate"><span class="pre">member_errors</span></code>, from the operators and decorators, and the plain group from a
+hand-built agent (see <a class="reference internal" href="provider_fallback.html"><span class="doc">Provider fallback</span></a>). <code class="docutils literal notranslate"><span class="pre">LLMRetryPolicy</span></code> and
+<code class="docutils literal notranslate"><span class="pre">ClassifierRetryPolicy</span></code> match their <code class="docutils literal notranslate"><span class="pre">fallback_rules</span></code> against the last connection’s
+error too, so a rule can fail a permanent error such as a bad request without failing
+outage retries, provided the two raise different exception types. Telling a rate limit
+from a bad request needs <code class="docutils literal notranslate"><span class="pre">ModelRateLimitError</span></code> and <code class="docutils literal notranslate"><span class="pre">ModelRequestRejectedError</span></code>
+rules; see <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a> for the pydantic-ai-slim versions that have them. A plain
+<code class="docutils literal notranslate"><span class="pre">ExceptionRetryPolicy</span></code> compares only the group, and a retry still counts against
+<code class="docutils literal notranslate"><span class="pre">retries</span></code>. Retry policies need Airflow 3.3 or later; see “When the connection also
+carries a fallback chain” in <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a>.</p></li>
 <li><p>No connection type builds the <code class="docutils literal notranslate"><span class="pre">AnthropicVertex</span></code> client that Claude on Vertex AI
 needs, so a chain cannot include Claude on Vertex AI. A Vertex AI connection reaches
 Gemini.</p></li>
@@ -860,8 +870,8 @@ Agents agent run through <code class="docutils literal notranslate"><span class=
 Airflow 3.3 and later (<a class="reference internal" href="frameworks/strands.html#howto-frameworks-strands-durable"><span class="std std-ref">Durable execution with Strands</span></a>), and a retried
 <code class="docutils literal notranslate"><span class="pre">LLMBatchOperator</span></code> re-attaches to its running batch (<a class="reference internal" href="operators/llm_batch.html#llm-batch-reattach"><span class="std std-ref">Retries re-attach instead of re-submitting</span></a>).</p></li>
 <li><p>A <code class="docutils literal notranslate"><span class="pre">ManagedAgentToolset</span></code> runs again on every attempt unless it is built with
-<code class="docutils literal notranslate"><span class="pre">replayable=True</span></code>. Durable execution cannot be combined with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>,
-a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code> or tool approval; see the limitations in <a class="reference internal" href="durable_execution.html"><span class="doc">Durable execution</span></a>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">replayable=True</span></code>. Durable execution cannot be combined with a
+<code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code>; see the limitations in <a class="reference internal" href="durable_execution.html"><span class="doc">Durable execution</span></a>.</p></li>
 </ul>
 </section>
 </section>
@@ -1166,7 +1176,7 @@ a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</s
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

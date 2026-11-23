@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.1.0</span>
+        <span class="version-label">Version: </span><span class="version">0.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -413,6 +413,11 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../connections.html">Connection types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../usage.html">Using Modal from Airflow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../task_decorator.html">Running a Python function on Modal</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System tests</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../_api/tests/system/modal/index.html">System Tests</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
@@ -473,7 +478,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">0.1.0</span>
+        <span class="version-label">Version: </span><span class="version">0.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -520,6 +525,11 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../connections.html">Connection types</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../usage.html">Using Modal from Airflow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../task_decorator.html">Running a Python function on Modal</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">System tests</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../_api/tests/system/modal/index.html">System Tests</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
@@ -653,17 +663,26 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">weakref</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached_property</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">modal</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.connection</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_async_connection</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowNotFoundException</span><span class="p">,</span> <span class="n">BaseHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.modal.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModalConnectionError</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Connection</span>
+
+<span class="c1"># Async clients shared across hook instances in this process, keyed on (pid, token id, token secret).</span>
+<span class="n">_async_clients</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">modal</span><span class="o">.</span><span class="n">Client</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">_async_client_locks</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakKeyDictionary</span><span class="p">[</span><span class="n">asyncio</span><span class="o">.</span><span class="n">AbstractEventLoop</span><span class="p">,</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Lock</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">weakref</span><span class="o">.</span><span class="n">WeakKeyDictionary</span><span class="p">()</span>
+<span class="p">)</span>
 
 
 <div class="viewcode-block" id="ModalHook">
@@ -741,22 +760,29 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">AirflowNotFoundException</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_conn_name</span><span class="p">:</span>
-                <span class="k">raise</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">"Connection </span><span class="si">%r</span><span class="s2"> not found; using ambient Modal credentials (MODAL_TOKEN_ID / "</span>
-                <span class="s2">"MODAL_TOKEN_SECRET or ~/.modal.toml)."</span><span class="p">,</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span><span class="p">,</span>
-            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">AirflowNotFoundException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fall_back_to_ambient</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fall_back_to_ambient</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="n">AirflowNotFoundException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Accept a missing default connection, meaning "use ambient credentials"; re-raise any other."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_conn_name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">error</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"Connection </span><span class="si">%r</span><span class="s2"> not found; using ambient Modal credentials (MODAL_TOKEN_ID / "</span>
+            <span class="s2">"MODAL_TOKEN_SECRET or ~/.modal.toml)."</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="nd">@cached_property</span>
 <div class="viewcode-block" id="ModalHook.credentials">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/modal/hooks/modal/index.html#airflow.providers.modal.hooks.modal.ModalHook.credentials">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">credentials</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Token id and secret from the connection, or ``None`` to defer to the Modal SDK."""</span>
-        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_credentials_from</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_credentials_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">Connection</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">conn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">token_id</span><span class="p">,</span> <span class="n">token_secret</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">login</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">password</span> <span class="ow">or</span> <span class="s2">""</span>
@@ -768,8 +794,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">token_id</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">return</span> <span class="n">token_id</span><span class="p">,</span> <span class="n">token_secret</span></div>
-
+        <span class="k">return</span> <span class="n">token_id</span><span class="p">,</span> <span class="n">token_secret</span>
 
     <span class="nd">@cached_property</span>
 <div class="viewcode-block" id="ModalHook.environment_name">
@@ -814,6 +839,59 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="k">def</span><span class="w"> </span><span class="nf">get_conn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">modal</span><span class="o">.</span><span class="n">Client</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Return the Modal client for this connection (same cached object as :attr:`client`)."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span></div>
+
+
+<div class="viewcode-block" id="ModalHook.get_async_client">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/modal/hooks/modal/index.html#airflow.providers.modal.hooks.modal.ModalHook.get_async_client">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_async_client</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">modal</span><span class="o">.</span><span class="n">Client</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return a Modal client for async callers, such as a trigger, without blocking the event loop.</span>
+
+<span class="sd">        The connection is looked up asynchronously, and the client is built with the Modal SDK's</span>
+<span class="sd">        ``.aio`` constructors. Use it with the ``.aio`` form of SDK calls, for example</span>
+<span class="sd">        ``await modal.Sandbox.from_id.aio(sandbox_id, client=client)``.</span>
+
+<span class="sd">        Unlike :attr:`client`, which is cached per hook instance, async clients are shared per</span>
+<span class="sd">        process and per token pair. The triggerer is long-lived and runs many triggers, the Modal</span>
+<span class="sd">        SDK has no public way to close a client, and it shares its own ambient ``from_env``</span>
+<span class="sd">        client in the same way. The number of clients is bounded by the number of distinct Modal</span>
+<span class="sd">        tokens the connections hold.</span>
+<span class="sd">        """</span>
+        <span class="n">connection</span><span class="p">:</span> <span class="n">Connection</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">connection</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_async_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modal_conn_id</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">AirflowNotFoundException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_fall_back_to_ambient</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="n">credentials</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_credentials_from</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">credentials</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="n">modal</span><span class="o">.</span><span class="n">Client</span><span class="o">.</span><span class="n">from_env</span><span class="o">.</span><span class="n">aio</span><span class="p">()</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">(),</span> <span class="o">*</span><span class="n">credentials</span><span class="p">)</span>
+        <span class="c1"># One lock per event loop, held across construction: without it, triggers that start</span>
+        <span class="c1"># together all miss the cache and each build a client that Modal keeps open until exit.</span>
+        <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span>
+        <span class="n">lock</span> <span class="o">=</span> <span class="n">_async_client_locks</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">loop</span><span class="p">,</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Lock</span><span class="p">())</span>
+        <span class="k">async</span> <span class="k">with</span> <span class="n">lock</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">_async_clients</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">client</span><span class="o">.</span><span class="n">is_closed</span><span class="p">():</span>
+                <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="n">modal</span><span class="o">.</span><span class="n">Client</span><span class="o">.</span><span class="n">from_credentials</span><span class="o">.</span><span class="n">aio</span><span class="p">(</span><span class="o">*</span><span class="n">credentials</span><span class="p">)</span>
+                <span class="n">_async_clients</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span>
+        <span class="k">return</span> <span class="n">client</span></div>
+
+
+<div class="viewcode-block" id="ModalHook.aget_sandbox">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/modal/hooks/modal/index.html#airflow.providers.modal.hooks.modal.ModalHook.aget_sandbox">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">aget_sandbox</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sandbox_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">modal</span><span class="o">.</span><span class="n">Sandbox</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Reattach to an existing sandbox by id without blocking the event loop.</span>
+
+<span class="sd">        The async counterpart of :meth:`get_sandbox`; call the ``.aio`` form of methods on the</span>
+<span class="sd">        returned handle.</span>
+
+<span class="sd">        :param sandbox_id: The ``sb-...`` id returned by ``Sandbox.object_id``.</span>
+<span class="sd">        """</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_async_client</span><span class="p">()</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">modal</span><span class="o">.</span><span class="n">Sandbox</span><span class="o">.</span><span class="n">from_id</span><span class="o">.</span><span class="n">aio</span><span class="p">(</span><span class="n">sandbox_id</span><span class="p">,</span> <span class="n">client</span><span class="o">=</span><span class="n">client</span><span class="p">)</span></div>
 
 
     <span class="nd">@property</span>
@@ -1228,7 +1306,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+        <script src="../../../../../_static/documentation_options.js?v=938c9ccc"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -511,7 +511,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -853,27 +853,34 @@ installed.</p></td>
 file. Airflow itself accepts 1.42.1.</p></td>
 </tr>
 <tr class="row-even"><td><p>OpenAI Agents SDK</p></td>
-<td><p>0.20.0 and 0.23.1</p></td>
-<td><p>0.21.0 and later require <code class="docutils literal notranslate"><span class="pre">openai&gt;=3</span></code>, while Airflow’s constraints file pins
-<code class="docutils literal notranslate"><span class="pre">openai</span></code> below 3, so installing with that file gives 0.20.</p></td>
+<td><p>0.20.0, 0.23.1 and 0.24.0</p></td>
+<td><p>0.21.0 and later require <code class="docutils literal notranslate"><span class="pre">openai&gt;=3</span></code>, so installing with a constraints file that
+pins <code class="docutils literal notranslate"><span class="pre">openai</span></code> below 3 gives 0.20.</p></td>
 </tr>
-<tr class="row-odd"><td><p>Claude Agent SDK</p></td>
+<tr class="row-odd"><td><p>LlamaIndex</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">llama-index-core</span></code> 0.14.25, <code class="docutils literal notranslate"><span class="pre">llama-index-llms-openai</span></code> 0.8.3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">llama-index-llms-openai</span></code> caps <code class="docutils literal notranslate"><span class="pre">openai</span></code> below 3, so the <code class="docutils literal notranslate"><span class="pre">[llamaindex]</span></code> extra
+cannot share an environment with the <code class="docutils literal notranslate"><span class="pre">[openai]</span></code> extra or with a constraints file
+that pins <code class="docutils literal notranslate"><span class="pre">openai</span></code> 3. See <a class="reference internal" href="../hooks/llamaindex.html"><span class="doc">Using LlamaIndex directly: LlamaIndexHook</span></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Claude Agent SDK</p></td>
 <td><p>0.2.168</p></td>
 <td><p>Bundles the Claude Code CLI as the subprocess the SDK talks to.</p></td>
 </tr>
 </tbody>
 </table>
 <p>These are the versions the adapter tests have been run against. Strands and ADK cap
-packages below the versions in Airflow’s dependency lock, and current OpenAI Agents SDK
-releases need <code class="docutils literal notranslate"><span class="pre">openai</span></code> 3, so CI runs their adapter tests in a job of their own, one
-framework at a time. The Claude Agent SDK adapter has no such conflict, so CI runs its
-tests.</p>
+packages below the versions in Airflow’s dependency lock, LlamaIndex caps <code class="docutils literal notranslate"><span class="pre">openai</span></code> below
+the version in it, and no Airflow package depends on the OpenAI Agents SDK, so CI runs their
+tests in a job of their own, one framework at a time. The Claude Agent SDK adapter has no
+such conflict, so CI runs its tests.</p>
 <p>Outside canary runs, the job holds every package already in the CI image at its
 installed version with <code class="docutils literal notranslate"><span class="pre">--override</span></code>, so Strands’ and ADK’s own dependency caps are
-overridden. It installs the newest framework release that is older than the repository’s
-<code class="docutils literal notranslate"><span class="pre">exclude-newer</span></code> window, which for the OpenAI Agents SDK means the newest release that
-accepts <code class="docutils literal notranslate"><span class="pre">openai</span></code> 2.x, not the versions in the table above. It therefore does not show
-that those versions work in the environment a user gets. Canary runs, which include
+overridden. LlamaIndex is the exception for <code class="docutils literal notranslate"><span class="pre">openai</span></code>: the job lets its cap bring
+<code class="docutils literal notranslate"><span class="pre">openai</span></code> down to 2.x, because a run on openai 3 would test a pairing no user gets. It
+installs the newest framework release that is older than the repository’s
+<code class="docutils literal notranslate"><span class="pre">exclude-newer</span></code> window, so it does not show that the versions in the table above work in
+the environment a user gets. Canary runs, which include
 scheduled and manual runs on <code class="docutils literal notranslate"><span class="pre">main</span></code> and pull requests labeled <code class="docutils literal notranslate"><span class="pre">canary</span></code>, install each
 framework’s newest release with its own dependency pins instead.</p>
 </section>
@@ -930,7 +937,8 @@ framework’s own MCP client to the server.</p></li>
 sure a <code class="docutils literal notranslate"><span class="pre">ToolCallError</span></code> ends the run rather than reaching the model, as the Strands
 plugin does. <a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.collect_tools" title="airflow.providers.common.ai.tools.collect_tools"><code class="xref py py-func docutils literal notranslate"><span class="pre">collect_tools()</span></code></a> turns the toolsets and
 tools an adapter is given into one list, as the Strands, ADK, Anthropic, OpenAI Agents and Claude Agent SDK
-adapters do.</p>
+adapters do. It accepts toolsets wrapped with <code class="docutils literal notranslate"><span class="pre">.filtered()</span></code>, <code class="docutils literal notranslate"><span class="pre">.prefixed()</span></code> and
+<code class="docutils literal notranslate"><span class="pre">.renamed()</span></code>, and raises <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> for any other wrapper.</p>
 <p>Blocking hook calls, such as a SQL query, run one at a time in the task’s process, so an
 agent that calls two database tools at once gets its answers one after the other.</p>
 <p>Run a Strands, ADK or OpenAI Agents SDK agent inside
@@ -1243,7 +1251,7 @@ on; see <a class="reference internal" href="../observability.html"><span class="
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

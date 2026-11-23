@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">15.3.1</span>
+        <span class="version-label">Version: </span><span class="version">15.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -437,7 +437,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-microsoft-azure/15.3.1/providers/microsoft/azure/tests/system/microsoft/azure">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-microsoft-azure/15.4.0/providers/microsoft/azure/tests/system/microsoft/azure">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-microsoft-azure/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">15.3.1</span>
+        <span class="version-label">Version: </span><span class="version">15.4.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -562,7 +562,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-microsoft-azure/15.3.1/providers/microsoft/azure/tests/system/microsoft/azure">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-microsoft-azure/15.4.0/providers/microsoft/azure/tests/system/microsoft/azure">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-microsoft-azure/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -819,6 +819,37 @@ from the first page.</p>
 <p>Pages are stored as they are, so pages larger than <code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">max_value_storage_bytes</span></code> need a state
 store backend that offloads large values. Durable execution requires Airflow 3.3 or newer.</p>
 </section>
+<section id="starting-from-the-triggerer">
+<span id="howto-operator-msgraphasyncoperator-start-from-trigger"></span><h4>Starting from the triggerer<a class="headerlink" href="#starting-from-the-triggerer" title="Link to this heading">¶</a></h4>
+<p>The operator does all its requests in the triggerer, so the only thing it does on a worker at the start
+is to hand the first request over. With <code class="docutils literal notranslate"><span class="pre">start_from_trigger=True</span></code> the scheduler defers the task itself
+and that first worker run is skipped. The worker gets involved once the response is there, to process it
+and to follow the pagination.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">site_task</span> <span class="o">=</span> <span class="n">MSGraphAsyncOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"news_site"</span><span class="p">,</span>
+    <span class="n">conn_id</span><span class="o">=</span><span class="s2">"msgraph_api"</span><span class="p">,</span>
+    <span class="n">url</span><span class="o">=</span><span class="s2">"sites/{{ params.site }}"</span><span class="p">,</span>
+    <span class="n">start_from_trigger</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This needs Airflow 3.4 or later, on older versions the task starts on a worker as it does without the
+argument. It also starts on a worker when:</p>
+<ul class="simple">
+<li><p>an argument which is passed on to the trigger is an <code class="docutils literal notranslate"><span class="pre">XComArg</span></code>, a callable or a file-like object,
+as the triggerer cannot resolve or receive those;</p></li>
+<li><p>the task is mapped with <code class="docutils literal notranslate"><span class="pre">expand</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> is set, as a retry then resumes from the task state store on a worker.</p></li>
+</ul>
+<p>Keep the following in mind when you enable it:</p>
+<ul class="simple">
+<li><p>The templated fields of the first request are rendered by the triggerer, which does not know the
+<code class="docutils literal notranslate"><span class="pre">user_defined_macros</span></code> and <code class="docutils literal notranslate"><span class="pre">user_defined_filters</span></code> of the Dag and always renders strings, also when
+<code class="docutils literal notranslate"><span class="pre">render_template_as_native_obj</span></code> is set.</p></li>
+<li><p>The task goes straight from scheduled to deferred, so the first request does not wait for a pool
+slot or for a worker.</p></li>
+</ul>
+</section>
 </section>
 <section id="cross-references">
 <h3>Cross-References<a class="headerlink" href="#cross-references" title="Link to this heading">¶</a></h3>
@@ -917,6 +948,7 @@ store backend that offloads large values. Durable execution requires Airflow 3.3
 <li><a class="reference internal" href="#prerequisite-tasks">Prerequisite Tasks</a><ul>
 <li><a class="reference internal" href="#msgraphasyncoperator">MSGraphAsyncOperator</a><ul>
 <li><a class="reference internal" href="#durable-execution">Durable execution</a></li>
+<li><a class="reference internal" href="#starting-from-the-triggerer">Starting from the triggerer</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#cross-references">Cross-References</a></li>
@@ -1142,7 +1174,7 @@ store backend that offloads large values. Durable execution requires Airflow 3.3
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=bb0c1cca"></script>
+        <script src="../_static/documentation_options.js?v=912f691d"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

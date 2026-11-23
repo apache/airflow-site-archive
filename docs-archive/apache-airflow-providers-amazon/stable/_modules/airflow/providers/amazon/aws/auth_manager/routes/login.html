@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -715,6 +715,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.auth.managers.base_auth_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">COOKIE_NAME_JWT_TOKEN</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.common.router</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowRouter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.api_fastapi.core_api.security</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_safe_url</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.auth_manager.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">CONF_ALLOW_IDP_INITIATED_LOGIN_KEY</span><span class="p">,</span>
     <span class="n">CONF_SAML_METADATA_URL_KEY</span><span class="p">,</span>
@@ -774,6 +775,14 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="MAX_PENDING_LOGINS">
 <a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.MAX_PENDING_LOGINS">[docs]</a>
 <span class="n">MAX_PENDING_LOGINS</span> <span class="o">=</span> <span class="mi">5</span></div>
+
+
+<span class="c1"># Cap the JSON-encoded length of the redirect URL stored in the pending entry so that</span>
+<span class="c1"># 5 pending entries do not push the base64-encoded cookie past the ~4 KB browser limit,</span>
+<span class="c1"># even when non-Latin-1 characters expand to \uXXXX escapes.</span>
+<div class="viewcode-block" id="MAX_NEXT_URL_JSON_LENGTH">
+<a class="viewcode-back" href="../../../../../../../_api/airflow/providers/amazon/aws/auth_manager/routes/login/index.html#airflow.providers.amazon.aws.auth_manager.routes.login.MAX_NEXT_URL_JSON_LENGTH">[docs]</a>
+<span class="n">MAX_NEXT_URL_JSON_LENGTH</span> <span class="o">=</span> <span class="mi">400</span></div>
 
 
 <div class="viewcode-block" id="LOGIN_MODE_REDIRECT">
@@ -903,14 +912,22 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <span class="n">callback_url</span> <span class="o">=</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">nonce</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">callback_url</span><span class="p">)</span>
     <span class="n">pending</span> <span class="o">=</span> <span class="n">_read_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">)[</span><span class="o">-</span><span class="p">(</span><span class="n">MAX_PENDING_LOGINS</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="p">:]</span>
-    <span class="n">pending</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-        <span class="p">{</span>
-            <span class="s2">"nonce"</span><span class="p">:</span> <span class="n">nonce</span><span class="p">,</span>
-            <span class="s2">"request_id"</span><span class="p">:</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">get_last_request_id</span><span class="p">(),</span>
-            <span class="s2">"mode"</span><span class="p">:</span> <span class="n">mode</span><span class="p">,</span>
-            <span class="s2">"exp"</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">+</span> <span class="n">LOGIN_STATE_MAX_AGE</span><span class="p">,</span>
-        <span class="p">}</span>
-    <span class="p">)</span>
+    <span class="n">entry</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"nonce"</span><span class="p">:</span> <span class="n">nonce</span><span class="p">,</span>
+        <span class="s2">"request_id"</span><span class="p">:</span> <span class="n">saml_auth</span><span class="o">.</span><span class="n">get_last_request_id</span><span class="p">(),</span>
+        <span class="s2">"mode"</span><span class="p">:</span> <span class="n">mode</span><span class="p">,</span>
+        <span class="s2">"exp"</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">+</span> <span class="n">LOGIN_STATE_MAX_AGE</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="n">LOGIN_MODE_REDIRECT</span><span class="p">:</span>
+        <span class="n">next_url</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">query_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"next"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">next_url</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">next_url</span><span class="p">))</span> <span class="o">&lt;=</span> <span class="n">MAX_NEXT_URL_JSON_LENGTH</span> <span class="ow">and</span> <span class="n">is_safe_url</span><span class="p">(</span>
+                <span class="n">next_url</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="n">request</span>
+            <span class="p">):</span>
+                <span class="n">entry</span><span class="p">[</span><span class="s2">"next"</span><span class="p">]</span> <span class="o">=</span> <span class="n">next_url</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Dropping next URL </span><span class="si">%r</span><span class="s2">: exceeds maximum length or is unsafe."</span><span class="p">,</span> <span class="n">next_url</span><span class="p">)</span>
+    <span class="n">pending</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
     <span class="n">_write_pending_logins</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="n">pending</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">response</span>
 
@@ -988,14 +1005,16 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
         <span class="n">username</span><span class="o">=</span><span class="n">saml_auth</span><span class="o">.</span><span class="n">get_nameid</span><span class="p">(),</span>
         <span class="n">email</span><span class="o">=</span><span class="n">attributes</span><span class="p">[</span><span class="s2">"email"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="s2">"email"</span> <span class="ow">in</span> <span class="n">attributes</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="n">url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"base_url"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">"/"</span><span class="p">)</span>
+    <span class="n">fallback_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"base_url"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">"/"</span><span class="p">)</span>
+    <span class="n">next_url</span> <span class="o">=</span> <span class="n">matched</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"next"</span><span class="p">)</span> <span class="k">if</span> <span class="n">matched</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">redirect_url</span> <span class="o">=</span> <span class="n">next_url</span> <span class="ow">or</span> <span class="n">fallback_url</span>
     <span class="n">token</span> <span class="o">=</span> <span class="n">get_auth_manager</span><span class="p">()</span><span class="o">.</span><span class="n">generate_jwt</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
 
     <span class="n">response</span><span class="p">:</span> <span class="n">Any</span>
     <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="n">LOGIN_MODE_REDIRECT</span><span class="p">:</span>
-        <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">303</span><span class="p">)</span>
         <span class="n">cookie_path</span> <span class="o">=</span> <span class="n">get_cookie_path</span><span class="p">()</span>
         <span class="n">secure</span> <span class="o">=</span> <span class="n">_is_secure_request</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">redirect_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">303</span><span class="p">)</span>
         <span class="c1"># In Airflow 3.1.1 authentication changes, front-end no longer handle the token</span>
         <span class="c1"># See https://github.com/apache/airflow/pull/55506</span>
         <span class="k">if</span> <span class="n">AIRFLOW_V_3_1_1_PLUS</span><span class="p">:</span>
@@ -1316,7 +1335,7 @@ window.PAGEFIND_PATH = '../../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -34,8 +34,9 @@ airflow.providers.common.ai.durable.fingerprint
    attempt -- a ``datetime`` or ``Decimal`` tool argument, a dataclass in
    ``tool_choice`` -- still produces a usable fingerprint.
    The ``capability_id`` of a tool from a capability without an ``id`` is left out
-   of the request parameters, since it is random per run, and so is
-   ``deferred_capability_ids`` (see ``_normalize_params``).
+   of the request parameters, since it is random per run, and so are
+   ``deferred_capability_ids`` and the ``airflow`` key of a tool's metadata, which
+   only decides whether the tool replays (see ``_normalize_params``).
 
    That rendering is hashed as it is, with two exceptions.  Both are found by
    dumping the payload a second time in pydantic's python mode, which has the same
@@ -93,6 +94,7 @@ Functions
 
    airflow.providers.common.ai.durable.fingerprint.fingerprint_model_request
    airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call
+   airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests
 
 
 Module Contents
@@ -107,7 +109,7 @@ Module Contents
    The ``ModelRequestParameters`` object is hashed (tool definitions, output
    mode and schema, native tools, ...) so any change to what is sent to the
    model invalidates the cached response; only each tool's ``capability_id`` and
-   ``deferred_capability_ids`` are left out.
+   ``airflow`` metadata key, and ``deferred_capability_ids``, are left out.
 
    Returns ``None`` when the request cannot be fingerprinted. The journal then
    replays the step without verification, and only right after a step that
@@ -132,5 +134,14 @@ Module Contents
    so they are rendered from copies (see ``_render``): hashing must neither order
    a ``set`` unpredictably nor consume a lazily validated ``Iterable`` the tool
    has not read, and must not change what the tool will see.
+
+
+.. py:function:: fingerprint_deferred_tool_requests(requests)
+
+   Fingerprint tool calls waiting to be settled, such as approved, from each call's :func:`fingerprint_tool_call`.
+
+   The answer recorded for these calls then replays only for calls with the same names,
+   arguments and call ids, which a replayed model response keeps. ``None`` when any call
+   cannot be fingerprinted.
 
 

@@ -1,0 +1,71 @@
+airflow.providers.openlineage.api.datasets
+==========================================
+
+.. py:module:: airflow.providers.openlineage.api.datasets
+
+.. autoapi-nested-parse::
+
+   Public helpers for emitting OpenLineage events carrying dataset lineage.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.openlineage.api.datasets.emit_dataset_lineage
+
+
+Module Contents
+---------------
+
+.. py:function:: emit_dataset_lineage(*, inputs = None, outputs = None, task_instance = None, additional_run_facets = None, additional_job_facets = None, raise_on_error = False)
+
+   Emit an OpenLineage RUNNING event attributing datasets to the current task run.
+
+   This helper lets DAG authors supplement automatic extractor-based lineage with their own datasets.
+   It constructs and emits a RUNNING ``RunEvent`` whose run/job identifiers match the currently
+   executing Airflow task, attaches the same facets the provider adds to a task's START/COMPLETE events.
+
+   At least one of ``inputs`` or ``outputs`` must be non-empty.
+
+   Helpful References:
+
+   - Dataset naming convention: https://openlineage.io/docs/spec/naming
+   - Dataset naming helpers: https://openlineage.io/docs/client/python/best-practices#dataset-naming-helpers
+   - Available facets: https://openlineage.io/docs/spec/facets
+
+   :param inputs: Input datasets consumed by the task.
+   :param outputs: Output datasets produced by the task.
+   :param task_instance: The Airflow task instance to attribute lineage to. Defaults to the currently
+       executing task instance obtained from the execution context.
+   :param additional_run_facets: Extra run facets to attach.
+   :param additional_job_facets: Extra job facets to attach.
+   :param raise_on_error: When ``False`` (default), any exception raised while building or emitting
+       the event is logged at WARNING level and the function returns silently — so a broken lineage
+       helper never breaks a user's task. Set to ``True`` to opt into normal exception propagation.
+
+   :raises ValueError: When ``raise_on_error=True``, if both ``inputs`` and ``outputs`` are empty or
+       ``None``.
+   :raises TypeError: When ``raise_on_error=True``, if any item in ``inputs`` or ``outputs`` is not
+       an OpenLineage ``Dataset``.
+   :raises RuntimeError: When ``raise_on_error=True``, if ``task_instance`` is not provided and
+       cannot be resolved from the current execution context.
+
+   Example:
+
+   .. code-block:: python
+
+       from openlineage.client.event_v2 import Dataset
+       from airflow.providers.openlineage.api import emit_dataset_lineage
+
+
+       @task
+       def my_task():
+           emit_dataset_lineage(
+               inputs=[Dataset(namespace="s3://bucket", name="raw/2024/01/01/data.csv")],
+               outputs=[Dataset(namespace="snowflake://account", name="analytics.public.users")],
+           )
+
+

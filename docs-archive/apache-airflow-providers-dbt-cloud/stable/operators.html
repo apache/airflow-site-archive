@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.11.2</span>
+        <span class="version-label">Version: </span><span class="version">4.12.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -427,7 +427,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.11.2/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.12.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-dbt-cloud/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -484,7 +484,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">4.11.2</span>
+        <span class="version-label">Version: </span><span class="version">4.12.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -542,7 +542,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Resources</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.11.2/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/apache/airflow/tree/providers-dbt-cloud/4.12.0/providers/dbt/cloud/tests/system/dbt/cloud/example_dbt_cloud.py">Example Dags</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://pypi.org/project/apache-airflow-providers-dbt-cloud/">PyPI Repository</a></li>
 <li class="toctree-l1"><a class="reference internal" href="installing-providers-from-sources.html">Installing from sources</a></li>
 </ul>
@@ -720,6 +720,38 @@ via the <code class="docutils literal notranslate"><span class="pre">additional_
 by providing the <code class="docutils literal notranslate"><span class="pre">project_name</span></code>, <code class="docutils literal notranslate"><span class="pre">environment_name</span></code>, and <code class="docutils literal notranslate"><span class="pre">job_name</span></code>.
 Please note that it will only work if the above three parameters uniquely identify a job in your account
 (i.e. you cannot have two jobs with the same name in the same project and environment).</p>
+<section id="durable-execution">
+<h3>Durable execution<a class="headerlink" href="#durable-execution" title="Link to this heading">¶</a></h3>
+<p>On Airflow 3.3 and later, when <code class="docutils literal notranslate"><span class="pre">wait_for_termination</span></code> is True, the operator stores the dbt Cloud run
+id in the <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/task-state-store.html" title="(in apache-airflow v3.5.0)"><span class="xref std std-doc">task state store</span></a> before it waits. If
+the worker dies and the task retries, the operator checks that run instead of triggering a new one:</p>
+<ul class="simple">
+<li><p>If the run is still queued, starting or running, the operator waits on it again, in deferrable mode
+too.</p></li>
+<li><p>If the run succeeded, the operator returns its run id without triggering anything.</p></li>
+<li><p>If the run errored, was cancelled or no longer exists, the operator triggers a new run as before,
+which respects <code class="docutils literal notranslate"><span class="pre">retry_from_failure</span></code>.</p></li>
+</ul>
+<p>The run id is saved right after the run is triggered. If the worker dies between the two, the retry
+finds nothing and triggers a second run. On reconnect, <code class="docutils literal notranslate"><span class="pre">timeout</span></code> starts counting again from zero.</p>
+<p>Clearing the task instance from the UI or the REST API discards the stored run id by default, so the
+next try triggers a new run. This is what you want after fixing upstream data. To keep the stored run
+id instead, tick “keep task state” in the clear dialog or pass <code class="docutils literal notranslate"><span class="pre">keep_task_state=true</span></code> to the clear
+endpoint. The next try then treats the stored run like a retry does.</p>
+<p>Before Airflow 3.5, clearing the whole Dag run, marking a task as success or failed, and
+<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">tasks</span> <span class="pre">clear</span></code> / <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">clear</span></code> keep the stored run id. So if you clear the whole Dag
+run after fixing upstream data, a task whose run succeeded returns without running dbt again. Clear
+the task instance itself instead. From Airflow 3.5, every way of clearing discards the stored run id
+by default.</p>
+<p>Clearing a task that is waiting on the worker cancels its run first, so the next try triggers a new
+run either way. Only a deferred task’s run keeps going. See
+<a class="reference external" href="/docs/apache-airflow/stable/core-concepts/resumable-tasks.html#concepts-resumable-tasks" title="(in apache-airflow v3.5.0)"><span>Resumable Tasks</span></a> for details.</p>
+<p>Below Airflow 3.3 the operator always triggers a new run on retry. Set <code class="docutils literal notranslate"><span class="pre">durable=False</span></code> to get that
+behavior on any version:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">DbtCloudRunJobOperator</span><span class="p">(</span><span class="n">task_id</span><span class="o">=</span><span class="s2">"run_job"</span><span class="p">,</span> <span class="n">job_id</span><span class="o">=</span><span class="mi">48617</span><span class="p">,</span> <span class="n">durable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
 <section id="linking-dbt-cloud-runs-to-the-triggering-airflow-task">
 <h3>Linking dbt Cloud runs to the triggering Airflow task<a class="headerlink" href="#linking-dbt-cloud-runs-to-the-triggering-airflow-task" title="Link to this heading">¶</a></h3>
 <p>Setting <code class="docutils literal notranslate"><span class="pre">openlineage_inject_parent_job_info</span></code> to True replaces the triggered run’s <code class="docutils literal notranslate"><span class="pre">cause</span></code> field
@@ -902,6 +934,7 @@ through the connection or supplied as a parameter to the task.</p>
             <ul>
 <li><a class="reference internal" href="#">dbt Cloud Operators</a><ul>
 <li><a class="reference internal" href="#trigger-a-dbt-cloud-job">Trigger a dbt Cloud Job</a><ul>
+<li><a class="reference internal" href="#durable-execution">Durable execution</a></li>
 <li><a class="reference internal" href="#linking-dbt-cloud-runs-to-the-triggering-airflow-task">Linking dbt Cloud runs to the triggering Airflow task</a></li>
 </ul>
 </li>
@@ -1128,7 +1161,7 @@ through the connection or supplied as a parameter to the task.</p>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=70aa39c2"></script>
+        <script src="_static/documentation_options.js?v=7155e95a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

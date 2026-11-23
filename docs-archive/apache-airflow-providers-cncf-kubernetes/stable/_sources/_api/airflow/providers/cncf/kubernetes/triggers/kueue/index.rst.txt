@@ -1,0 +1,218 @@
+airflow.providers.cncf.kubernetes.triggers.kueue
+================================================
+
+.. py:module:: airflow.providers.cncf.kubernetes.triggers.kueue
+
+.. autoapi-nested-parse::
+
+   Wait for a Kubernetes Job run through Kueue.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.cncf.kubernetes.triggers.kueue.JOB_STATE_MESSAGES
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.cncf.kubernetes.triggers.kueue.KueueJobState
+   airflow.providers.cncf.kubernetes.triggers.kueue.KubernetesKueueJobTrigger
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   airflow.providers.cncf.kubernetes.triggers.kueue.get_job_state
+   airflow.providers.cncf.kubernetes.triggers.kueue.build_pod_label_selector
+   airflow.providers.cncf.kubernetes.triggers.kueue.build_job_event
+   airflow.providers.cncf.kubernetes.triggers.kueue.get_succeeded_pod_xcoms
+   airflow.providers.cncf.kubernetes.triggers.kueue.list_job_pods
+   airflow.providers.cncf.kubernetes.triggers.kueue.is_pod_deleted
+   airflow.providers.cncf.kubernetes.triggers.kueue.collect_xcom_results
+
+
+Module Contents
+---------------
+
+.. py:class:: KueueJobState
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   State of a Job run through Kueue.
+
+
+   .. py:attribute:: SUSPENDED
+      :value: 'suspended'
+
+
+
+   .. py:attribute:: RUNNING
+      :value: 'running'
+
+
+
+   .. py:attribute:: FINISHED
+      :value: 'finished'
+
+
+
+.. py:data:: JOB_STATE_MESSAGES
+
+.. py:function:: get_job_state(job)
+
+   Return the state of a Job run through Kueue; finished means Complete or Failed.
+
+
+.. py:function:: build_pod_label_selector(job)
+
+   Return the label selector of the pods of the Job, built from its ``spec.selector``.
+
+   Kubernetes adds the ``batch.kubernetes.io/job-name`` label to the pods only without ``manualSelector``,
+   while ``spec.selector`` matches them in both modes.
+
+
+.. py:function:: build_job_event(job, xcom_results)
+
+   Build the event of a finished Job, as passed to ``KubernetesStartKueueJobOperator.execute_complete``.
+
+   :param job: the finished Job.
+   :param xcom_results: the raw XComs read from the pods, by pod name.
+
+
+.. py:function:: get_succeeded_pod_xcoms(pods, xcom_results)
+
+   Return the XComs read from the pods that succeeded, skipping failed and preempted pods.
+
+
+.. py:function:: list_job_pods(client, namespace, label_selector, job_uid)
+
+   Return the pods the Job has now: those matched by ``build_pod_label_selector`` that the Job owns.
+
+   With ``manualSelector``, the selector may also match the pods of other Jobs, such as the same task
+   in another Dag run; the Job controller tells them apart by owner too.
+
+
+.. py:function:: is_pod_deleted(client, pod)
+
+   Return whether the pod no longer exists.
+
+
+.. py:function:: collect_xcom_results(client, pod_manager, job, base_container_name, xcom_results)
+
+   Read into ``xcom_results`` the XCom of each pod of the Job whose base container has ended.
+
+   Reading the XCom also stops the XCom sidecar: until then the pod, and so the Job, cannot finish.
+   Pods already read are skipped, so this is called at each poll.
+
+
+.. py:class:: KubernetesKueueJobTrigger(job_name, job_namespace, base_container_name, kubernetes_conn_id = None, poll_interval = 10.0, cluster_context = None, config_file = None, in_cluster = None, do_xcom_push = False)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Wait until a Job run through Kueue is finished, even if Kueue preempts it several times.
+
+   Unlike :class:`~airflow.providers.cncf.kubernetes.triggers.job.KubernetesJobTrigger`, it polls the Job
+   rather than the pods found when the Job started, and reads the XComs from the pods the Job has at
+   each poll.
+
+   :param job_name: The name of the job.
+   :param job_namespace: The namespace of the job.
+   :param base_container_name: The name of the base container in the pod.
+   :param kubernetes_conn_id: The :ref:`kubernetes connection id <howto/connection:kubernetes>`
+       for the Kubernetes cluster.
+   :param cluster_context: Context that points to kubernetes cluster.
+   :param config_file: Path to kubeconfig file.
+   :param poll_interval: Polling period in seconds to check for the status.
+   :param in_cluster: run kubernetes client with in_cluster configuration.
+   :param do_xcom_push: If True, the content of the file
+       /airflow/xcom/return.json in the container will also be pushed to an
+       XCom when the container completes.
+
+
+   .. py:attribute:: job_name
+
+
+   .. py:attribute:: job_namespace
+
+
+   .. py:attribute:: base_container_name
+
+
+   .. py:attribute:: kubernetes_conn_id
+      :value: None
+
+
+
+   .. py:attribute:: poll_interval
+      :value: 10.0
+
+
+
+   .. py:attribute:: cluster_context
+      :value: None
+
+
+
+   .. py:attribute:: config_file
+      :value: None
+
+
+
+   .. py:attribute:: in_cluster
+      :value: None
+
+
+
+   .. py:attribute:: do_xcom_push
+      :value: False
+
+
+
+   .. py:method:: serialize()
+
+      Serialize KubernetesKueueJobTrigger arguments and classpath.
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Poll the Job until it is finished and yield a TriggerEvent.
+
+
+
+   .. py:property:: hook
+      :type: airflow.providers.cncf.kubernetes.hooks.kubernetes.AsyncKubernetesHook
+
+
+
+   .. py:property:: sync_hook
+      :type: airflow.providers.cncf.kubernetes.hooks.kubernetes.KubernetesHook
+
+
+
+   .. py:property:: pod_manager
+      :type: airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager
+
+
+
+   .. py:method:: cleanup()
+      :async:
+
+
+      Release the hook's cached API client when the trigger exits.
+
+
+

@@ -1,0 +1,254 @@
+airflow.providers.common.ai.toolsets.managed_agent
+==================================================
+
+.. py:module:: airflow.providers.common.ai.toolsets.managed_agent
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.managed_agent.log
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.common.ai.toolsets.managed_agent.BaseManagedAgentToolset
+   airflow.providers.common.ai.toolsets.managed_agent.ManagedAgentToolset
+
+
+Module Contents
+---------------
+
+.. py:data:: log
+
+.. py:class:: BaseManagedAgentToolset(*, tool_name, description = None, timeout = None, max_retries = 1)
+
+   Bases: :py:obj:`airflow.providers.common.ai.utils.toolset_base.AirflowToolset`
+
+
+   Base class exposing a vendor-managed agent as a single pydantic-ai tool.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   A managed agent runs its own reasoning loop on the vendor's infrastructure. Airflow
+   submits one request and reads one answer, so the Airflow-side agent features --
+   toolsets, human-in-the-loop review, durable step replay -- apply to the *calling* agent
+   and never reach inside the managed agent.
+
+   Most code should not subclass this. Use :class:`ManagedAgentToolset` over a
+   :class:`~airflow.providers.common.ai.managed_agents.base.ManagedAgentClient`, which
+   every provider hook that adopts
+   :class:`~airflow.providers.common.ai.managed_agents.base.BaseManagedAgentHook`
+   produces via ``hook.agent(...)``. Subclass this directly only for an agent that has no
+   hook at all. Subclasses implement :attr:`agent_ref` and :meth:`invoke_sync` (or override
+   the async :meth:`invoke`); tool naming, argument validation, result serialization,
+   logging and metrics are handled here so every implementation presents the same surface
+   to the model.
+
+   :param tool_name: Name the calling model sees, and the identifier it emits when calling
+       the tool. A verb phrase naming the specialist reads best, e.g. ``ask_bookings_analyst``.
+   :param description: What this agent knows and when to consult it. Optional -- it falls
+       back to ``tool_name`` rendered as prose, matching how ``HookToolset`` handles a method
+       with no docstring. Worth writing anyway: it is what tells the model to consult the
+       agent rather than answer from its own knowledge, and it is the only place to state a
+       scope limit the name cannot carry ("cannot see revenue figures"). Since the argument
+       schema is always a bare prompt, the name and this string are the whole of what the
+       model knows about the agent.
+   :param timeout: Seconds to wait for a single invocation. ``None`` defers to the platform
+       default. Exposed as :attr:`timeout` so an implementation can honor it.
+   :param max_retries: How many times the calling model may rephrase after the remote agent
+       rejects a request. ``0`` turns the first rejection into a hard error.
+
+
+   .. py:attribute:: replayable
+      :type:  bool
+      :value: False
+
+
+
+   .. py:property:: timeout
+      :type: float | None
+
+
+      Seconds to wait for one invocation, or ``None`` for the platform default.
+
+
+
+   .. py:property:: agent_ref
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
+
+      :abstractmethod:
+
+
+      Normalized identity of the remote agent.
+
+      Logged after every successful call, so the resolved remote identity behind a task
+      appears in that task's log even though the Dag only names a connection. Resolution
+      is never on the call's critical path: a failure here is logged, not raised.
+
+
+
+   .. py:method:: invoke(prompt)
+      :async:
+
+
+      Send ``prompt`` to the remote agent and return the agent's answer.
+
+      Override this when the vendor call is already asynchronous. When it blocks, implement
+      :meth:`invoke_sync` instead and let the default implementation here run it in a worker
+      thread, which keeps it off the event loop that the whole agent run shares.
+
+      Return the answer, not the transport envelope. Failures sort into three classes:
+      ``ModelRetry`` (the model can fix it by rephrasing; a hook-backed client raises
+      :class:`~airflow.providers.common.ai.exceptions.ManagedAgentRejected` instead and
+      :class:`ManagedAgentToolset` translates it),
+      :class:`~airflow.providers.common.ai.exceptions.ManagedAgentInvocationError`
+      (terminal), and anything transient, which should propagate unchanged so Airflow's
+      task-level retry handles it.
+
+      **Release anything you allocate, on every path.** Platforms that require a session
+      bill for its lifetime, so an implementation that opens one here must close it in a
+      ``finally``. A tool call has no post-task cleanup hook to fall back on.
+
+      :param prompt: The question or instruction to send to the remote agent.
+
+
+
+   .. py:method:: invoke_sync(prompt)
+      :abstractmethod:
+
+
+      Blocking variant of :meth:`invoke`, run in a worker thread.
+
+      A thread cannot be cancelled, so set a timeout on the underlying request: a caller
+      that stops waiting does not stop this call.
+
+      :param prompt: The question or instruction to send to the remote agent.
+
+
+
+   .. py:property:: id
+      :type: str
+
+
+      An ID for the toolset that is unique among all toolsets registered with the same agent.
+
+      If you're implementing a concrete implementation that users can instantiate more than once, you should let them optionally pass a custom ID to the constructor and return that here.
+
+      A toolset needs to have an ID in order to be used in a durable execution environment like Temporal, in which case the ID will be used to identify the toolset's activities within the workflow.
+
+      IDs wrapped in angle brackets (`'<agent>'` for an agent's own function toolset, `'<output>'` for
+      its output tools) name a role the framework fills on the user's behalf rather than a registered
+      toolset. Don't return one from your own toolset.
+
+
+
+   .. py:method:: get_tools(ctx)
+      :async:
+
+
+      The tools that are available in this toolset.
+
+
+
+   .. py:method:: execute_tool(name, tool_args, *, ctx, tool)
+      :async:
+
+
+      Run tool ``name`` with validated ``tool_args`` and return its result unmasked.
+
+      This is the method a subclass implements; :meth:`call_tool` runs it and masks what it
+      returns. ``ctx`` and ``tool`` are keyword-only so that arguments can be added here later
+      without breaking subclasses.
+
+
+
+.. py:class:: ManagedAgentToolset(client, *, tool_name, description = None, timeout = None, max_retries = 1, replayable = False, vendor_options = None)
+
+   Bases: :py:obj:`BaseManagedAgentToolset`
+
+
+   Expose any managed-agent client as one tool.
+
+   .. note::
+
+       Experimental: this can change or be removed in a minor release of this provider.
+       See :ref:`howto/stability`.
+
+   This is the toolset to use. It accepts any
+   :class:`~airflow.providers.common.ai.managed_agents.base.ManagedAgentClient`. The client is usually a
+   :class:`~airflow.providers.common.ai.managed_agents.base.BoundManagedAgent` from a
+   vendor hook's ``agent()`` method, or a
+   :class:`~airflow.providers.common.ai.managed_agents.failover.FailoverManagedAgentClient`
+   over several of them::
+
+       from airflow.providers.amazon.aws.hooks.bedrock import (
+           BedrockAgentCoreHook,
+       )
+       from airflow.providers.common.ai.toolsets import ManagedAgentToolset
+
+       claims = BedrockAgentCoreHook(aws_conn_id="aws_prod").agent(RUNTIME_ARN)
+       toolset = ManagedAgentToolset(
+           claims,
+           tool_name="ask_claims_agent",
+           description="Reviews an insurance claim and returns a coverage determination.",
+       )
+
+   The model receives ``response.text``. The vendor envelope in ``response.raw`` is for
+   Python callers of the client and never reaches the model.
+
+   :param client: The agent to consult.
+   :param tool_name: See :class:`BaseManagedAgentToolset`.
+   :param description: See :class:`BaseManagedAgentToolset`.
+   :param timeout: Passed to the client on every request as ``ManagedAgentRequest.timeout``.
+       ``None`` means whatever the vendor client defaults to, which for Agent Engine is no
+       deadline at all.
+   :param max_retries: See :class:`BaseManagedAgentToolset`.
+   :param replayable: Whether durable execution may replay a completed call. Only set it
+       for an agent that is read-only.
+   :param vendor_options: Sent with every request as ``ManagedAgentRequest.vendor_options``,
+       for per-agent settings the vendor hook accepts there (Agent Engine's ``class_method``,
+       for instance). The hook decides which keys are allowed.
+
+
+   .. py:attribute:: replayable
+      :value: False
+
+
+
+   .. py:property:: client
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentClient
+
+
+
+   .. py:property:: agent_ref
+      :type: airflow.providers.common.ai.managed_agents.base.ManagedAgentRef
+
+
+      Normalized identity of the remote agent.
+
+      Logged after every successful call, so the resolved remote identity behind a task
+      appears in that task's log even though the Dag only names a connection. Resolution
+      is never on the call's critical path: a failure here is logged, not raised.
+
+
+
+   .. py:method:: invoke_sync(prompt)
+
+      Blocking variant of :meth:`invoke`, run in a worker thread.
+
+      A thread cannot be cancelled, so set a timeout on the underlying request: a caller
+      that stops waiting does not stop this call.
+
+      :param prompt: The question or instruction to send to the remote agent.
+
+
+

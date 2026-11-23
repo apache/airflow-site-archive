@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -707,7 +707,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">timedelta</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">UTC</span><span class="p">,</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunContext</span><span class="p">,</span> <span class="n">Tool</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.capabilities</span><span class="w"> </span><span class="kn">import</span> <span class="n">SetToolMetadata</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionToolset</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowDurability</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticAIHook</span>
@@ -821,6 +825,93 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="c1"># [END howto_capability_airflow_durability]</span>
 
     <span class="n">example_airflow_durability_capability</span><span class="p">()</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># 4. Tools that run on every attempt instead of replaying</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="c1"># [START howto_agent_durable_tool_opt_out]</span>
+<div class="viewcode-block" id="today">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.today">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">today</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return today's date in UTC."""</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span><span class="o">.</span><span class="n">date</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span></div>
+
+
+
+<span class="k">if</span> <span class="n">SQLToolset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+
+    <span class="nd">@dag</span><span class="p">(</span><span class="n">default_args</span><span class="o">=</span><span class="p">{</span><span class="s2">"retries"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"retry_delay"</span><span class="p">:</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)},</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<div class="viewcode-block" id="example_agent_durable_tool_opt_out">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.example_agent_durable_tool_opt_out">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">example_agent_durable_tool_opt_out</span><span class="p">():</span>
+        <span class="n">AgentOperator</span><span class="p">(</span>
+            <span class="n">task_id</span><span class="o">=</span><span class="s2">"durable_freshness_check"</span><span class="p">,</span>
+            <span class="n">prompt</span><span class="o">=</span><span class="s2">"Which tables in load_log have not been loaded today?"</span><span class="p">,</span>
+            <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span>
+            <span class="n">durable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">toolsets</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">Tool</span><span class="p">(</span><span class="n">today</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">"airflow"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})],</span> <span class="nb">id</span><span class="o">=</span><span class="s2">"calendar"</span><span class="p">),</span>
+                <span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"postgres_default"</span><span class="p">,</span> <span class="n">allowed_tables</span><span class="o">=</span><span class="p">[</span><span class="s2">"load_log"</span><span class="p">]),</span>
+            <span class="p">],</span>
+            <span class="n">capabilities</span><span class="o">=</span><span class="p">[</span><span class="n">SetToolMetadata</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="s2">"query"</span><span class="p">],</span> <span class="n">airflow</span><span class="o">=</span><span class="kc">False</span><span class="p">)],</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># [END howto_agent_durable_tool_opt_out]</span>
+
+    <span class="n">example_agent_durable_tool_opt_out</span><span class="p">()</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># 5. Toolsets without an id</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="c1"># [START howto_agent_durable_toolsets_without_id]</span>
+<div class="viewcode-block" id="get_order">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.get_order">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_order</span><span class="p">(</span><span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Look up an order's status and carrier."""</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"shipped"</span><span class="p">,</span> <span class="s2">"carrier"</span><span class="p">:</span> <span class="s2">"dhl"</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="track_parcel">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.track_parcel">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">track_parcel</span><span class="p">(</span><span class="n">carrier</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return where a carrier's parcel for an order is."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">carrier</span><span class="si">}</span><span class="s2"> parcel for order </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">: out for delivery"</span></div>
+
+
+
+<div class="viewcode-block" id="carrier_tools">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.carrier_tools">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">carrier_tools</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">RunContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FunctionToolset</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build the carrier tools for each run."""</span>
+    <span class="k">return</span> <span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">track_parcel</span><span class="p">])</span></div>
+
+
+
+<span class="nd">@dag</span><span class="p">(</span><span class="n">default_args</span><span class="o">=</span><span class="p">{</span><span class="s2">"retries"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"retry_delay"</span><span class="p">:</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)},</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<div class="viewcode-block" id="example_agent_durable_toolsets_without_id">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/example_dags/example_agent_durable/index.html#airflow.providers.common.ai.example_dags.example_agent_durable.example_agent_durable_toolsets_without_id">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">example_agent_durable_toolsets_without_id</span><span class="p">():</span>
+    <span class="n">AgentOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"durable_order_status"</span><span class="p">,</span>
+        <span class="n">prompt</span><span class="o">=</span><span class="s2">"Where is order 4411?"</span><span class="p">,</span>
+        <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span>
+        <span class="n">durable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">toolsets</span><span class="o">=</span><span class="p">[</span><span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">get_order</span><span class="p">]),</span> <span class="n">carrier_tools</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># [END howto_agent_durable_toolsets_without_id]</span>
+
+<span class="n">example_agent_durable_toolsets_without_id</span><span class="p">()</span>
 </pre></div>
 
     <div class="pager" role="navigation" aria-label="related navigation"><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Previous</button><button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" disabled>Next</button>
@@ -1080,7 +1171,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

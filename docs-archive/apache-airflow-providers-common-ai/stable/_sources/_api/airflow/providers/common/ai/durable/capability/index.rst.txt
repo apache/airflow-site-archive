@@ -56,9 +56,19 @@ Module Contents
    soon as the run succeeds, so that clearing the task later starts it fresh: a task that
    runs several agents replays only the run that failed, and runs the ones before it again.
 
+   A tool that must run on every attempt, such as one that reads the current time or
+   creates a temporary table, opts out with ``metadata={"airflow": False}``; for tools of
+   a toolset you do not define, such as ``SQLToolset``, add the capability
+   ``SetToolMetadata(tools=[...], airflow=False)``. pydantic-ai's own ``MCPToolset`` refuses the
+   opt-out; the provider's ``MCPToolset`` accepts it.
+
    Toolsets the agent calls through pydantic-ai's durable backend need a unique ``id``
    (``FunctionToolset(id=...)``, ``MCPToolset(..., id=...)``), as do capabilities that
    contribute ``@durable_operation`` methods; the ids name the steps in the journal.
+   ``AgentOperator`` and ``@task.agent`` fill in the ids of a ``FunctionToolset`` or a
+   function that builds a toolset passed in ``toolsets`` or ``agent_params["toolsets"]``,
+   and of a ``FunctionToolset`` held directly by a ``Toolset`` capability
+   (:ref:`durable-toolset-ids`); in a plain ``@task`` you set them.
 
    :param models: Extra models the run may switch to, keyed by id; see pydantic-ai's
        ``BaseDurabilityCapability``.
@@ -85,6 +95,14 @@ Module Contents
    .. py:method:: get_durable_operation_backend()
 
       Return the backend that dispatches this capability's durable operations.
+
+
+
+   .. py:method:: before_model_request(ctx, request_context)
+      :async:
+
+
+      Validate the final request and repair durability after an outer hook swaps the model.
 
 
 

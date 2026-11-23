@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -782,15 +782,23 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="p">}</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_count_skill_calls</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ModelMessage</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-<span class="w">    </span><span class="sd">"""Count, per skill, the calls to each per-skill tool that returned a result."""</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_count_skill_calls</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ModelMessage</span><span class="p">],</span> <span class="n">run_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Count, per skill, the calls to each per-skill tool that succeeded in the agent run ``run_id``."""</span>
     <span class="n">calls</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ToolCallPart</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="n">counts</span><span class="p">:</span> <span class="n">defaultdict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Counter</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="n">Counter</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">message</span><span class="o">.</span><span class="n">parts</span><span class="p">:</span>
+            <span class="c1"># A call approved after a pause was made in the paused run, so calls are matched across</span>
+            <span class="c1"># the whole transcript while only this run's returns are counted.</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">ToolCallPart</span><span class="p">):</span>
                 <span class="n">calls</span><span class="p">[</span><span class="n">part</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">part</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">ToolReturnPart</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">call</span> <span class="o">:=</span> <span class="n">calls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">part</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">)):</span>
+            <span class="k">elif</span> <span class="p">(</span>
+                <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">ToolReturnPart</span><span class="p">)</span>
+                <span class="ow">and</span> <span class="n">message</span><span class="o">.</span><span class="n">run_id</span> <span class="o">==</span> <span class="n">run_id</span>
+                <span class="c1"># A denied, failed or interrupted call never ran the skill tool to completion.</span>
+                <span class="ow">and</span> <span class="n">part</span><span class="o">.</span><span class="n">outcome</span> <span class="o">==</span> <span class="s2">"success"</span>
+                <span class="ow">and</span> <span class="p">(</span><span class="n">call</span> <span class="o">:=</span> <span class="n">calls</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">part</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">))</span>
+            <span class="p">):</span>
                 <span class="c1"># Two skills toolsets on one agent need ``prefixed()`` to keep their tool names apart.</span>
                 <span class="n">tool</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
                     <span class="p">(</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">_PER_SKILL_TOOLS</span> <span class="k">if</span> <span class="n">call</span><span class="o">.</span><span class="n">tool_name</span> <span class="o">==</span> <span class="n">t</span> <span class="ow">or</span> <span class="n">call</span><span class="o">.</span><span class="n">tool_name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">"_</span><span class="si">{</span><span class="n">t</span><span class="si">}</span><span class="s2">"</span><span class="p">)),</span>
@@ -851,9 +859,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_locations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_SkillsLocation</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="c1"># The run's messages, prior history included. Calls made before an approval pause or</span>
-        <span class="c1"># replayed on a durable retry never reach call_tool, so the skills XCom counts these.</span>
+        <span class="c1"># The run's messages, its history included. Calls replayed on a durable retry never reach</span>
+        <span class="c1"># call_tool, so the skills XCom counts these.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ModelMessage</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="c1"># The agent run this instance serves, set by get_tools. ``async with agent:`` also enters</span>
+        <span class="c1"># the instance passed to the agent, which never serves a run and so never publishes. Not</span>
+        <span class="c1"># set in for_run: a DynamicToolset builds this toolset on every model step, unless given</span>
+        <span class="c1"># per_run_step=False, without calling its for_run.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="nd">@property</span>
 <div class="viewcode-block" id="AgentSkillsToolset.id">
@@ -938,25 +951,38 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>
             <span class="c1"># Used outside an Airflow task: there is no task instance to publish on.</span>
             <span class="k">return</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
+        <span class="n">run_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_id</span>
+        <span class="k">if</span> <span class="n">run_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">task</span><span class="o">.</span><span class="n">do_xcom_push</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="c1"># Telemetry only: a failure here must not fail the run or skip the clean-up after it.</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">counts</span> <span class="o">=</span> <span class="n">_count_skill_calls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_messages</span><span class="p">)</span>
-            <span class="n">skills</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="n">name</span><span class="p">:</span> <span class="p">{</span>
+            <span class="c1"># Only this run's calls: history seeded from another task holds that task's calls.</span>
+            <span class="n">counts</span> <span class="o">=</span> <span class="n">_count_skill_calls</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_messages</span><span class="p">,</span> <span class="n">run_id</span><span class="p">)</span>
+            <span class="c1"># An earlier run of this try (before an approval pause or a review regeneration), or</span>
+            <span class="c1"># another skills toolset on this run's agent, may have published already. Calls are kept</span>
+            <span class="c1"># per run: another toolset of this run counts the same calls and replaces them, while an</span>
+            <span class="c1"># earlier run's stay. XComs from an earlier try are cleared before this one starts.</span>
+            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span>
+            <span class="n">stored</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">entry</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]:</span> <span class="n">entry</span>
+                <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">ti</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">SKILLS_XCOM_KEY</span><span class="p">,</span> <span class="n">task_ids</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="n">map_indexes</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="p">[]</span>
+            <span class="p">}</span>
+            <span class="n">skills</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">skill</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="o">.</span><span class="n">skills</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">calls_by_run</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"calls_by_run"</span><span class="p">,</span> <span class="p">{}))</span>
+                <span class="c1"># A run that made no call to the skill is left out, so the XCom grows with calls,</span>
+                <span class="c1"># not with every resume of a paused run.</span>
+                <span class="k">if</span> <span class="n">calls</span> <span class="o">:=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+                    <span class="n">calls_by_run</span><span class="p">[</span><span class="n">run_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">calls</span><span class="p">)</span>
+                <span class="n">skills</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">"name"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
                     <span class="s2">"description"</span><span class="p">:</span> <span class="n">skill</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
                     <span class="s2">"source"</span><span class="p">:</span> <span class="n">_describe_skill_source</span><span class="p">(</span><span class="n">skill</span><span class="o">.</span><span class="n">uri</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_locations</span><span class="p">),</span>
-                    <span class="s2">"calls"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">{})),</span>
+                    <span class="s2">"calls"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">Counter</span><span class="p">(</span><span class="n">calls</span><span class="p">)</span> <span class="k">for</span> <span class="n">calls</span> <span class="ow">in</span> <span class="n">calls_by_run</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">Counter</span><span class="p">())),</span>
+                    <span class="s2">"calls_by_run"</span><span class="p">:</span> <span class="n">calls_by_run</span><span class="p">,</span>
                 <span class="p">}</span>
-                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">skill</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_inner</span><span class="o">.</span><span class="n">skills</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-            <span class="p">}</span>
-            <span class="c1"># Another skills toolset on the agent, or this run before it paused for approval, may</span>
-            <span class="c1"># have published already. XComs from an earlier try are cleared before this one starts.</span>
-            <span class="n">ti</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span>
-            <span class="n">stored</span> <span class="o">=</span> <span class="n">ti</span><span class="o">.</span><span class="n">xcom_pull</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">SKILLS_XCOM_KEY</span><span class="p">,</span> <span class="n">task_ids</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">task_id</span><span class="p">,</span> <span class="n">map_indexes</span><span class="o">=</span><span class="n">ti</span><span class="o">.</span><span class="n">map_index</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-            <span class="n">merged</span> <span class="o">=</span> <span class="p">{</span><span class="n">entry</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]:</span> <span class="n">entry</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">stored</span><span class="p">}</span> <span class="o">|</span> <span class="n">skills</span>
+            <span class="n">merged</span> <span class="o">=</span> <span class="n">stored</span> <span class="o">|</span> <span class="n">skills</span>
             <span class="n">ti</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">SKILLS_XCOM_KEY</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">[</span><span class="n">merged</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">merged</span><span class="p">)])</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Failed to push the skills XCom"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -976,6 +1002,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="c1"># retries say; resolve it the way the provider's other toolsets do instead.</span>
         <span class="n">max_retries</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">max_retries</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_messages</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">messages</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_run_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">run_id</span>
         <span class="n">tools</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_require_inner</span><span class="p">()</span><span class="o">.</span><span class="n">get_tools</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">max_retries</span><span class="o">=</span><span class="n">max_retries</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div>
 
@@ -1255,7 +1282,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

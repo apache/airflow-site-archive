@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -510,7 +510,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -803,24 +803,79 @@ directly:</p>
 <code class="docutils literal notranslate"><span class="pre">agent_params</span></code> sets one, and the task id otherwise. Outside a running Airflow task
 the capability does nothing, so the same agent runs normally in a test or a notebook.</p>
 </section>
-<section id="give-every-toolset-an-id">
-<h2>Give every toolset an id<a class="headerlink" href="#give-every-toolset-an-id" title="Link to this heading">¶</a></h2>
-<p>pydantic-ai records each call of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> or
-<code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code> under the toolset’s <code class="docutils literal notranslate"><span class="pre">id</span></code>, and refuses to run one without it. Set
-the id on the toolset itself:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">orders</span> <span class="o">=</span> <span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">get_order</span><span class="p">],</span> <span class="nb">id</span><span class="o">=</span><span class="s2">"orders"</span><span class="p">)</span>
+<section id="toolset-ids">
+<span id="durable-toolset-ids"></span><h2>Toolset ids<a class="headerlink" href="#toolset-ids" title="Link to this heading">¶</a></h2>
+<p>pydantic-ai names the recorded steps of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> or
+<code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code> after the toolset’s <code class="docutils literal notranslate"><span class="pre">id</span></code>. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> fill
+in the ids you leave out of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> and of a function that builds a toolset
+for each run passed in <code class="docutils literal notranslate"><span class="pre">toolsets</span></code> or <code class="docutils literal notranslate"><span class="pre">agent_params[&quot;toolsets&quot;]</span></code>, and of a
+<code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> held directly by a <code class="docutils literal notranslate"><span class="pre">Toolset</span></code> capability, so this agent needs none:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_agent_durable.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/ai/example_dags/example_agent_durable.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_order</span><span class="p">(</span><span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Look up an order's status and carrier."""</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"status"</span><span class="p">:</span> <span class="s2">"shipped"</span><span class="p">,</span> <span class="s2">"carrier"</span><span class="p">:</span> <span class="s2">"dhl"</span><span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">track_parcel</span><span class="p">(</span><span class="n">carrier</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">order_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return where a carrier's parcel for an order is."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">carrier</span><span class="si">}</span><span class="s2"> parcel for order </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">: out for delivery"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">carrier_tools</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">RunContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FunctionToolset</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Build the carrier tools for each run."""</span>
+    <span class="k">return</span> <span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">track_parcel</span><span class="p">])</span>
+
+
+<span class="nd">@dag</span><span class="p">(</span><span class="n">default_args</span><span class="o">=</span><span class="p">{</span><span class="s2">"retries"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"retry_delay"</span><span class="p">:</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)},</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">example_agent_durable_toolsets_without_id</span><span class="p">():</span>
+    <span class="n">AgentOperator</span><span class="p">(</span>
+        <span class="n">task_id</span><span class="o">=</span><span class="s2">"durable_order_status"</span><span class="p">,</span>
+        <span class="n">prompt</span><span class="o">=</span><span class="s2">"Where is order 4411?"</span><span class="p">,</span>
+        <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span>
+        <span class="n">durable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">toolsets</span><span class="o">=</span><span class="p">[</span><span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">get_order</span><span class="p">]),</span> <span class="n">carrier_tools</span><span class="p">],</span>
+    <span class="p">)</span>
+
+
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">AgentOperator(durable=True)</span></code> checks this when the Dag is parsed and fails with:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: durable=True needs a unique id on every FunctionToolset, such as FunctionToolset(..., id='orders'): durable replay records each tool call under it. Set it on the toolset itself, and pass a function that builds a toolset as DynamicToolset(function, id=...); the id of a Toolset capability around a toolset does not reach it.
+</div>
+<p>A tool call of a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> without an id is recorded under the tool’s name
+alone, <code class="docutils literal notranslate"><span class="pre">durable_order_status__function_toolset.call_tool:get_order</span></code> above, so a retry
+of the same agent finds the calls the failed attempt recorded. A function that builds a
+toolset, such as <code class="docutils literal notranslate"><span class="pre">carrier_tools</span></code>, is named by its module and qualified name
+(<code class="docutils literal notranslate"><span class="pre">example_agent_durable.carrier_tools</span></code>). A toolset you give an <code class="docutils literal notranslate"><span class="pre">id</span></code> keeps it in its
+step names. Adding a tool to a toolset, reordering the toolsets, or renaming a function
+or an id between attempts changes what the model is offered, so the retry runs again
+from the first model request (<a class="reference internal" href="#durable-replay"><span class="std std-ref">How a retry replays</span></a>). A function that builds a toolset
+per run is the exception for its own tools: its tool list is a recorded step, so the
+steps a retry replays, and the request that failed, keep the tools the failed attempt
+saw, and later steps get the new list. A clear that deletes the journal
+(<a class="reference internal" href="#durable-clear"><span class="std std-ref">Clearing a task</span></a>) starts over with the new list.</p>
+<p>An <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> from pydantic-ai still needs an id from you. Its calls are named after
+the toolset alone, and no id is derived from the server’s URL or command, which can carry
+credentials. The Dag fails to load with:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: durable=True needs a unique id on every MCPToolset, such as MCPToolset(..., id='weather'): durable replay records each tool call under it, and none is derived from the server's URL or command, which can carry credentials. Set it on the toolset itself; the id of a Toolset capability around a toolset does not reach it.
 </pre></div>
 </div>
-<p>It also refuses two different toolsets with the same id, which would file their calls
-under one name; passing one toolset object in two places is fine.</p>
-<p>Keep an id stable once tasks run with it: a retry finds its recorded tool calls by it.
-The provider’s own toolsets (<code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code> and the rest) and tools
-passed as <code class="docutils literal notranslate"><span class="pre">agent_params={&quot;tools&quot;:</span> <span class="pre">[...]}</span></code> need nothing. A capability that contributes
-<code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods needs an <code class="docutils literal notranslate"><span class="pre">id</span></code> for the same reason; pydantic-ai raises
+<p>So does a callable that has no <code class="docutils literal notranslate"><span class="pre">__qualname__</span></code> to name it by, such as a
+<code class="docutils literal notranslate"><span class="pre">functools.partial</span></code>; pass it as <code class="docutils literal notranslate"><span class="pre">DynamicToolset(function,</span> <span class="pre">id=...)</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: durable=True names the steps of a toolset built per run after the function that builds it, but functools.partial(&lt;function carrier_tools at 0x...&gt;, carrier='dhl') has no __qualname__. Pass it as DynamicToolset(function, id=...).
+</pre></div>
+</div>
+<p>Two different toolsets with the same id are refused, since their calls would be filed
+under one name, and so are two functions with the same qualified name, such as two
+lambdas in one Dag file:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: durable=True needs a unique id on each toolset, but more than one toolset has the id 'orders_dag_lambdas.&lt;lambda&gt;': durable replay records each tool call under its toolset's id, so a retry could not tell their calls apart.
+</pre></div>
+</div>
+<p>Passing one toolset object in two places is fine. The provider’s own toolsets
+(<code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code>, its <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> and the rest) and tools passed as
+<code class="docutils literal notranslate"><span class="pre">agent_params={&quot;tools&quot;:</span> <span class="pre">[...]}</span></code> need nothing. <code class="docutils literal notranslate"><span class="pre">AirflowDurability</span></code> in a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>
+does not fill in ids: there pydantic-ai raises <code class="docutils literal notranslate"><span class="pre">UserError</span></code> for a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> or <code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code> without one. A capability that contributes
+<code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods needs an <code class="docutils literal notranslate"><span class="pre">id</span></code> for the same reason, and pydantic-ai raises
 <code class="docutils literal notranslate"><span class="pre">UserError</span></code> naming it when it has none. pydantic-ai-harness <code class="docutils literal notranslate"><span class="pre">SpendLimits</span></code> has one by
 default.</p>
 </section>
@@ -830,7 +885,19 @@ default.</p>
 <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/task-state-store.html" title="(in apache-airflow v3.5.0)"><span class="xref std std-doc">task state store</span></a>, scoped to the
 task instance. No configuration is needed. Each step is written to the Airflow metadata
 database; for agents with large model responses or tool results, set
-<code class="docutils literal notranslate"><span class="pre">[workers]</span> <span class="pre">state_store_backend</span></code> to offload the values to external storage instead.</p>
+<code class="docutils literal notranslate"><span class="pre">[workers]</span> <span class="pre">state_store_backend</span></code> to offload the values to external storage instead.
+Without it, a step larger than <code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">max_value_storage_bytes</span></code> (64 KB by
+default) is still written to the database, and the task log warns that it exceeds the
+limit.</p>
+<p>When the agent run succeeds, its journal is deleted; with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, once the
+reviewer approves (<a class="reference internal" href="hitl_review.html#hitl-review-durable"><span class="std std-ref">With durable execution</span></a>). On 3.3 and later, every step the
+agent completes is one write to the task state store, a call the task makes to the API
+server while the agent waits. A first attempt reads back only the list of agent runs the
+task started (and, in <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code>, the run id), since no earlier attempt recorded
+anything; a retry also looks up each step of a run an earlier attempt started, and stops
+looking once the run takes a different path from that attempt. Deleting the journal is
+one call per entry; before 3.3 it rewrites the journal file instead, or removes it once
+nothing is left in it.</p>
 <p>On <strong>Airflow before 3.3</strong> the journal is a JSON file on ObjectStorage, and the location
 must be set:</p>
 <div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[common.ai]</span>
@@ -850,7 +917,7 @@ worker can read the journal:</p>
 </div>
 </section>
 <section id="how-a-retry-replays">
-<h2>How a retry replays<a class="headerlink" href="#how-a-retry-replays" title="Link to this heading">¶</a></h2>
+<span id="durable-replay"></span><h2>How a retry replays<a class="headerlink" href="#how-a-retry-replays" title="Link to this heading">¶</a></h2>
 <p>Each step the agent completes is recorded under its position in the run, with its
 name (which model or tool it was) and a fingerprint of what it was asked: the model,
 the message history, the settings and the tool definitions for a model request; the
@@ -886,28 +953,60 @@ succeeded alongside the one that was rejected. The task log names the step:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Durable: the run took a different path from the previous attempt; this step and every step after it run again position=2 step=analyst__model.request reason=the model's answers from this step on failed the previous attempt, so it is asked again
 </pre></div>
 </div>
+<p>A tool call that fails the run on two attempts in a row, with an exception other than
+<code class="docutils literal notranslate"><span class="pre">ModelRetry</span></code>, <code class="docutils literal notranslate"><span class="pre">ToolFailed</span></code>, <code class="docutils literal notranslate"><span class="pre">ApprovalRequired</span></code> or <code class="docutils literal notranslate"><span class="pre">CallDeferred</span></code>, is also handled
+by asking the model again. The first retry replays the model’s answer and runs the call
+again with the same arguments, in case the failure was transient, such as a dropped
+connection. If the call fails the run on that retry too, the arguments are taken to be the
+problem: the next retry replays the steps before the model request that chose the call,
+and asks the model again from there. That takes <code class="docutils literal notranslate"><span class="pre">retries=2</span></code> or more. A call from the new
+answer gets its own retry with the same arguments before the model is asked again, and
+other calls of the old answer run again if the new answer repeats them. When the failing
+call belongs to an agent that a tool runs, only that agent’s model is asked again. The
+attempt that failed the second time logs:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Durable: the same tool call failed on consecutive attempts; a retry asks the model again from the request that chose it position=1 step=slogan_agent__function_toolset__marketing.call_tool:publish_slogan attempts=2
+</pre></div>
+</div>
+<p>The model is asked with the conversation it had before, which does not include the
+exception, so it can choose the same arguments again. To let the model see what went
+wrong and correct the call within the same attempt, raise <code class="docutils literal notranslate"><span class="pre">ModelRetry</span></code> from the tool
+instead.</p>
 <p>Some steps have no request to fingerprint: another capability’s
 <code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code>, or tool discovery. Such a step replays on its name, and only when
-the step before it also replayed.</p>
+the step before it also replayed. A step that settles tool calls waiting for approval is
+fingerprinted by those calls, so it replays only for them.</p>
 <p>The journal records:</p>
 <ul class="simple">
 <li><p>model requests, including streamed ones;</p></li>
 <li><p>calls to tools from any toolset, including the provider’s own toolsets, MCP servers,
-toolsets built per run, and toolsets supplied by capabilities;</p></li>
+toolsets built per run, and toolsets supplied by capabilities, except the tools you
+<a class="reference internal" href="#durable-tool-opt-out"><span class="std std-ref">set to run on every attempt</span></a>;</p></li>
 <li><p>tool discovery for MCP and per-run toolsets;</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods of other capabilities, such as the spend accounting of
 pydantic-ai-harness <code class="docutils literal notranslate"><span class="pre">SpendLimits</span></code> and the summarization of <code class="docutils literal notranslate"><span class="pre">SummarizingCompaction</span></code>,
-so a retry neither charges the spend twice nor pays for a summary again.</p></li>
+so a retry neither charges the spend twice nor pays for a summary again, unless the
+summary follows a tool set to run on every attempt.</p></li>
 </ul>
 <p>A tool that raises <code class="docutils literal notranslate"><span class="pre">ModelRetry</span></code>, <code class="docutils literal notranslate"><span class="pre">ToolFailed</span></code>, <code class="docutils literal notranslate"><span class="pre">ApprovalRequired</span></code> or
-<code class="docutils literal notranslate"><span class="pre">CallDeferred</span></code> replays as the same signal. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> does not support tool
-approval or deferred tools with <code class="docutils literal notranslate"><span class="pre">durable=True</span></code>, so there such a call fails the task
-with <code class="docutils literal notranslate"><span class="pre">UnsupportedToolDeferralError</span></code>, as it would without <code class="docutils literal notranslate"><span class="pre">durable</span></code>. A tool that raises
-any other exception runs again on retry.</p>
+<code class="docutils literal notranslate"><span class="pre">CallDeferred</span></code> replays as the same signal. With <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> on Airflow 3.3 and
+later, a tool that needs approval pauses the task (except with code mode or
+<code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>), and the reviewer’s answer is recorded as a step, so a retry does
+not ask again, and replays an approved call that returned (<a class="reference internal" href="tool_approval.html#tool-approval-durable"><span class="std std-ref">With durable execution</span></a>
+has the exceptions). A deferred tool (<code class="docutils literal notranslate"><span class="pre">CallDeferred</span></code>) fails the task with
+<code class="docutils literal notranslate"><span class="pre">UnsupportedToolDeferralError</span></code>, as it would without <code class="docutils literal notranslate"><span class="pre">durable</span></code>. A tool that raises
+any other exception runs again on retry; once it has failed the run on two attempts in a
+row, the next retry asks the model again, as described above. <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> uses that
+split: a statement the database rejects is a <code class="docutils literal notranslate"><span class="pre">ModelRetry</span></code> and replays, while failing to
+reach the database raises, so the retry queries it again rather than handing the model the
+old failure.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, the first output and each regeneration after feedback are
+runs in the same journal, and on Airflow 3.3 and later a retry applies the feedback the
+reviewer already gave instead of asking again; a review that ends in a reject starts over
+with a new answer from the model (<a class="reference internal" href="hitl_review.html#hitl-review-durable"><span class="std std-ref">With durable execution</span></a>).</p>
 <p>A task can run more than one agent, and an agent’s tool can run another agent; each
 agent run is replayed on its own, and one a tool started is replayed under that tool
 call. The journal is deleted when the task succeeds, including any steps an earlier
-attempt recorded beyond where the last one went, so a task cleared later starts fresh.
+attempt recorded beyond where the last one went.
 In a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code>, which has no such moment, the capability deletes a run’s journal
 as soon as that run succeeds: after a failure, only the run that failed replays, and
 the agents that ran before it run again.</p>
@@ -1011,15 +1110,34 @@ accounting for a <code class="docutils literal notranslate"><span class="pre">ru
 failed attempt or a successful one, and the <code class="docutils literal notranslate"><span class="pre">gen_ai.agent.call.id</span></code> span attribute carry
 the same id; the spans of each attempt still carry that attempt’s own
 <code class="docutils literal notranslate"><span class="pre">airflow.task_instance.id</span></code> and <code class="docutils literal notranslate"><span class="pre">try_number</span></code>. The id is stored with the journal and
-deleted with it, so a task cleared after it succeeded starts a new one.</p>
+deleted with it, so a rerun after a clear that deleted the journal (see
+<a class="reference internal" href="#durable-clear"><span class="std std-ref">Clearing a task</span></a>) gets a new one.</p>
 </section>
 <section id="usage-and-limits">
 <h2>Usage and limits<a class="headerlink" href="#usage-and-limits" title="Link to this heading">¶</a></h2>
 <p>A replayed step adds nothing to the usage the run counts against <code class="docutils literal notranslate"><span class="pre">usage_limits</span></code> or
 reports in the <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom: not its request, tokens, cost or tool calls, nor the
 usage a replayed <code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> brings back. Each attempt counts only the calls
-it actually makes. This holds after clearing a failed task instance too: the clear
-starts a fresh budget but keeps the journal, and what the rerun replays from it is free.</p>
+it actually makes. Clearing a finished task instance starts a fresh budget; if the
+rerun replays from the journal (see <a class="reference internal" href="#durable-clear"><span class="std std-ref">Clearing a task</span></a>), the replayed steps cost nothing.</p>
+</section>
+<section id="clearing-a-task">
+<span id="durable-clear"></span><h2>Clearing a task<a class="headerlink" href="#clearing-a-task" title="Link to this heading">¶</a></h2>
+<p>On Airflow 3.4 and later, clearing a task instance (its Clear dialog in the UI, or
+<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v2/dags/{dag_id}/clearTaskInstances</span></code>) deletes its task state, the journal
+included, so the rerun starts the agent over. This holds for the default task state store
+backend; a custom <code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">backend</span></code> keeps its entries. To resume from the journal
+instead, tick <strong>Keep task state and resume</strong> in the dialog, or send
+<code class="docutils literal notranslate"><span class="pre">&quot;keep_task_state&quot;:</span> <span class="pre">true</span></code> in the request. The <strong>Keep task state on clear</strong> UI setting
+ticks that box by default. Clearing the whole Dag run from the Clear Run dialog keeps task
+state; “Retries resume, clearing starts over” in
+<a class="reference external" href="/docs/apache-airflow/stable/core-concepts/resumable-tasks.html#concepts-resumable-tasks" title="(in apache-airflow v3.5.0)"><span>Resumable Tasks</span></a> lists the other ways of clearing and which
+of them keep it.</p>
+<p>Before Airflow 3.4 no clear deletes the journal (the task state store on 3.3, the file
+under <code class="docutils literal notranslate"><span class="pre">durable_cache_path</span></code> earlier), so a cleared task replays.</p>
+<p>A task that ran to success has no journal left, so clearing it starts over either way. For
+<code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code>, the rerun’s <code class="docutils literal notranslate"><span class="pre">Durable:</span></code> line in the task log
+counts the steps it replayed; a count above zero means it resumed from the journal.</p>
 </section>
 <section id="side-effects-and-idempotency">
 <h2>Side effects and idempotency<a class="headerlink" href="#side-effects-and-idempotency" title="Link to this heading">¶</a></h2>
@@ -1028,26 +1146,114 @@ side effect it had (a file written, a message sent) is not repeated.
 A tool that fails <em>before</em> its result is recorded runs again on retry, so a tool that
 sent an email and then raised sends it again. The same holds when the worker dies
 between a tool’s side effect and the write of its result, and for the tool calls of a
-model answer that the retry asks for again after the model ran out of retries. Make tools with side effects
+model answer that the retry asks for again, after pydantic-ai gave up on the model’s
+answers (<code class="docutils literal notranslate"><span class="pre">UnexpectedModelBehavior</span></code>) or a tool call failed the run on two attempts in a
+row. Make tools with side effects
 idempotent: check whether the work already happened, or let a database constraint
 reject the duplicate.</p>
 <p>Tool results are masked by Airflow’s secret masker before they are recorded, so a
 connection password in a result reaches the journal as <code class="docutils literal notranslate"><span class="pre">***</span></code>.</p>
-<p>A toolset can opt out of replay. <code class="docutils literal notranslate"><span class="pre">ManagedAgentToolset</span></code> does by default
-(<code class="docutils literal notranslate"><span class="pre">replayable=False</span></code>), because a managed agent acts on a system Airflow cannot observe:
-its calls run again on every attempt, while the steps around them still replay.</p>
-<p>A result has to survive a JSON round trip to be recorded. One that cannot be encoded
-fails the task with <code class="docutils literal notranslate"><span class="pre">DurableJournalError</span></code> and no retry, since it would fail the same
-way every time; the model could not have read it either. A write the task state store
-refuses does not fail the task: the task log names
-the step, and a retry runs it again.</p>
+<p>A result has to survive a JSON round trip to be recorded. Bytes a tool returns, on their
+own or as values anywhere inside dicts and lists, are recorded as base64, and a retry
+replays the same bytes. Only <code class="docutils literal notranslate"><span class="pre">bytes</span></code> is converted. <code class="docutils literal notranslate"><span class="pre">bytearray</span></code>, <code class="docutils literal notranslate"><span class="pre">memoryview</span></code>, a
+<code class="docutils literal notranslate"><span class="pre">set</span></code> or <code class="docutils literal notranslate"><span class="pre">frozenset</span></code> of bytes, and bytes in a field of a dataclass or Pydantic model
+are not:
+depending on the pydantic-ai version and the toolset, such a result fails the task, or
+it comes back changed (as text, a list or a dict), which can make the steps after that
+tool call run again. Put bytes in a dict instead. A result the journal cannot encode,
+such as an object with no JSON form, fails the task with <code class="docutils literal notranslate"><span class="pre">DurableJournalError</span></code> and no
+retry, since it would fail the same way every time. A write the storage refuses or
+fails does not fail the task: the task log names the step, and a retry runs it again.</p>
+</section>
+<section id="run-a-tool-on-every-attempt">
+<span id="durable-tool-opt-out"></span><h2>Run a tool on every attempt<a class="headerlink" href="#run-a-tool-on-every-attempt" title="Link to this heading">¶</a></h2>
+<p>Some tools must run again on a retry rather than replay: one whose answer has to be
+current, such as today’s date or the state of a job, and one whose effect does not outlive
+the attempt, such as a file in a temporary directory. Give such a tool the metadata
+<code class="docutils literal notranslate"><span class="pre">{&quot;airflow&quot;:</span> <span class="pre">False}</span></code>. For a tool in a toolset you do not build yourself, such as
+<code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, select it by name with pydantic-ai’s <code class="docutils literal notranslate"><span class="pre">SetToolMetadata</span></code> capability:</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_agent_durable.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/airflow/providers/common/ai/example_dags/example_agent_durable.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">today</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return today's date in UTC."""</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span><span class="o">.</span><span class="n">date</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+
+
+<span class="k">if</span> <span class="n">SQLToolset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+
+    <span class="nd">@dag</span><span class="p">(</span><span class="n">default_args</span><span class="o">=</span><span class="p">{</span><span class="s2">"retries"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"retry_delay"</span><span class="p">:</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)},</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">example_agent_durable_tool_opt_out</span><span class="p">():</span>
+        <span class="n">AgentOperator</span><span class="p">(</span>
+            <span class="n">task_id</span><span class="o">=</span><span class="s2">"durable_freshness_check"</span><span class="p">,</span>
+            <span class="n">prompt</span><span class="o">=</span><span class="s2">"Which tables in load_log have not been loaded today?"</span><span class="p">,</span>
+            <span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span>
+            <span class="n">durable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">toolsets</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">FunctionToolset</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">Tool</span><span class="p">(</span><span class="n">today</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">"airflow"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})],</span> <span class="nb">id</span><span class="o">=</span><span class="s2">"calendar"</span><span class="p">),</span>
+                <span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"postgres_default"</span><span class="p">,</span> <span class="n">allowed_tables</span><span class="o">=</span><span class="p">[</span><span class="s2">"load_log"</span><span class="p">]),</span>
+            <span class="p">],</span>
+            <span class="n">capabilities</span><span class="o">=</span><span class="p">[</span><span class="n">SetToolMetadata</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="s2">"query"</span><span class="p">],</span> <span class="n">airflow</span><span class="o">=</span><span class="kc">False</span><span class="p">)],</span>
+        <span class="p">)</span>
+
+</pre></div>
+</div>
+</div>
+<p>On a retry, <code class="docutils literal notranslate"><span class="pre">today</span></code> and every <code class="docutils literal notranslate"><span class="pre">query</span></code> call run again, and the model requests and the
+other tool calls still replay. A live call that returns what it returned on the last
+attempt leaves the model requests and tool calls after it replaying. One that returns
+something new changes the conversation the model sees, so the model requests after it,
+and the tool calls they make, run again. A capability that writes into the conversation
+right after the live call (a compaction summary, say) runs again too: its
+<code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> has no request to compare, so it replays only after a step that
+replayed. The summary it writes can then make the steps after it run again.</p>
+<p>You can turn the opt-out on or off between attempts. The call keeps its place in the
+journal and the setting is left out when a model request is compared, so later steps still
+replay. Failures still count, too. Two in a row with the same arguments, and the next retry
+asks the model again.</p>
+<p>Where the setting goes depends on the toolset:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Toolset</p></th>
+<th class="head"><p>How to opt a tool out</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code>, tools passed to the agent</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">metadata={&quot;airflow&quot;:</span> <span class="pre">False}</span></code> on the tool, or <code class="docutils literal notranslate"><span class="pre">SetToolMetadata</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">HookToolset</span></code>, the provider’s <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code>, and any other toolset</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SetToolMetadata</span></code>. On a toolset built on <code class="docutils literal notranslate"><span class="pre">AirflowToolset</span></code>, setting
+<code class="docutils literal notranslate"><span class="pre">replayable</span> <span class="pre">=</span> <span class="pre">False</span></code> opts all its tools out; <code class="docutils literal notranslate"><span class="pre">ManagedAgentToolset</span></code> does by
+default, because a managed agent acts on a system Airflow cannot observe.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SetToolMetadata</span></code>. Its tool list replays from the journal, so metadata set inside
+the toolset can keep the value an earlier attempt saw.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pydantic_ai.mcp.MCPToolset</span></code></p></td>
+<td><p>Not supported; pydantic-ai raises the error below when an opted-out tool is called.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The error from pydantic-ai’s <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>pydantic_ai.exceptions.UserError: Airflow durable config for MCP tool 'get_forecast' has been explicitly set to `False` (durable execution disabled), but MCP tools perform I/O and cannot run outside a durable step. Remove the metadata so the call stays durable.
+</pre></div>
+</div>
+<p>Any value other than <code class="docutils literal notranslate"><span class="pre">True</span></code>, <code class="docutils literal notranslate"><span class="pre">False</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> fails the task before the model is first
+offered the tool, and the task is not retried:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>airflow.providers.common.ai.exceptions.DurableToolMetadataError: Tool 'today' has invalid 'airflow' metadata: expected True or False, got str.
+</pre></div>
+</div>
 </section>
 <section id="limitations">
 <h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> cannot be combined with <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code>
-or tool approval. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for the first two when the Dag
-is parsed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">durable=True</span></code> cannot be combined with a <code class="docutils literal notranslate"><span class="pre">SandboxToolset</span></code>. <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> raises
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when the Dag is parsed.</p></li>
 <li><p>A task instance that is retried across an upgrade of this provider from a version
 without <code class="docutils literal notranslate"><span class="pre">AirflowDurability</span></code> runs its steps live once: the journal keys changed.</p></li>
 </ul>
@@ -1139,7 +1345,7 @@ without <code class="docutils literal notranslate"><span class="pre">AirflowDura
             <ul>
 <li><a class="reference internal" href="#">Durable execution</a><ul>
 <li><a class="reference internal" href="#turn-it-on">Turn it on</a></li>
-<li><a class="reference internal" href="#give-every-toolset-an-id">Give every toolset an id</a></li>
+<li><a class="reference internal" href="#toolset-ids">Toolset ids</a></li>
 <li><a class="reference internal" href="#where-the-journal-is-kept">Where the journal is kept</a></li>
 <li><a class="reference internal" href="#how-a-retry-replays">How a retry replays</a></li>
 <li><a class="reference internal" href="#values-that-are-not-plain-json">Values that are not plain JSON</a></li>
@@ -1147,7 +1353,9 @@ without <code class="docutils literal notranslate"><span class="pre">AirflowDura
 <li><a class="reference internal" href="#what-the-task-log-shows">What the task log shows</a></li>
 <li><a class="reference internal" href="#the-agent-s-run-id-and-conversation-id">The agent’s <code class="docutils literal notranslate"><span class="pre">run_id</span></code> and <code class="docutils literal notranslate"><span class="pre">conversation_id</span></code></a></li>
 <li><a class="reference internal" href="#usage-and-limits">Usage and limits</a></li>
+<li><a class="reference internal" href="#clearing-a-task">Clearing a task</a></li>
 <li><a class="reference internal" href="#side-effects-and-idempotency">Side effects and idempotency</a></li>
+<li><a class="reference internal" href="#run-a-tool-on-every-attempt">Run a tool on every attempt</a></li>
 <li><a class="reference internal" href="#limitations">Limitations</a></li>
 <li><a class="reference internal" href="#see-also">See also</a></li>
 </ul>
@@ -1369,7 +1577,7 @@ without <code class="docutils literal notranslate"><span class="pre">AirflowDura
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

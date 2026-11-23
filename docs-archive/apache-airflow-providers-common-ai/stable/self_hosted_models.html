@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -514,7 +514,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -979,6 +979,94 @@ model doesn’t have to guess a path. That matters because <code class="docutils
 on any response outside the 2xx/3xx range: if the model guessed wrong, the
 task would fail outright rather than the agent recovering gracefully.</p>
 </section>
+<section id="waiting-for-an-ollama-model-to-load">
+<span id="self-hosted-models-ensure-model-ready"></span><h2>Waiting for an Ollama model to load<a class="headerlink" href="#waiting-for-an-ollama-model-to-load" title="Link to this heading">¶</a></h2>
+<p>Ollama loads a model into memory on the first request. pydantic-ai’s default
+HTTP read timeout is 600 seconds, longer than the 300 seconds used below, so with
+default settings the agent’s first request waits for the load itself. Loading
+ahead of time matters when <code class="docutils literal notranslate"><span class="pre">model_settings</span></code> sets a shorter <code class="docutils literal notranslate"><span class="pre">timeout</span></code>: the first
+request then times out before the model has loaded. In that case, call
+<a class="reference internal" href="_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.ensure_model_ready" title="airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.ensure_model_ready"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ensure_model_ready()</span></code></a>
+before the task builds its agent. It sends Ollama a load request for this
+connection’s model and waits until Ollama answers, which it does once the model
+is available (right away if it is already loaded):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticAIHook</span>
+
+<span class="n">hook</span> <span class="o">=</span> <span class="n">PydanticAIHook</span><span class="p">(</span><span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">)</span>
+<span class="n">hook</span><span class="o">.</span><span class="n">ensure_model_ready</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+<span class="n">agent</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">create_agent</span><span class="p">(</span><span class="n">instructions</span><span class="o">=</span><span class="s2">"Answer briefly."</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Nothing calls it for you; it is opt-in. It has these limits:</p>
+<ul class="simple">
+<li><p>Only Ollama is built in. For any other model prefix pass <code class="docutils literal notranslate"><span class="pre">backend_factory=</span></code>
+(see below); without it, <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code> is raised.</p></li>
+<li><p>Only the hook’s own connection is checked. Models behind <code class="docutils literal notranslate"><span class="pre">fallback_conn_ids</span></code>
+are not loaded.</p></li>
+<li><p>The call blocks and holds the worker slot for the whole wait.</p></li>
+<li><p>The built-in Ollama backend does not send the connection’s password, so an Ollama
+server behind authentication is not supported.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> and <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code> build their own hook from <code class="docutils literal notranslate"><span class="pre">llm_conn_id</span></code> and
+their <code class="docutils literal notranslate"><span class="pre">model_id</span></code>, so call <code class="docutils literal notranslate"><span class="pre">ensure_model_ready</span></code> from an upstream task with
+the same connection and, if the downstream task sets <code class="docutils literal notranslate"><span class="pre">model_id</span></code>, the same
+<code class="docutils literal notranslate"><span class="pre">model_id</span></code>. Otherwise the upstream task loads the connection’s own model:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">PydanticAIHook</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">task</span>
+
+
+<span class="nd">@task</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_model</span><span class="p">():</span>
+    <span class="n">hook</span> <span class="o">=</span> <span class="n">PydanticAIHook</span><span class="p">(</span><span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span> <span class="n">model_id</span><span class="o">=</span><span class="s2">"ollama:llama3"</span><span class="p">)</span>
+    <span class="n">hook</span><span class="o">.</span><span class="n">ensure_model_ready</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The load request does not send <code class="docutils literal notranslate"><span class="pre">keep_alive</span></code>, so Ollama unloads the model after
+its own keep-alive time (5 minutes by default) like any other model. If the
+downstream LLM task can wait in the queue longer than that, raise the server’s
+default with the <code class="docutils literal notranslate"><span class="pre">OLLAMA_KEEP_ALIVE</span></code> environment variable.</p>
+<p>The upstream task and the LLM task must reach the same Ollama server for the
+load to help. With one Ollama on each worker (a <code class="docutils literal notranslate"><span class="pre">localhost</span></code> connection) or several
+replicas behind a load balancer, the load request can reach a different server
+than the LLM call, and then it has no effect on that call.</p>
+<p><code class="docutils literal notranslate"><span class="pre">timeout</span></code> is passed as is to the load request. Running out ends in a
+<code class="docutils literal notranslate"><span class="pre">TimeoutError</span></code> naming the model, or the server when it cannot be reached.
+Nothing is retried, so a wrong host, a server error or a request timing out is
+raised right away.</p>
+<section id="using-your-own-readiness-backend">
+<span id="self-hosted-models-readiness-backend"></span><h3>Using your own readiness backend<a class="headerlink" href="#using-your-own-readiness-backend" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ensure_model_ready</span></code> accepts <code class="docutils literal notranslate"><span class="pre">backend_factory=</span></code>, a callable that is called
+with the keyword arguments <code class="docutils literal notranslate"><span class="pre">model_name</span></code> (the model name without its provider
+prefix) and <code class="docutils literal notranslate"><span class="pre">base_url</span></code> (the connection’s host, or <code class="docutils literal notranslate"><span class="pre">None</span></code>) and returns any
+object with a keyword-only <code class="docutils literal notranslate"><span class="pre">load(*,</span> <span class="pre">timeout)</span></code> method, described by
+<a class="reference internal" href="_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackend" title="airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">ModelReadinessBackend</span></code></a>.
+<code class="docutils literal notranslate"><span class="pre">load</span></code> should return once the model is available. With <code class="docutils literal notranslate"><span class="pre">backend_factory=</span></code>,
+the model prefix and the connection host are not checked, and errors are raised
+as is. The <code class="docutils literal notranslate"><span class="pre">base_url</span></code> the factory receives is only the connection’s host, never
+<code class="docutils literal notranslate"><span class="pre">OLLAMA_BASE_URL</span></code>; the factory decides what to do when it is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyServerBackend</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+
+
+<span class="n">hook</span><span class="o">.</span><span class="n">ensure_model_ready</span><span class="p">(</span><span class="n">backend_factory</span><span class="o">=</span><span class="n">MyServerBackend</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The prefix is not used to detect the server, because <code class="docutils literal notranslate"><span class="pre">openai:&lt;model&gt;</span></code> can
+point at Ollama’s <code class="docutils literal notranslate"><span class="pre">/v1</span></code> endpoint as well as at any other OpenAI-compatible
+server. When it points at Ollama, pass <code class="docutils literal notranslate"><span class="pre">OllamaBackend</span></code> as the factory
+(<code class="docutils literal notranslate"><span class="pre">base_url</span></code> may keep its <code class="docutils literal notranslate"><span class="pre">/v1</span></code> suffix). When the connection has no host,
+<code class="docutils literal notranslate"><span class="pre">OllamaBackend</span></code> uses the <code class="docutils literal notranslate"><span class="pre">OLLAMA_BASE_URL</span></code> environment variable, and raises
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if that is not set either:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.ollama</span><span class="w"> </span><span class="kn">import</span> <span class="n">OllamaBackend</span>
+
+<span class="n">hook</span> <span class="o">=</span> <span class="n">PydanticAIHook</span><span class="p">(</span><span class="n">llm_conn_id</span><span class="o">=</span><span class="s2">"pydanticai_default"</span><span class="p">,</span> <span class="n">model_id</span><span class="o">=</span><span class="s2">"openai:llama3"</span><span class="p">)</span>
+<span class="n">hook</span><span class="o">.</span><span class="n">ensure_model_ready</span><span class="p">(</span><span class="n">backend_factory</span><span class="o">=</span><span class="n">OllamaBackend</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
 <section id="routing-through-an-ai-gateway">
 <h2>Routing through an AI gateway<a class="headerlink" href="#routing-through-an-ai-gateway" title="Link to this heading">¶</a></h2>
 <p>The same wiring routes through a bearer-token AI gateway instead of talking
@@ -1196,6 +1284,10 @@ for the full list of providers it supports.</p></li>
 <li><a class="reference internal" href="#create-the-connection">2. Create the connection</a></li>
 <li><a class="reference internal" href="#run-your-first-dag-with-task-llm">3. Run your first Dag with <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code></a></li>
 <li><a class="reference internal" href="#run-an-agent-with-tool-calling">4. Run an agent with tool calling</a></li>
+<li><a class="reference internal" href="#waiting-for-an-ollama-model-to-load">Waiting for an Ollama model to load</a><ul>
+<li><a class="reference internal" href="#using-your-own-readiness-backend">Using your own readiness backend</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#routing-through-an-ai-gateway">Routing through an AI gateway</a></li>
 <li><a class="reference internal" href="#reference">Reference</a><ul>
 <li><a class="reference internal" href="#model-identifier-format">Model identifier format</a></li>
@@ -1423,7 +1515,7 @@ for the full list of providers it supports.</p></li>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

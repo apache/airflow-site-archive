@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -709,9 +709,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">concurrent.futures</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">contextvars</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">overload</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">overload</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pydantic_ai</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span>
@@ -721,6 +723,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.providers</span><span class="w"> </span><span class="kn">import</span> <span class="n">infer_provider_class</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParamSpec</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.hooks.ollama</span><span class="w"> </span><span class="kn">import</span> <span class="n">OllamaBackend</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.observability</span><span class="w"> </span><span class="kn">import</span> <span class="n">genai_instrumentation_settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">MaskingCapability</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.module_loading</span><span class="w"> </span><span class="kn">import</span> <span class="n">import_string</span>
@@ -741,6 +744,44 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="R">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.R">[docs]</a>
 <span class="n">R</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"R"</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ModelReadinessBackend">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackend">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ModelReadinessBackend</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Server-specific half of :meth:`PydanticAIHook.ensure_model_ready`.</span>
+
+<span class="sd">    Any object with this method works; it does not need to subclass this class.</span>
+
+<span class="sd">    ``load`` returns once the model is available, waiting at most *timeout* seconds, and raises</span>
+<span class="sd">    ``TimeoutError`` when it exceeds *timeout*. See :ref:`self_hosted_models_readiness_backend`.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="ModelReadinessBackend.load">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackend.load">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ModelReadinessBackendFactory">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackendFactory">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ModelReadinessBackendFactory</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Builds the :class:`ModelReadinessBackend` for :meth:`PydanticAIHook.ensure_model_ready`.</span>
+
+<span class="sd">    Called with the ``model_name`` without its provider prefix and the connection host as</span>
+<span class="sd">    ``base_url`` (``None`` when the connection has no host). ``OllamaBackend`` is one.</span>
+<span class="sd">    See :ref:`self_hosted_models_readiness_backend`.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="ModelReadinessBackendFactory.__call__">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackendFactory.__call__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelReadinessBackend</span><span class="p">:</span> <span class="o">...</span></div>
+</div>
+
 
 
 <span class="c1"># Sentinel distinguishing "caller did not pass ``instrument``" from an explicit</span>
@@ -1272,10 +1313,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">model_name</span> <span class="o">=</span> <span class="n">forwarded_model_id</span>
             <span class="n">forwarded</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">model_name</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"No model specified for connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">'. Set model_id on the "</span>
-                <span class="s2">"hook or the Model field on the connection."</span>
-            <span class="p">)</span>
+            <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_missing_model_error</span><span class="p">()</span>
         <span class="n">model_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qualify_model_name</span><span class="p">(</span>
             <span class="n">model_name</span><span class="p">,</span>
             <span class="n">forwarded_from_conn_id</span><span class="o">=</span><span class="n">forwarded_from_conn_id</span> <span class="k">if</span> <span class="n">forwarded</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
@@ -1306,6 +1344,79 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="n">infer_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">provider_factory</span><span class="o">=</span><span class="n">_provider_factory</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">infer_model</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_missing_model_error</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"No model specified for connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">'. Set model_id on the "</span>
+            <span class="s2">"hook or the Model field on the connection."</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_readiness_backend</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">backend_factory</span><span class="p">:</span> <span class="n">ModelReadinessBackendFactory</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelReadinessBackend</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Build the readiness backend for the provider-prefixed *model_name*.</span>
+
+<span class="sd">        *backend_factory* is called with the unprefixed ``model_name`` and the connection's</span>
+<span class="sd">        ``base_url``; without it only Ollama has a built-in backend.</span>
+<span class="sd">        """</span>
+        <span class="n">provider_prefix</span><span class="p">,</span> <span class="n">sep</span><span class="p">,</span> <span class="n">rest</span> <span class="o">=</span> <span class="n">model_name</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">backend_factory</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">provider_prefix</span> <span class="o">!=</span> <span class="s2">"ollama"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"ensure_model_ready has no built-in readiness backend for '</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">' on "</span>
+                <span class="sa">f</span><span class="s2">"connection '</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="si">}</span><span class="s2">'; only Ollama is built in. Pass backend_factory= a "</span>
+                <span class="s2">"callable taking model_name= and base_url= that returns an object with load(); "</span>
+                <span class="s2">"OllamaBackend is available for a model that Ollama serves."</span>
+            <span class="p">)</span>
+        <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_conn_and_extra</span><span class="p">()</span>
+        <span class="n">base_url</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="kc">None</span>
+        <span class="n">unprefixed_name</span> <span class="o">=</span> <span class="n">rest</span> <span class="k">if</span> <span class="n">sep</span> <span class="k">else</span> <span class="n">model_name</span>
+        <span class="k">if</span> <span class="n">backend_factory</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">backend_factory</span><span class="p">(</span><span class="n">model_name</span><span class="o">=</span><span class="n">unprefixed_name</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="n">base_url</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">OllamaBackend</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">unprefixed_name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PydanticAIHook.ensure_model_ready">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/hooks/pydantic_ai/index.html#airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook.ensure_model_ready">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ensure_model_ready</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">300.0</span><span class="p">,</span>
+        <span class="n">backend_factory</span><span class="p">:</span> <span class="n">ModelReadinessBackendFactory</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Block until this connection's local model is loaded, asking the server to load it if needed.</span>
+
+<span class="sd">        Opt-in, blocks the worker slot, and loads only this hook's own connection. Details and</span>
+<span class="sd">        limits: :ref:`self_hosted_models_ensure_model_ready`.</span>
+
+<span class="sd">        :param timeout: Seconds to wait for the load request, passed to the backend as is.</span>
+<span class="sd">        :param backend_factory: Callable that takes the keyword arguments ``model_name`` (the</span>
+<span class="sd">            resolved name without its provider prefix) and ``base_url`` (the connection host, or</span>
+<span class="sd">            ``None``) and returns an object with ``load()`` (see ModelReadinessBackend). When</span>
+<span class="sd">            given, the model prefix and connection host checks are skipped; a missing model still</span>
+<span class="sd">            raises ``ValueError``. See :ref:`self_hosted_models_readiness_backend`.</span>
+<span class="sd">        :raises ValueError: If *timeout* is not a positive finite number or no model is configured;</span>
+<span class="sd">            also from the default ``OllamaBackend`` when neither the connection host nor the</span>
+<span class="sd">            ``OLLAMA_BASE_URL`` environment variable is set.</span>
+<span class="sd">        :raises NotImplementedError: If *backend_factory* is not given and the model's provider</span>
+<span class="sd">            prefix has no built-in backend (only ``ollama`` has one).</span>
+<span class="sd">        :raises TimeoutError: If a request times out.</span>
+<span class="sd">        :raises httpx2.TransportError: If a request cannot reach the server.</span>
+<span class="sd">        :raises httpx2.HTTPStatusError: If the server answers with an error status. The default</span>
+<span class="sd">            ``OllamaBackend`` words the message with the model name and the server's error text.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span> <span class="ow">or</span> <span class="n">timeout</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"timeout must be positive and finite, got </span><span class="si">{</span><span class="n">timeout</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">configured_name</span> <span class="o">:=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_configured_model_name</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_missing_model_error</span><span class="p">()</span>
+        <span class="n">model_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_qualify_model_name</span><span class="p">(</span><span class="n">configured_name</span><span class="p">)</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_readiness_backend</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">backend_factory</span><span class="p">)</span>
+
+        <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Loading model '</span><span class="si">%s</span><span class="s2">' for connection '</span><span class="si">%s</span><span class="s2">'"</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">llm_conn_id</span><span class="p">)</span>
+        <span class="n">backend</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Model '</span><span class="si">%s</span><span class="s2">' is ready after </span><span class="si">%.1f</span><span class="s2"> seconds"</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_fallback_conn_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -2172,7 +2283,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

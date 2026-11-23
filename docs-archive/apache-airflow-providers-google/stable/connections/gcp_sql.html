@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.9.0</span>
+        <span class="version-label">Version: </span><span class="version">23.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -491,7 +491,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">22.9.0</span>
+        <span class="version-label">Version: </span><span class="version">23.0.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -715,6 +715,45 @@ parameters of the URI. Note that all components of the URI should be URL-encoded
 </dd>
 </dl>
 </section>
+<section id="using-cloud-sql-auth-proxy-v2">
+<h2>Using Cloud SQL Auth Proxy v2<a class="headerlink" href="#using-cloud-sql-auth-proxy-v2" title="Link to this heading">¶</a></h2>
+<p>By default Airflow runs Cloud SQL Auth Proxy v1. To run Cloud SQL Auth Proxy v2 instead, set
+<code class="docutils literal notranslate"><span class="pre">&quot;sql_proxy_major_version&quot;:</span> <span class="pre">2</span></code> in the <code class="docutils literal notranslate"><span class="pre">extra</span></code> field. <code class="docutils literal notranslate"><span class="pre">sql_proxy_version</span></code> must also be set to the v2
+release to download, as there is no “latest” download for v2, unless the <code class="docutils literal notranslate"><span class="pre">sql_proxy_binary_path</span></code> argument
+of the hook or operator points to an existing v2 binary. Both must be v2.2.0 or newer.</p>
+<p>Cloud SQL for MySQL 8.4 users authenticating with <code class="docutils literal notranslate"><span class="pre">caching_sha2_password</span></code> need v2.19.0 or newer, and
+must keep the default Unix socket mode (<code class="docutils literal notranslate"><span class="pre">sql_proxy_use_tcp</span></code> disabled). v1 and older v2 releases cannot
+complete that plugin’s full authentication, so connections fail with <code class="docutils literal notranslate"><span class="pre">1045</span> <span class="pre">Access</span> <span class="pre">denied</span></code> after the
+server’s authentication cache is emptied, for example by an instance restart. Over TCP, full authentication
+needs the client to retrieve the server’s public key, which the MySQL hook cannot be configured to do.</p>
+<p>Cloud SQL Auth Proxy v2 connects only to the instance’s public IP by default, while v1 falls back to the
+private IP when the instance has no public IP. Airflow passes <code class="docutils literal notranslate"><span class="pre">--auto-ip</span></code> to v2 to keep the v1 behavior,
+so instances with only a private IP work with both versions. <code class="docutils literal notranslate"><span class="pre">--auto-ip</span></code> was added in v2.2.0, which is
+why older v2 releases exit at startup.</p>
+<p>The two versions also differ in authentication:</p>
+<ul class="simple">
+<li><p>When the Google Cloud connection has neither <code class="docutils literal notranslate"><span class="pre">key_path</span></code> nor <code class="docutils literal notranslate"><span class="pre">keyfile_dict</span></code>, v1 tries the
+<code class="docutils literal notranslate"><span class="pre">GOOGLE_APPLICATION_CREDENTIALS</span></code> file, then the active <code class="docutils literal notranslate"><span class="pre">gcloud</span></code> account, then Application Default
+Credentials. v2 uses Application Default Credentials only. A worker authenticated only with
+<code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">auth</span> <span class="pre">login</span></code> or <code class="docutils literal notranslate"><span class="pre">gcloud</span> <span class="pre">auth</span> <span class="pre">activate-service-account</span></code> can therefore work with v1 but fail,
+or connect as a different identity, with v2.</p></li>
+<li><p>v2 attributes its Cloud SQL Admin API calls to the quota project of its credentials. Credentials whose
+quota project is unrelated to the instance, which is common for local Application Default Credentials,
+make v2 fail with <code class="docutils literal notranslate"><span class="pre">403</span> <span class="pre">SERVICE_DISABLED</span></code> naming that other project.</p></li>
+</ul>
+<p>Example “extras” field:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">   </span><span class="nt">"database_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"mysql"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"project_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"example-project"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"location"</span><span class="p">:</span><span class="w"> </span><span class="s2">"europe-west1"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"instance"</span><span class="p">:</span><span class="w"> </span><span class="s2">"testinstance"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"use_proxy"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"sql_proxy_major_version"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"sql_proxy_version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v2.27.0"</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
 <section id="configuring-and-using-iam-authentication">
 <h2>Configuring and using IAM authentication<a class="headerlink" href="#configuring-and-using-iam-authentication" title="Link to this heading">¶</a></h2>
 <p>The Google provider supports two IAM authentication paths:</p>
@@ -772,9 +811,10 @@ Do not combine <code class="docutils literal notranslate"><span class="pre">use_
 <section id="configure-gcpcloudsql-connection-with-cloud-sql-auth-proxy-iam-authentication">
 <h3>Configure <code class="docutils literal notranslate"><span class="pre">gcpcloudsql</span></code> connection with Cloud SQL Auth Proxy IAM authentication<a class="headerlink" href="#configure-gcpcloudsql-connection-with-cloud-sql-auth-proxy-iam-authentication" title="Link to this heading">¶</a></h3>
 <p>For using Cloud SQL Auth Proxy IAM authentication, enable <code class="docutils literal notranslate"><span class="pre">&quot;use_proxy&quot;:</span> <span class="pre">&quot;True&quot;</span></code> and
-<code class="docutils literal notranslate"><span class="pre">&quot;sql_proxy_enable_iam_login&quot;:</span> <span class="pre">&quot;True&quot;</span></code> in the <code class="docutils literal notranslate"><span class="pre">extra</span></code> field. With the current Cloud SQL Auth Proxy
-v1 integration this option is supported for both Postgres and MySQL. Airflow passes
-<code class="docutils literal notranslate"><span class="pre">-enable_iam_login</span></code> to the proxy, so the <code class="docutils literal notranslate"><span class="pre">password</span></code> field can be empty.</p>
+<code class="docutils literal notranslate"><span class="pre">&quot;sql_proxy_enable_iam_login&quot;:</span> <span class="pre">&quot;True&quot;</span></code> in the <code class="docutils literal notranslate"><span class="pre">extra</span></code> field. Airflow passes <code class="docutils literal notranslate"><span class="pre">-enable_iam_login</span></code> to
+Cloud SQL Auth Proxy v1 or <code class="docutils literal notranslate"><span class="pre">--auto-iam-authn</span></code> to v2, so the <code class="docutils literal notranslate"><span class="pre">password</span></code> field can be empty.
+Cloud SQL Auth Proxy v1 supports IAM database authentication for Postgres only; for MySQL, use
+Cloud SQL Auth Proxy v2 (see <a class="reference internal" href="#using-cloud-sql-auth-proxy-v2">Using Cloud SQL Auth Proxy v2</a>).</p>
 <p>Example “extras” field for Postgres:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">   </span><span class="nt">"database_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"postgres"</span><span class="p">,</span>
@@ -795,7 +835,9 @@ v1 integration this option is supported for both Postgres and MySQL. Airflow pas
 <span class="w">   </span><span class="nt">"instance"</span><span class="p">:</span><span class="w"> </span><span class="s2">"testinstance"</span><span class="p">,</span>
 <span class="w">   </span><span class="nt">"use_proxy"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">   </span><span class="nt">"sql_proxy_use_tcp"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<span class="w">   </span><span class="nt">"sql_proxy_enable_iam_login"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">   </span><span class="nt">"sql_proxy_enable_iam_login"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"sql_proxy_major_version"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"sql_proxy_version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v2.27.0"</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -913,6 +955,7 @@ for the default <code class="docutils literal notranslate"><span class="pre">pub
             <ul>
 <li><a class="reference internal" href="#">Google Cloud SQL Connection</a><ul>
 <li><a class="reference internal" href="#configuring-the-connection">Configuring the Connection</a></li>
+<li><a class="reference internal" href="#using-cloud-sql-auth-proxy-v2">Using Cloud SQL Auth Proxy v2</a></li>
 <li><a class="reference internal" href="#configuring-and-using-iam-authentication">Configuring and using IAM authentication</a><ul>
 <li><a class="reference internal" href="#configure-service-accounts-on-google-cloud-iam-side">Configure Service Accounts on Google Cloud IAM side</a></li>
 <li><a class="reference internal" href="#configure-gcpcloudsql-connection-with-direct-iam-token-authentication">Configure <code class="docutils literal notranslate"><span class="pre">gcpcloudsql</span></code> connection with direct IAM token authentication</a></li>
@@ -1138,7 +1181,7 @@ for the default <code class="docutils literal notranslate"><span class="pre">pub
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=21e35fd5"></script>
+        <script src="../_static/documentation_options.js?v=950e7480"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

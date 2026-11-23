@@ -1,0 +1,115 @@
+tests.system.openlineage.example_openlineage_task_loop_state_dag
+================================================================
+
+.. py:module:: tests.system.openlineage.example_openlineage_task_loop_state_dag
+
+.. autoapi-nested-parse::
+
+   Dags with task loops whose state this Dag changes through the REST API, like a user does in the UI, or that end in
+   ways the loop Dag doesn't cover (requires Airflow 3.4+).
+
+   For each scenario it triggers a child Dag with a loop and changes its state, or clears it once it finished:
+       - a running task of the first iteration, and the Dag run around it, marked as success and as failed
+       - a task of the middle iteration cleared alone, then the loop run again from its first iteration, twice
+       - a loop stopped early by `until`, run again from its first iteration
+       - a task failing for good in the second iteration, next to a mapped task retrying in the first, and a
+         deferrable sensor and a sensor in reschedule mode in another loop of the same Dag
+
+   It needs a deployment with an API server (the OpenLineage e2e tests).
+
+   It checks, for every execution of every task:
+       - taskInstance's `try_number`, `max_tries`, `state`, `map_index`, `expanded_ti_count` and `region_index`
+       - taskInstance's `loop`: `index`, `trajectory`, `forked_from_region_id` and `resumes_from_index` of every run
+         of the loop, and the gate's `decision` recomputed when the loop runs again
+       - `dagRun`'s `clear_number` of every clear
+       - the API server's COMPLETE or FAIL of a marked task has the `runId` of the worker's START
+       - a task cleared alone runs again in its own iteration and region, and nothing after it runs again
+       - a loop ending on a failed task: the gate of that iteration and the iterations after it emit nothing
+       - a deferral or a reschedule inside the loop: START on every resume of the deferred task, one START for the
+         sensor in reschedule mode, and one COMPLETE each per iteration
+       - every execution (clear, trajectory, iteration, map index, try) has its own `runId`, shared by its START and
+         COMPLETE/FAIL, and the loop fields of each event agree with its `runId` and region (the `runId` check of
+         OpenLineageTestOperator)
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.DAG_ID
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.SCENARIOS
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.check_events
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.test_run
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.DeferOnceOperator
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.get_child_dag_id
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.build_sleeping_loop
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.build_work
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.build_until
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.ready_on_second_poke
+   tests.system.openlineage.example_openlineage_task_loop_state_dag.build_endings
+
+
+Module Contents
+---------------
+
+.. py:data:: DAG_ID
+   :value: 'openlineage_task_loop_state_dag'
+
+
+.. py:function:: get_child_dag_id(scenario)
+
+.. py:function:: build_sleeping_loop()
+
+.. py:function:: build_work()
+
+.. py:function:: build_until()
+
+.. py:class:: DeferOnceOperator(*, task_id, owner = DEFAULT_OWNER, email = None, email_on_retry = DEFAULT_EMAIL_ON_RETRY, email_on_failure = DEFAULT_EMAIL_ON_FAILURE, retries = DEFAULT_RETRIES, retry_delay = DEFAULT_RETRY_DELAY, retry_exponential_backoff = 0, max_retry_delay = None, retry_policy = None, start_date = None, end_date = None, depends_on_past = False, ignore_first_depends_on_past = DEFAULT_IGNORE_FIRST_DEPENDS_ON_PAST, wait_for_past_depends_before_skipping = DEFAULT_WAIT_FOR_PAST_DEPENDS_BEFORE_SKIPPING, wait_for_downstream = False, dag = None, params = None, default_args = None, priority_weight = DEFAULT_PRIORITY_WEIGHT, weight_rule = DEFAULT_WEIGHT_RULE, queue = DEFAULT_QUEUE, pool = None, pool_slots = DEFAULT_POOL_SLOTS, sla = None, execution_timeout = DEFAULT_TASK_EXECUTION_TIMEOUT, on_execute_callback = None, on_failure_callback = None, on_success_callback = None, on_retry_callback = None, on_skipped_callback = None, pre_execute = None, post_execute = None, trigger_rule = DEFAULT_TRIGGER_RULE, resources = None, run_as_user = None, map_index_template = None, max_active_tis_per_dag = None, max_active_tis_per_dagrun = None, executor = None, executor_config = None, do_xcom_push = True, multiple_outputs = False, inlets = None, outlets = None, task_group = None, doc = None, doc_md = None, doc_json = None, doc_yaml = None, doc_rst = None, task_display_name = None, logger_name = None, allow_nested_operators = True, render_template_as_native_obj = None, **kwargs)
+
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
+
+
+   Defer once on every run, so every iteration resumes once.
+
+
+   .. py:method:: execute(context)
+
+      Derive when creating an operator.
+
+      The main method to execute the task. Context is the same dictionary used
+      as when rendering jinja templates.
+
+      Refer to get_template_context for more context.
+
+
+
+   .. py:method:: execute_complete(context, event=None)
+
+
+.. py:function:: ready_on_second_poke(task_reschedule_count = 0, **_)
+
+.. py:function:: build_endings()
+
+.. py:data:: SCENARIOS
+   :type:  dict[str, tuple[collections.abc.Callable[[], None], list[tuple[collections.abc.Callable, dict]]]]
+
+.. py:data:: check_events
+
+.. py:data:: test_run
+

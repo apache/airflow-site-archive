@@ -731,7 +731,7 @@ The <code class="docutils literal notranslate"><span class="pre">asset_state_sto
     <span class="n">method</span><span class="o">=</span><span class="s2">"GET"</span><span class="p">,</span>
     <span class="n">http_conn_id</span><span class="o">=</span><span class="s2">"http_default"</span><span class="p">,</span>  <span class="c1"># HTTP connection with https://api.github.com/ as the Host</span>
     <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
-    <span class="n">response_check_path</span><span class="o">=</span><span class="s2">"dags.check_airflow_releases.check_github_api_response"</span><span class="p">,</span>  <span class="c1"># Path to the check_github_api_response callable</span>
+    <span class="n">response_check_path</span><span class="o">=</span><span class="s2">"check_airflow_releases.check_github_api_response"</span><span class="p">,</span>  <span class="c1"># Module path the triggerer can import</span>
     <span class="n">poll_interval</span><span class="o">=</span><span class="mi">600</span><span class="p">,</span>  <span class="c1"># Poll API every 600 seconds</span>
 <span class="p">)</span>
 
@@ -755,6 +755,82 @@ The <code class="docutils literal notranslate"><span class="pre">asset_state_sto
 <span class="n">check_airflow_releases</span><span class="p">()</span>
 </pre></div>
 </div>
+</section>
+<section id="watching-an-rss-feed">
+<h2>Watching an RSS feed<a class="headerlink" href="#watching-an-rss-feed" title="Link to this heading">¶</a></h2>
+<p>This example polls the SEC’s US GAAP filings feed and schedules a Dag when the feed contains filings whose GUIDs
+were not in the previous poll. The check parses the RSS response as XML and saves the new filings and the
+current feed’s GUIDs in the asset state store. The task prints the new filings’ titles and links. On the first
+non-empty response, every filing counts as new.</p>
+<p>It requires Airflow 3.3.2 or later for the asynchronous asset state store API. Save the example as
+<code class="docutils literal notranslate"><span class="pre">example_sec_rss.py</span></code> in the Dag folder. The triggerer imports <code class="docutils literal notranslate"><span class="pre">response_check_path</span></code> by module name and does
+not add the Dag folder to <code class="docutils literal notranslate"><span class="pre">sys.path</span></code>, so add the Dag folder to the triggerer’s <code class="docutils literal notranslate"><span class="pre">PYTHONPATH</span></code>. The GitHub
+example above needs the same setup. Create an HTTP connection named <code class="docutils literal notranslate"><span class="pre">sec_edgar</span></code> with host
+<code class="docutils literal notranslate"><span class="pre">https://www.sec.gov</span></code> and a <code class="docutils literal notranslate"><span class="pre">User-Agent</span></code> header identifying your organization and contact email, as required
+by the <a class="reference external" href="https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data">SEC’s access guidance</a>.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">tests/system/http/example_sec_rss.py</span><a class="example-header-button viewcode-button reference internal" href="_modules/tests/system/http/example_sec_rss.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">UTC</span><span class="p">,</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">xml.etree</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementTree</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.http.triggers.http</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpEventTrigger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Asset</span><span class="p">,</span> <span class="n">AssetWatcher</span><span class="p">,</span> <span class="n">dag</span><span class="p">,</span> <span class="n">task</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_sec_feed</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">asset_state_store</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">asset_state_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"This example requires an asset state store"</span><span class="p">)</span>
+
+    <span class="c1"># The SEC is a trusted source. Parse feeds you do not control with defusedxml instead.</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">ElementTree</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
+    <span class="n">filings</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">"guid"</span><span class="p">:</span> <span class="n">item</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="s2">"guid"</span><span class="p">),</span> <span class="s2">"title"</span><span class="p">:</span> <span class="n">item</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="s2">"title"</span><span class="p">),</span> <span class="s2">"link"</span><span class="p">:</span> <span class="n">item</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="s2">"link"</span><span class="p">)}</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">root</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s2">"./channel/item"</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="ow">not</span> <span class="n">filing</span><span class="p">[</span><span class="s2">"guid"</span><span class="p">]</span> <span class="k">for</span> <span class="n">filing</span> <span class="ow">in</span> <span class="n">filings</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"RSS item is missing a GUID"</span><span class="p">)</span>
+
+    <span class="n">seen_guids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="k">await</span> <span class="n">asset_state_store</span><span class="o">.</span><span class="n">aget</span><span class="p">(</span><span class="s2">"seen_guids"</span><span class="p">,</span> <span class="p">[]))</span>
+    <span class="n">new_filings</span> <span class="o">=</span> <span class="p">[</span><span class="n">filing</span> <span class="k">for</span> <span class="n">filing</span> <span class="ow">in</span> <span class="n">filings</span> <span class="k">if</span> <span class="n">filing</span><span class="p">[</span><span class="s2">"guid"</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen_guids</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">new_filings</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># Saving the filings before the GUIDs means an interruption between the two repeats a</span>
+    <span class="c1"># notification on the next poll instead of losing it.</span>
+    <span class="k">await</span> <span class="n">asset_state_store</span><span class="o">.</span><span class="n">aset</span><span class="p">(</span><span class="s2">"new_filings"</span><span class="p">,</span> <span class="n">new_filings</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">asset_state_store</span><span class="o">.</span><span class="n">aset</span><span class="p">(</span><span class="s2">"seen_guids"</span><span class="p">,</span> <span class="p">[</span><span class="n">filing</span><span class="p">[</span><span class="s2">"guid"</span><span class="p">]</span> <span class="k">for</span> <span class="n">filing</span> <span class="ow">in</span> <span class="n">filings</span><span class="p">])</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<span class="n">trigger</span> <span class="o">=</span> <span class="n">HttpEventTrigger</span><span class="p">(</span>
+    <span class="n">http_conn_id</span><span class="o">=</span><span class="s2">"sec_edgar"</span><span class="p">,</span>
+    <span class="n">method</span><span class="o">=</span><span class="s2">"GET"</span><span class="p">,</span>
+    <span class="n">endpoint</span><span class="o">=</span><span class="s2">"Archives/edgar/usgaap.rss.xml"</span><span class="p">,</span>
+    <span class="n">response_check_path</span><span class="o">=</span><span class="s2">"example_sec_rss.check_sec_feed"</span><span class="p">,</span>
+    <span class="n">poll_interval</span><span class="o">=</span><span class="mi">600</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">asset</span> <span class="o">=</span> <span class="n">Asset</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"sec_filings"</span><span class="p">,</span> <span class="n">watchers</span><span class="o">=</span><span class="p">[</span><span class="n">AssetWatcher</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"sec_rss"</span><span class="p">,</span> <span class="n">trigger</span><span class="o">=</span><span class="n">trigger</span><span class="p">)])</span>
+
+
+<span class="nd">@dag</span><span class="p">(</span><span class="n">start_date</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">UTC</span><span class="p">),</span> <span class="n">schedule</span><span class="o">=</span><span class="n">asset</span><span class="p">,</span> <span class="n">catchup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">example_sec_rss</span><span class="p">():</span>
+    <span class="nd">@task</span><span class="p">(</span><span class="n">inlets</span><span class="o">=</span><span class="p">[</span><span class="n">asset</span><span class="p">])</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">print_new_filings</span><span class="p">(</span><span class="o">**</span><span class="n">context</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">filing</span> <span class="ow">in</span> <span class="n">context</span><span class="p">[</span><span class="s2">"asset_state_store"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"new_filings"</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">filing</span><span class="p">[</span><span class="s1">'title'</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">filing</span><span class="p">[</span><span class="s1">'link'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">print_new_filings</span><span class="p">()</span>
+
+
+<span class="n">sec_rss_dag</span> <span class="o">=</span> <span class="n">example_sec_rss</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<p>The feed contains at most 200 recent filings and is updated every ten minutes. A filing that leaves the feed
+between polls can be missed. <code class="docutils literal notranslate"><span class="pre">new_filings</span></code> holds the latest batch, not a queue: a later poll can replace it
+before a task reads it. The batch is saved before the asset event is recorded, so an interruption between the
+two loses that notification. Use a durable external queue or ingestion store if every filing must be processed.</p>
+<p>The trigger also stores the whole response body, base64-encoded, in each asset event’s <code class="docutils literal notranslate"><span class="pre">extra</span></code>. For a large
+feed, every event adds a correspondingly large row to the metadata database.</p>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
@@ -877,6 +953,7 @@ Any poll that completes resets the count, including one where <code class="docut
 <li><a class="reference internal" href="#">HTTP Event Trigger</a><ul>
 <li><a class="reference internal" href="#how-it-works">How It Works</a></li>
 <li><a class="reference internal" href="#usage-example-with-assetwatcher">Usage Example with AssetWatcher</a></li>
+<li><a class="reference internal" href="#watching-an-rss-feed">Watching an RSS feed</a></li>
 <li><a class="reference internal" href="#parameters">Parameters</a></li>
 <li><a class="reference internal" href="#important-notes">Important Notes</a></li>
 </ul>

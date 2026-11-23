@@ -17,9 +17,11 @@ Attributes
    airflow.providers.google.cloud.hooks.cloud_sql.UNIX_PATH_MAX
    airflow.providers.google.cloud.hooks.cloud_sql.TIME_TO_SLEEP_IN_SECONDS
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_VERSION_REGEX
+   airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_V2_VERSION_REGEX
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_NON_TERMINAL_STATUSES
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_DOWNLOAD_URL
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_VERSION_DOWNLOAD_URL
+   airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_PROXY_V2_DOWNLOAD_URL
    airflow.providers.google.cloud.hooks.cloud_sql.CONNECTION_URIS
    airflow.providers.google.cloud.hooks.cloud_sql.CLOUD_SQL_VALID_DATABASE_TYPES
 
@@ -56,6 +58,8 @@ Module Contents
 
 
 .. py:data:: CLOUD_SQL_PROXY_VERSION_REGEX
+
+.. py:data:: CLOUD_SQL_PROXY_V2_VERSION_REGEX
 
 .. py:exception:: CloudSQLImportError
 
@@ -333,6 +337,10 @@ Module Contents
    :value: 'https://storage.googleapis.com/cloudsql-proxy/{}/cloud_sql_proxy.{}.{}'
 
 
+.. py:data:: CLOUD_SQL_PROXY_V2_DOWNLOAD_URL
+   :value: 'https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/{}/cloud-sql-proxy.{}.{}'
+
+
 .. py:class:: CloudSQLAsyncHook(**kwargs)
 
    Bases: :py:obj:`airflow.providers.google.common.hooks.base_google.GoogleBaseAsyncHook`
@@ -362,7 +370,7 @@ Module Contents
 
 
 
-.. py:class:: CloudSqlProxyRunner(path_prefix, instance_specification, gcp_conn_id = 'google_cloud_default', project_id = PROVIDE_PROJECT_ID, sql_proxy_version = None, sql_proxy_binary_path = None, *, sql_proxy_enable_iam_login = False)
+.. py:class:: CloudSqlProxyRunner(path_prefix, instance_specification, gcp_conn_id = 'google_cloud_default', project_id = PROVIDE_PROJECT_ID, sql_proxy_version = None, sql_proxy_binary_path = None, *, sql_proxy_enable_iam_login = False, sql_proxy_major_version = 1)
 
    Bases: :py:obj:`airflow.utils.log.logging_mixin.LoggingMixin`
 
@@ -385,18 +393,30 @@ Module Contents
        -instances parameter (typically in the form of ``<project>:<region>:<instance>``
        for UNIX socket connections and in the form of
        ``<project>:<region>:<instance>=tcp:<port>`` for TCP connections.
+       With ``sql_proxy_major_version=2`` use ``<project>:<region>:<instance>?port=<port>``
+       for TCP connections instead.
    :param gcp_conn_id: Id of Google Cloud connection to use for
        authentication
    :param project_id: Optional id of the Google Cloud project to connect to - it overwrites
        default project id taken from the Google Cloud connection.
    :param sql_proxy_version: Specific version of SQL proxy to download
        (for example 'v1.13'). By default, latest version is downloaded.
+       With ``sql_proxy_major_version=2`` the version (for example 'v2.27.0') is required
+       to download the proxy, as there is no "latest" download for v2.
    :param sql_proxy_binary_path: If specified, then proxy will be
        used from the path specified rather than dynamically generated. This means
        that if the binary is not present in that path it will also be downloaded.
+   :param sql_proxy_enable_iam_login: Whether the proxy should use IAM database authentication.
+   :param sql_proxy_major_version: Major version of Cloud SQL Auth Proxy to run: ``1`` (default)
+       or ``2``. The two versions have different download locations and command line flags.
 
 
    .. py:attribute:: path_prefix
+
+
+   .. py:attribute:: sql_proxy_major_version
+      :value: 1
+
 
 
    .. py:attribute:: sql_proxy_was_downloaded
@@ -529,12 +549,15 @@ Module Contents
    * **use_iam** - (default False) Whether IAM should be used to connect to Cloud SQL DB.
      With using IAM password field should be empty string.
    * **sql_proxy_enable_iam_login** - (default False) Whether Cloud SQL Auth Proxy should use
-     IAM database authentication. This requires ``use_proxy`` and is supported with the current
-     Cloud SQL Auth Proxy v1 integration for both Postgres and MySQL.
+     IAM database authentication. This requires ``use_proxy``. With Cloud SQL Auth Proxy v1 it is
+     supported for Postgres only, with v2 for both Postgres and MySQL.
    * **sql_proxy_use_tcp** - (default False) If set to true, TCP is used to connect via
      proxy, otherwise UNIX sockets are used.
    * **sql_proxy_version** -  Specific version of the proxy to download (for example
-     v1.13). If not specified, the latest version is downloaded.
+     v1.13). If not specified, the latest version is downloaded. Required when
+     ``sql_proxy_major_version`` is 2 and the binary has to be downloaded (for example v2.27.0).
+   * **sql_proxy_major_version** - (default 1) Major version of Cloud SQL Auth Proxy to use,
+     either 1 or 2.
    * **sslcert** - Path to client certificate to authenticate when SSL is used.
    * **sslkey** - Path to client private key to authenticate when SSL is used.
    * **sslrootcert** - Path to server's certificate to authenticate when SSL is used.
@@ -645,6 +668,9 @@ Module Contents
 
 
    .. py:attribute:: sql_proxy_version
+
+
+   .. py:attribute:: sql_proxy_major_version
 
 
    .. py:attribute:: sql_proxy_binary_path

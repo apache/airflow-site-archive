@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -512,7 +512,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -871,7 +871,8 @@ and a placeholder such as <code class="docutils literal notranslate"><span class
 <p>Set <code class="docutils literal notranslate"><span class="pre">output_type</span></code> to a Pydantic <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> subclass to get structured data
 back. The model instance is pushed to XCom unchanged so downstream tasks can
 type-hint the class directly (<code class="docutils literal notranslate"><span class="pre">def</span> <span class="pre">downstream(result:</span> <span class="pre">MyModel)</span></code>) and use
-attribute access (<code class="docutils literal notranslate"><span class="pre">result.field</span></code>).</p>
+attribute access (<code class="docutils literal notranslate"><span class="pre">result.field</span></code>). Inside a list of types (<code class="docutils literal notranslate"><span class="pre">[MyModel,</span> <span class="pre">int]</span></code>) the
+model is pushed as a <code class="docutils literal notranslate"><span class="pre">dict</span></code> instead.</p>
 <p><a class="reference internal" href="../structured_output.html"><span class="doc">Structured output and XCom</span></a> explains the XCom deserialization rules, the cross-Dag gap and
 <code class="docutils literal notranslate"><span class="pre">serialize_output</span></code>.</p>
 <div class="example-block-wrapper compound">
@@ -1232,9 +1233,12 @@ regeneration starts a fresh count.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">durable</span></code>: When <code class="docutils literal notranslate"><span class="pre">True</span></code>, records each step the agent completes (model
 requests, tool calls, other capabilities’ <code class="docutils literal notranslate"><span class="pre">&#64;durable_operation</span></code> methods) in a
 journal kept for the task instance, and replays the recorded steps on retry
-instead of running them again. Every <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code>, <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> and
-<code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code> needs an <code class="docutils literal notranslate"><span class="pre">id</span></code>. On Airflow &gt;= 3.3 the journal uses the task
-state store (no configuration needed); on older Airflow versions it requires the
+instead of running them again. A pydantic-ai <code class="docutils literal notranslate"><span class="pre">MCPToolset</span></code> needs an <code class="docutils literal notranslate"><span class="pre">id</span></code>. A
+<code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> or a function that builds a toolset, passed in <code class="docutils literal notranslate"><span class="pre">toolsets</span></code> or
+<code class="docutils literal notranslate"><span class="pre">agent_params[&quot;toolsets&quot;]</span></code>, needs none, and neither does a <code class="docutils literal notranslate"><span class="pre">FunctionToolset</span></code> held
+directly by a <code class="docutils literal notranslate"><span class="pre">Toolset</span></code> capability (<a class="reference internal" href="../durable_execution.html#durable-toolset-ids"><span class="std std-ref">Toolset ids</span></a>). On Airflow &gt;= 3.3
+the journal uses the task state store (no configuration needed); on older Airflow
+versions it requires the
 <code class="docutils literal notranslate"><span class="pre">[common.ai]</span> <span class="pre">durable_cache_path</span></code> config option to be set. Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. A replayed
 step adds nothing to the usage counted against <code class="docutils literal notranslate"><span class="pre">usage_limits</span></code> or reported
 in the <code class="docutils literal notranslate"><span class="pre">usage</span></code> XCom – not its request, tokens, cost, or tool calls – so
@@ -1242,9 +1246,9 @@ each attempt counts only the model and tool calls it actually makes, on
 every Airflow version. A step that re-runs live because the conversation
 changed since the previous attempt is counted like any other live call, and
 a retry whose cross-attempt total already sits at a limit can still start
-when the steps it needs are recorded. Clearing a failed task instance starts
-a fresh budget but keeps the journal its attempts left behind, so what the
-rerun replays from it is free there too. See <a class="reference internal" href="../durable_execution.html"><span class="doc">Durable execution</span></a>.</p></li>
+when the steps it needs are recorded. Clearing a finished task instance
+starts a fresh budget; whether its rerun replays from the journal depends on
+the Airflow version and how the task was cleared (<a class="reference internal" href="../durable_execution.html#durable-clear"><span class="std std-ref">Clearing a task</span></a>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cache_prompt</span></code>: Ask the provider to cache the tool definitions, system prompt and
 conversation so later requests read them back at a discount. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>; a no-op for
 providers that cache on their own. See <a class="reference internal" href="#agent-prompt-caching"><span class="std std-ref">Prompt caching</span></a>.</p></li>
@@ -1256,16 +1260,17 @@ See <a class="reference internal" href="../message_history.html"><span class="do
 <li><p><code class="docutils literal notranslate"><span class="pre">emit_message_history</span></code>: Push the post-run transcript to XCom under the key
 <code class="docutils literal notranslate"><span class="pre">message_history</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code> when <code class="docutils literal notranslate"><span class="pre">message_history</span></code> is set and <code class="docutils literal notranslate"><span class="pre">False</span></code>
 otherwise; <code class="docutils literal notranslate"><span class="pre">True</span></code> records a single-turn run without seeding it. See <a class="reference internal" href="../message_history.html"><span class="doc">Multi-turn sessions and message history</span></a>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">serialize_output</span></code>: If <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">output_type</span></code> is a Pydantic
-<code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> subclass, the model instance is dumped to a <code class="docutils literal notranslate"><span class="pre">dict</span></code> via
-<code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> before being pushed to XCom. Default <code class="docutils literal notranslate"><span class="pre">False</span></code> – the
-Pydantic instance flows through XCom unchanged. Set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when a
-downstream consumer needs the dict shape.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">serialize_output</span></code>: If <code class="docutils literal notranslate"><span class="pre">True</span></code>, an output that is itself a Pydantic <code class="docutils literal notranslate"><span class="pre">BaseModel</span></code> is dumped with
+<code class="docutils literal notranslate"><span class="pre">model_dump()</span></code> before being pushed to XCom, so <code class="docutils literal notranslate"><span class="pre">date</span></code> and <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> fields keep their types.
+Default <code class="docutils literal notranslate"><span class="pre">False</span></code>: a model whose class the worker registers from <code class="docutils literal notranslate"><span class="pre">output_type</span></code> flows through XCom
+unchanged. Some outputs are pushed as dicts either way; see
+<a class="reference internal" href="../structured_output.html#structured-output-dict-shape"><span class="std std-ref">When a model arrives as a dict</span></a>.</p></li>
 </ul>
 <p><strong>HITL review parameters</strong>: <code class="docutils literal notranslate"><span class="pre">enable_hitl_review</span></code>, <code class="docutils literal notranslate"><span class="pre">max_hitl_iterations</span></code>,
 <code class="docutils literal notranslate"><span class="pre">hitl_timeout</span></code> and <code class="docutils literal notranslate"><span class="pre">hitl_poll_interval</span></code> turn on and bound the iterative review
-loop, which needs the <code class="docutils literal notranslate"><span class="pre">hitl_review</span></code> plugin. <a class="reference internal" href="../hitl_review.html"><span class="doc">Human-in-the-loop (HITL) review for agents</span></a> documents each
-parameter and the review workflow.</p>
+loop, which needs the <code class="docutils literal notranslate"><span class="pre">hitl_review</span></code> plugin. On Airflow 3.3+ the task waits for the
+reviewer in the <code class="docutils literal notranslate"><span class="pre">awaiting_input</span></code> state and holds no worker slot. <a class="reference internal" href="../hitl_review.html"><span class="doc">Human-in-the-loop (HITL) review for agents</span></a>
+documents each parameter and the review workflow.</p>
 </section>
 <section id="logging">
 <h2>Logging<a class="headerlink" href="#logging" title="Link to this heading">¶</a></h2>
@@ -1628,7 +1633,7 @@ configurations, and the production checklist.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

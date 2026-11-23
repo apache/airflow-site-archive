@@ -25,18 +25,10 @@ Module Contents
 
 .. py:function:: vertica_fetch_all_handler(cursor)
 
-   Replace the default DbApiHook fetch_all_handler in order to fix this issue https://github.com/apache/airflow/issues/32993.
+   Return all rows of the current result set, then consume the remaining result sets.
 
-   Returned value will not change after the initial call of fetch_all_handler, all the remaining code is here
-   only to make vertica client throws error.
-   With Vertica, if you run the following sql (with split_statements set to false):
-
-   INSERT INTO MyTable (Key, Label) values (1, 'test 1');
-   INSERT INTO MyTable (Key, Label) values (1, 'test 2');
-   INSERT INTO MyTable (Key, Label) values (3, 'test 3');
-
-   each insert will have its own result set and if you don't try to fetch data of those result sets
-   you won't detect error on the second insert.
+   Kept for backward compatibility: ``VerticaHook.run`` now drains the result sets for every
+   handler, so passing ``fetch_all_handler`` is enough. See https://github.com/apache/airflow/issues/32993.
 
 
 .. py:class:: VerticaHook(*args, schema = None, log_sql = True, **kwargs)
@@ -46,7 +38,8 @@ Module Contents
 
    Interact with Vertica.
 
-   This hook use a customized version of default fetch_all_handler named vertica_fetch_all_handler.
+   ``run`` consumes all rows and result sets after each executed statement, whatever the handler is,
+   so that an error raised by any statement of a multi-statement query is not silently ignored.
 
 
    .. py:attribute:: conn_name_attr
@@ -86,6 +79,10 @@ Module Contents
 
       Return a SQLAlchemy URL object with properly formatted query parameters.
 
+      The URL uses the ``vertica+vertica_python`` scheme: Vertica SQLAlchemy dialects register
+      themselves as ``vertica.vertica_python``, so a dialect package (for SQLAlchemy 2.x, for example
+      ``sqlalchemy-vertica``) has to be installed for ``get_sqlalchemy_engine()`` to work.
+
 
 
    .. py:method:: get_uri()
@@ -99,7 +96,10 @@ Module Contents
 
       Overwrite the common sql run.
 
-      Will automatically replace fetch_all_handler by vertica_fetch_all_handler.
+      vertica-python only reports an error raised by a statement once its result set is reached, so
+      every result set is consumed after each executed statement, whatever the handler is (including
+      when no handler is passed). Otherwise a failing statement in a multi-statement query could be
+      silently ignored.
 
 
 

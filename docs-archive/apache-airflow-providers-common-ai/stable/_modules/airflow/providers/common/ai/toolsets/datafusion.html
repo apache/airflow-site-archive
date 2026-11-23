@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -728,12 +728,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.query_results</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">DEFAULT_MAX_COLUMNS</span><span class="p">,</span>
     <span class="n">DEFAULT_MAX_RESULT_BYTES</span><span class="p">,</span>
-    <span class="n">GET_SCHEMA_TOOL_DESCRIPTION</span> <span class="k">as</span> <span class="n">_GET_SCHEMA_DESCRIPTION</span><span class="p">,</span>
     <span class="n">QUERY_TOOL_DESCRIPTION</span> <span class="k">as</span> <span class="n">_QUERY_DESCRIPTION</span><span class="p">,</span>
+    <span class="n">build_get_schema_description</span><span class="p">,</span>
     <span class="n">build_query_result</span><span class="p">,</span>
     <span class="n">build_schema_result</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_definition</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_args_validator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_prefix</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolPrefixMixin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowToolset</span><span class="p">,</span> <span class="n">validate_max_retries</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
@@ -786,7 +787,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="DataFusionToolset">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/datafusion/index.html#airflow.providers.common.ai.toolsets.datafusion.DataFusionToolset">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">DataFusionToolset</span><span class="p">(</span><span class="n">AirflowToolset</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataFusionToolset</span><span class="p">(</span><span class="n">ToolPrefixMixin</span><span class="p">,</span> <span class="n">AirflowToolset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Curated toolset that gives an LLM agent SQL access to object-storage data via Apache DataFusion.</span>
 
@@ -831,6 +832,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        the full list is replaced by a bounded summary (column count, a type histogram, a</span>
 <span class="sd">        sample of columns) that points the agent at the ``name_contains`` filter, so a</span>
 <span class="sd">        several-thousand-column table cannot exhaust the context before a query is written.</span>
+<span class="sd">    :param tool_prefix: Optional prefix joined to each tool name with an underscore</span>
+<span class="sd">        (e.g. ``"lake"`` produces ``"lake_query"``). Must be a valid Python identifier. Set it</span>
+<span class="sd">        when one agent has another toolset with the same tool names, such as a ``SQLToolset``,</span>
+<span class="sd">        since duplicate tool names are rejected.</span>
 <span class="sd">    :param max_retries: How many times the model may correct a failed call to one of these</span>
 <span class="sd">        tools before the run fails. ``None`` (the default) uses the agent's tool retry</span>
 <span class="sd">        budget, its ``retries``, as pydantic-ai's own toolsets do.</span>
@@ -844,9 +849,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">max_rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
         <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_RESULT_BYTES</span><span class="p">,</span>
         <span class="n">max_columns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_COLUMNS</span><span class="p">,</span>
+        <span class="n">tool_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">max_retries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span> <span class="o">=</span> <span class="n">validate_max_retries</span><span class="p">(</span><span class="n">max_retries</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_tool_prefix</span><span class="p">(</span><span class="n">tool_prefix</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">datasource_configs</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"datasource_configs must contain at least one DataSourceConfig"</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_datasource_configs</span> <span class="o">=</span> <span class="n">datasource_configs</span>
@@ -861,7 +868,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/datafusion/index.html#airflow.providers.common.ai.toolsets.datafusion.DataFusionToolset.id">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">suffix</span> <span class="o">=</span> <span class="s2">"_"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">table_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"-"</span><span class="p">,</span> <span class="s2">"_"</span><span class="p">)</span> <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_datasource_configs</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">"sql_datafusion_</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"sql_datafusion_</span><span class="si">{</span><span class="n">suffix</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_tool_prefix_id_suffix</span><span class="p">(</span><span class="s1">'_'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_engine</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DataFusionEngine</span><span class="p">:</span>
@@ -879,11 +886,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">max_retries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_tool_max_retries</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
         <span class="n">tools</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ToolsetTool</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="k">for</span> <span class="n">base</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="p">(</span>
             <span class="p">(</span><span class="s2">"list_tables"</span><span class="p">,</span> <span class="s2">"List available table names."</span><span class="p">,</span> <span class="n">_LIST_TABLES_SCHEMA</span><span class="p">),</span>
-            <span class="p">(</span><span class="s2">"get_schema"</span><span class="p">,</span> <span class="n">_GET_SCHEMA_DESCRIPTION</span><span class="p">,</span> <span class="n">_GET_SCHEMA_SCHEMA</span><span class="p">),</span>
+            <span class="p">(</span>
+                <span class="s2">"get_schema"</span><span class="p">,</span>
+                <span class="n">build_get_schema_description</span><span class="p">(</span><span class="n">tool_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s2">"get_schema"</span><span class="p">)),</span>
+                <span class="n">_GET_SCHEMA_SCHEMA</span><span class="p">,</span>
+            <span class="p">),</span>
             <span class="p">(</span><span class="s2">"query"</span><span class="p">,</span> <span class="n">_QUERY_DESCRIPTION</span><span class="p">,</span> <span class="n">_QUERY_SCHEMA</span><span class="p">),</span>
         <span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
             <span class="n">tool_def</span> <span class="o">=</span> <span class="n">ToolDefinition</span><span class="p">(</span>
                 <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
@@ -909,13 +921,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">ctx</span><span class="p">:</span> <span class="n">RunContext</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
         <span class="n">tool</span><span class="p">:</span> <span class="n">ToolsetTool</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"list_tables"</span><span class="p">:</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_base_tool_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">==</span> <span class="s2">"list_tables"</span><span class="p">:</span>
             <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_blocking</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_list_tables</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"get_schema"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">==</span> <span class="s2">"get_schema"</span><span class="p">:</span>
             <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_blocking</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_get_schema</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">[</span><span class="s2">"table_name"</span><span class="p">],</span> <span class="n">tool_args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name_contains"</span><span class="p">)</span>
             <span class="p">)</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"query"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="o">==</span> <span class="s2">"query"</span><span class="p">:</span>
             <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_blocking</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_query</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">[</span><span class="s2">"sql"</span><span class="p">])</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown tool: </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span></div>
 
@@ -948,6 +961,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">max_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_columns</span><span class="p">,</span>
             <span class="n">max_result_bytes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_result_bytes</span><span class="p">,</span>
             <span class="n">name_contains</span><span class="o">=</span><span class="n">name_contains</span><span class="p">,</span>
+            <span class="n">tool_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s2">"get_schema"</span><span class="p">),</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
@@ -980,7 +994,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">except</span> <span class="n">QueryExecutionException</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_retryable_query_error</span><span class="p">(</span><span class="n">ex</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">ModelRetry</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">"error: </span><span class="si">{</span><span class="n">ex</span><span class="si">!s}</span><span class="s2">, Use get_schema and list_tables tools for more details."</span>
+                    <span class="sa">f</span><span class="s2">"error: </span><span class="si">{</span><span class="n">ex</span><span class="si">!s}</span><span class="s2">, Use </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'get_schema'</span><span class="p">)</span><span class="si">}</span><span class="s2"> and "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'list_tables'</span><span class="p">)</span><span class="si">}</span><span class="s2"> tools for more details."</span>
                 <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">ex</span>
             <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">ex</span><span class="p">),</span> <span class="s2">"query"</span><span class="p">:</span> <span class="n">sql</span><span class="p">})</span>
 
@@ -1248,7 +1263,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

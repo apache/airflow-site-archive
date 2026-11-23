@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -511,7 +511,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -992,16 +992,23 @@ which the model would see as <code class="docutils literal notranslate"><span cl
 <p><a class="reference internal" href="../toolsets/hook.html#hook-toolset-restricted"><span class="std std-ref">Restricting the agent</span></a> shows a hook that passes these checks: <code class="docutils literal notranslate"><span class="pre">S3Hook</span></code> with
 <code class="docutils literal notranslate"><span class="pre">list_keys</span></code> and <code class="docutils literal notranslate"><span class="pre">read_key</span></code> and the bucket pinned. The same toolset works in
 <code class="docutils literal notranslate"><span class="pre">AirflowTools(...)</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">.filtered()</span></code> and <code class="docutils literal notranslate"><span class="pre">.approval_required()</span></code>, which pydantic-ai toolsets offer, do not
-reach the SDK through <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>. They return wrappers that <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> cannot
-read, and building it fails:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>AttributeError: 'FilteredToolset' object has no attribute 'airflow_tools'
+<p>To offer the model only some of a toolset’s tools, wrap the toolset with <code class="docutils literal notranslate"><span class="pre">.filtered()</span></code>
+before you pass it in. These tools are every <code class="docutils literal notranslate"><span class="pre">SQLToolset</span></code> tool except <code class="docutils literal notranslate"><span class="pre">query</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tools</span> <span class="o">=</span> <span class="n">AirflowTools</span><span class="p">(</span><span class="n">SQLToolset</span><span class="p">(</span><span class="n">db_conn_id</span><span class="o">=</span><span class="s2">"warehouse"</span><span class="p">)</span><span class="o">.</span><span class="n">filtered</span><span class="p">(</span><span class="k">lambda</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">tool</span><span class="p">:</span> <span class="n">tool</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s2">"query"</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>Choose the tools with <code class="docutils literal notranslate"><span class="pre">allowed_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">allowed_methods</span></code> and <code class="docutils literal notranslate"><span class="pre">pinned_arguments</span></code>
-instead. There is no per-call approval on this path; see
-<a class="reference internal" href="#howto-frameworks-openai-agents-limits"><span class="std std-ref">Sessions, approvals and streaming</span></a>. Each toolset’s page covers the rest of its
-options: <a class="reference internal" href="../toolsets/index.html#howto-toolsets"><span class="std std-ref">Toolsets</span></a>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.prefixed()</span></code> and <code class="docutils literal notranslate"><span class="pre">.renamed()</span></code> carry over the same way, nested in any order. The filter
+runs once, when <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is built, with a placeholder run context whose <code class="docutils literal notranslate"><span class="pre">deps</span></code>
+is <code class="docutils literal notranslate"><span class="pre">None</span></code>, so a filter that reads an attribute of <code class="docutils literal notranslate"><span class="pre">ctx.deps</span></code> fails there. Whatever the
+filter decides holds for every run of an agent given these tools, where a Pydantic AI agent
+asks it again before each model turn.</p>
+<p>Any other wrapper fails with a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> that names it, such as for
+<code class="docutils literal notranslate"><span class="pre">.approval_required()</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>TypeError: AirflowTools cannot carry ApprovalRequiredToolset (.approval_required()) to another framework's agent: only a Pydantic AI run pauses for the approval it asks for. Pass the toolset without it and use the framework's own tool approval, such as needs_approval in the OpenAI Agents SDK, whose guide says how it behaves in a task, or run the agent with AgentOperator.
+</pre></div>
+</div>
+<p><a class="reference internal" href="#howto-frameworks-openai-agents-approval"><span class="std std-ref">Have a person approve tool calls</span></a> says what <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> does in a task.
+Each toolset’s page covers the rest of its options: <a class="reference internal" href="../toolsets/index.html#howto-toolsets"><span class="std std-ref">Toolsets</span></a>.</p>
 </section>
 </section>
 <section id="tools">
@@ -1084,7 +1091,7 @@ destroys the sandbox when the block ends. A call outside the block fails with
 <p>See <a class="reference internal" href="../sandbox/index.html#sandbox-other-frameworks"><span class="std std-ref">With another agent framework</span></a> for the backends and what the sandbox contains.</p>
 <p>The SDK routes a call by tool name, so two toolsets that define the same name raise
 <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when you build <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code>:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: More than one tool is named check_query, get_schema, list_tables, query. Give the toolsets different tool_prefix values, where they take one, so the model can call each of them.
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ValueError: More than one tool is named check_query, get_schema, list_tables, query. Give the toolsets different tool_prefix values, where they take one, or wrap them with .prefixed(), so the model can call each of them.
 </pre></div>
 </div>
 </section>
@@ -1104,7 +1111,8 @@ that has an <code class="docutils literal notranslate"><span class="pre">arr</sp
 </div>
 <p>A toolset’s tool may fail this way once in a row by default; pass <code class="docutils literal notranslate"><span class="pre">max_retries</span></code> to the
 toolset to allow more. The count starts over after a call that succeeds and on every run
-of the agent. A tool still failing after that raises
+of the agent, except that a retry of a durable run counts the failures it replays as well
+(see <a class="reference internal" href="#howto-frameworks-openai-agents-durable"><span class="std std-ref">Durable execution</span></a>). A tool still failing after that raises
 <a class="reference internal" href="../_api/airflow/providers/common/ai/tools/index.html#airflow.providers.common.ai.tools.ToolCallError" title="airflow.providers.common.ai.tools.ToolCallError"><code class="xref py py-class docutils literal notranslate"><span class="pre">ToolCallError</span></code></a> out of <code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> and
 <code class="docutils literal notranslate"><span class="pre">Runner.run_sync</span></code>, so the task fails and Airflow’s own retry takes over. Catch it as
 <code class="docutils literal notranslate"><span class="pre">ToolCallError</span></code>; the traceback names a private subclass of it. For the same query sent
@@ -1323,6 +1331,8 @@ stands for building the agent as the task example does:</p>
 <span class="n">publish</span><span class="p">(</span><span class="n">answer</span><span class="p">(</span><span class="s2">"Which customer has the highest ARR?"</span><span class="p">))</span>
 </pre></div>
 </div>
+<p>A tool call that needs approval pauses the task until a person answers; see
+<a class="reference internal" href="#howto-frameworks-openai-agents-approval"><span class="std std-ref">Have a person approve tool calls</span></a>.</p>
 <section id="what-a-retry-replays">
 <h3>What a retry replays<a class="headerlink" href="#what-a-retry-replays" title="Link to this heading">¶</a></h3>
 <p>On a retry the agent runs again from the start, and each call that asks what the failed
@@ -1331,12 +1341,23 @@ every model given by name or in <code class="docutils literal notranslate"><span
 starting agent and of the agents in its <code class="docutils literal notranslate"><span class="pre">handoffs</span></code> list, and an agent used through
 <code class="docutils literal notranslate"><span class="pre">as_tool</span></code>, which replays as one call. Recorded tool results pass through Airflow’s
 secret masker before they are saved, and a replayed model call reports no token usage.</p>
+<p>A failure the model could correct, which an <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> tool answers with
+<code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code>, is recorded and replays like any other result, together with how many of
+the tool’s corrections were used when it finished. The replay restores that count, so the
+retry limit spans the task’s tries: a model that used one of two corrections before the
+crash has one left on the retry, not two. A run that used the limit up fails on the model’s
+answers, so each retry asks the model once more, with the errors it already got in its
+history. The task log notes when a replay changes the count:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Tool query: an earlier attempt left 1 of its 2 correction(s) used
+</pre></div>
+</div>
 <p>From the first call that differs, that call and every call after it run live:</p>
 <ul class="simple">
 <li><p>A retry whose prompt, instructions, model settings or tools differ from the failed
 try’s runs everything live from the first call that sees the difference.</p></li>
 <li><p>When the run failed because of the model’s answers (<code class="docutils literal notranslate"><span class="pre">MaxTurnsExceeded</span></code>,
-<code class="docutils literal notranslate"><span class="pre">ModelBehaviorError</span></code>, <code class="docutils literal notranslate"><span class="pre">ModelRefusalError</span></code>, or an output or tool input guardrail),
+<code class="docutils literal notranslate"><span class="pre">ModelBehaviorError</span></code>, <code class="docutils literal notranslate"><span class="pre">ModelRefusalError</span></code>, an output or tool input guardrail, or an
+<code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> tool that used up its retry limit),
 replaying those answers would fail it the same way, so the retry asks the model again
 from its last request.</p></li>
 </ul>
@@ -1350,7 +1371,10 @@ safe to repeat.</p></li>
 turned into text for the model. An <code class="docutils literal notranslate"><span class="pre">{&quot;error&quot;:</span> <span class="pre">...}</span></code> result from <code class="docutils literal notranslate"><span class="pre">AirflowTools</span></code> is
 not a raise: it is recorded, and the retry replays it. A <code class="docutils literal notranslate"><span class="pre">ModelBehaviorError</span></code> that a tool raises, such as
 arguments that fail validation with <code class="docutils literal notranslate"><span class="pre">failure_error_function=None</span></code>, counts as the
-tool’s failure: the tool call runs again, but the answer that asked for it replays.</p></li>
+tool’s failure: the tool call runs again, but the answer that asked for it replays.
+Once a call has failed the try on two tries in a row, though, the next try asks the
+model again from the request that chose the call, since replaying that answer would
+only reach the same failure.</p></li>
 <li><p>Tools other than function tools: hosted tools, the tools of <code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code>, and shell
 and computer tools.</p></li>
 <li><p>A function tool whose <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is a function: the SDK checks that the
@@ -1367,17 +1391,121 @@ which a failed try also ends, so the retry starts with a new, empty sandbox that
 replayed conversation does not describe.</p>
 </section>
 </section>
+<section id="have-a-person-approve-tool-calls">
+<span id="howto-frameworks-openai-agents-approval"></span><h2>Have a person approve tool calls<a class="headerlink" href="#have-a-person-approve-tool-calls" title="Link to this heading">¶</a></h2>
+<p>A refund, a deployment or an email to a customer shouldn’t happen only because a model
+asked for it. Set <code class="docutils literal notranslate"><span class="pre">needs_approval=True</span></code> on the function tool and run the agent with
+<code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code>: each call to that tool waits in Required Actions until a person
+approves or rejects it. To have a person review the agent’s answer rather than its tool
+calls, use <code class="docutils literal notranslate"><span class="pre">AgentOperator(enable_hitl_review=True)</span></code>, or add the standard provider’s
+<code class="docutils literal notranslate"><span class="pre">ApprovalOperator</span></code> as the next task.</p>
+<div class="example-block-wrapper compound">
+<p class="example-header example-header--with-button"><span class="example-title">airflow/providers/common/ai/example_dags/example_openai_agents_approval.py</span><a class="example-header-button viewcode-button reference internal" href="../_modules/airflow/providers/common/ai/example_dags/example_openai_agents_approval.html"><span class="viewcode-link">[source]</span></a></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dag</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">"example"</span><span class="p">])</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">example_openai_agents_approval</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""Resolve a support ticket with an agent whose refunds a person approves in Required Actions."""</span>
+
+    <span class="nd">@task</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">handle_ticket</span><span class="p">(</span><span class="n">ticket</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_TICKET</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># The SDK is an optional dependency, so it is imported when the task runs, not at parse time.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">Agent</span><span class="p">,</span> <span class="n">OpenAIChatCompletionsModel</span><span class="p">,</span> <span class="n">RunConfig</span><span class="p">,</span> <span class="n">function_tool</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncOpenAI</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_durably_sync</span>
+
+        <span class="nd">@function_tool</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">get_order</span><span class="p">(</span><span class="n">order_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">"""Look an order up by its id."""</span>
+            <span class="k">return</span> <span class="n">ORDERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">order_id</span><span class="p">,</span> <span class="p">{</span><span class="s2">"error"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"No order </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">"</span><span class="p">})</span>
+
+        <span class="nd">@function_tool</span><span class="p">(</span><span class="n">needs_approval</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">issue_refund</span><span class="p">(</span><span class="n">order_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">amount</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">"""Refund part or all of an order."""</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"Refunded </span><span class="si">{</span><span class="n">amount</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">order_id</span><span class="si">}</span><span class="s2">"</span>
+
+        <span class="n">llm</span> <span class="o">=</span> <span class="n">BaseHook</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="n">LLM_CONN_ID</span><span class="p">)</span>
+        <span class="n">agent</span> <span class="o">=</span> <span class="n">Agent</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">"support"</span><span class="p">,</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">OpenAIChatCompletionsModel</span><span class="p">(</span>
+                <span class="n">model</span><span class="o">=</span><span class="n">LLM_MODEL</span><span class="p">,</span>
+                <span class="n">openai_client</span><span class="o">=</span><span class="n">AsyncOpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="n">llm</span><span class="o">.</span><span class="n">password</span><span class="p">,</span> <span class="n">base_url</span><span class="o">=</span><span class="n">llm</span><span class="o">.</span><span class="n">host</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="p">),</span>
+            <span class="n">instructions</span><span class="o">=</span><span class="p">(</span>
+                <span class="s2">"You resolve support tickets. Check each order with get_order, then refund "</span>
+                <span class="s2">"only what the order supports with issue_refund, one call per order."</span>
+            <span class="p">),</span>
+            <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">get_order</span><span class="p">,</span> <span class="n">issue_refund</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="c1"># The SDK sends traces to OpenAI by default; see the guide's tracing section.</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">run_durably_sync</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">ticket</span><span class="p">,</span> <span class="n">run_config</span><span class="o">=</span><span class="n">RunConfig</span><span class="p">(</span><span class="n">tracing_disabled</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">final_output</span>
+
+    <span class="n">handle_ticket</span><span class="p">()</span>
+
+
+</pre></div>
+</div>
+</div>
+<p>When the model asks to call <code class="docutils literal notranslate"><span class="pre">issue_refund</span></code>, the task stops in the <code class="docutils literal notranslate"><span class="pre">awaiting_input</span></code>
+state without holding a worker slot, and Required Actions shows a request titled
+<code class="docutils literal notranslate"><span class="pre">support</span> <span class="pre">wants</span> <span class="pre">to</span> <span class="pre">call</span> <span class="pre">issue_refund</span></code>. Its body names the agent and the tool, with the
+tool’s description, and lists the call’s arguments after Airflow’s secret masker has
+masked them. The reviewer chooses <strong>Approve</strong> or <strong>Reject</strong>, and can fill in a reason.</p>
+<p>The answer resumes the task, which runs from the top again. <code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code> replays
+the calls it recorded before the pause instead of making them again (the calls in “What
+always runs live” above still run live), and then:</p>
+<ul class="simple">
+<li><p>On <strong>Approve</strong>, the tool runs and the agent continues.</p></li>
+<li><p>On <strong>Reject</strong>, the tool does not run, and the model gets the reviewer’s reason as the
+call’s result, or the SDK’s default rejection message when the reason is empty.</p></li>
+</ul>
+<p>Things to know:</p>
+<ul class="simple">
+<li><p>Pausing needs Airflow 3.4 or later, a standard provider that has
+<a class="reference external" href="/docs/apache-airflow-providers-standard/stable/_api/airflow/providers/standard/operators/hitl/index.html#airflow.providers.standard.operators.hitl.request_input" title="(in apache-airflow-providers-standard v1.22.0)"><code class="xref py py-func docutils literal notranslate"><span class="pre">request_input()</span></code></a>, and a <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> or
+<code class="docutils literal notranslate"><span class="pre">PythonOperator</span></code>. Elsewhere the task fails with <code class="docutils literal notranslate"><span class="pre">UnsupportedToolDeferralError</span></code>
+instead, without retrying.</p></li>
+<li><p>Code in the task before <code class="docutils literal notranslate"><span class="pre">run_durably_sync</span></code> runs again every time the task resumes. So
+does an earlier agent run in the same task, since what it recorded is deleted when it
+finishes: run an agent whose tools need approval in a task of its own.</p></li>
+<li><p>If a step before the paused call returns something different when the task resumes (a
+tool that always runs live, a prompt built from live data, a Dag changed while the task
+waited), the run never comes back to the call the reviewer answered. The task then fails
+with <code class="docutils literal notranslate"><span class="pre">DurableJournalError</span></code>, without retrying, rather than ask a question the reviewer
+did not see. Clearing it then asks about the call the run stopped at instead, or, when
+the run finished without stopping, replays that result.</p></li>
+<li><p>When one answer from the model asks for several calls that need approval, they are asked
+one at a time, in the order the model made them, and the agent continues once every one
+is answered.</p></li>
+<li><p>A retry asks again about calls that had not run. A call whose result was recorded ran
+after it was approved, so the retry approves it without asking.</p></li>
+<li><p>A function tool whose <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is a function, and a tool of an MCP server in
+<code class="docutils literal notranslate"><span class="pre">mcp_servers</span></code> whose <code class="docutils literal notranslate"><span class="pre">require_approval</span></code> applies, are not recorded (see “What always
+runs live” above). Once approved, such a tool runs again every time the task resumes or
+retries later in the run, so make it safe to repeat, or use <code class="docutils literal notranslate"><span class="pre">needs_approval=True</span></code> on a
+function tool of your own.</p></li>
+<li><p>The task fails with <code class="docutils literal notranslate"><span class="pre">UnsupportedToolDeferralError</span></code> instead of pausing when the run has
+a <code class="docutils literal notranslate"><span class="pre">session</span></code>, when the call is made by an agent used through <code class="docutils literal notranslate"><span class="pre">as_tool</span></code> or reached
+through <code class="docutils literal notranslate"><span class="pre">handoff()</span></code>, or when the approval is for a hosted MCP tool
+(<code class="docutils literal notranslate"><span class="pre">HostedMCPTool</span></code>). After you remove the approval requirement, clearing the task with
+its task state kept (<code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code>, or clearing the whole Dag run) replays the turns
+before that call and asks the model again from there, so a tool call made in that same
+answer runs again if the model asks for it. A clear that discards the task state starts
+the agent over.</p></li>
+<li><p>Every pause carries the answers the task has received so far, so keep the approvals one
+run asks for to a handful.</p></li>
+</ul>
+</section>
 <section id="sessions-approvals-and-streaming">
 <span id="howto-frameworks-openai-agents-limits"></span><h2>Sessions, approvals and streaming<a class="headerlink" href="#sessions-approvals-and-streaming" title="Link to this heading">¶</a></h2>
 <p>These SDK features interact with Airflow in ways the SDK documentation does not cover:</p>
 <ul class="simple">
 <li><p>A <code class="docutils literal notranslate"><span class="pre">session</span></code> works, but under <code class="docutils literal notranslate"><span class="pre">run_durably</span></code> it makes every retry run live, as
-above.</p></li>
-<li><p>A tool’s <code class="docutils literal notranslate"><span class="pre">needs_approval</span></code> is not connected to Airflow’s approval UI. The run stops
-at the first call that needs approval and returns with <code class="docutils literal notranslate"><span class="pre">final_output</span></code> set to
-<code class="docutils literal notranslate"><span class="pre">None</span></code> and the pending call in <code class="docutils literal notranslate"><span class="pre">result.interruptions</span></code>, and nothing in Airflow
-resumes it. To have a person approve the agent’s answer, add the standard
-provider’s <code class="docutils literal notranslate"><span class="pre">ApprovalOperator</span></code> as the next task.</p></li>
+above, and a run with a <code class="docutils literal notranslate"><span class="pre">session</span></code> cannot pause for approval.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Runner.run</span></code> stops at the first tool call that needs approval and returns with
+<code class="docutils literal notranslate"><span class="pre">final_output</span></code> set to <code class="docutils literal notranslate"><span class="pre">None</span></code> and the pending call in <code class="docutils literal notranslate"><span class="pre">result.interruptions</span></code>, and
+the task succeeds without an answer unless your code handles them. <code class="docutils literal notranslate"><span class="pre">run_durably</span></code> asks
+a person instead; see <a class="reference internal" href="#howto-frameworks-openai-agents-approval"><span class="std std-ref">Have a person approve tool calls</span></a>.</p></li>
 <li><p>A streamed run (<code class="docutils literal notranslate"><span class="pre">Runner.run_streamed</span></code>) is not recorded for durable retries.</p></li>
 </ul>
 </section>
@@ -1480,6 +1608,7 @@ provider’s <code class="docutils literal notranslate"><span class="pre">Approv
 <li><a class="reference internal" href="#what-always-runs-live">What always runs live</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#have-a-person-approve-tool-calls">Have a person approve tool calls</a></li>
 <li><a class="reference internal" href="#sessions-approvals-and-streaming">Sessions, approvals and streaming</a></li>
 </ul>
 </li>
@@ -1700,7 +1829,7 @@ provider’s <code class="docutils literal notranslate"><span class="pre">Approv
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

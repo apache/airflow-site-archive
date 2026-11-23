@@ -21,6 +21,8 @@ Classes
 
 .. autoapisummary::
 
+   airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackend
+   airflow.providers.common.ai.hooks.pydantic_ai.ModelReadinessBackendFactory
    airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIHook
    airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIAzureHook
    airflow.providers.common.ai.hooks.pydantic_ai.PydanticAIBedrockHook
@@ -35,6 +37,37 @@ Module Contents
 .. py:data:: P
 
 .. py:data:: R
+
+.. py:class:: ModelReadinessBackend
+
+   Bases: :py:obj:`Protocol`
+
+
+   Server-specific half of :meth:`PydanticAIHook.ensure_model_ready`.
+
+   Any object with this method works; it does not need to subclass this class.
+
+   ``load`` returns once the model is available, waiting at most *timeout* seconds, and raises
+   ``TimeoutError`` when it exceeds *timeout*. See :ref:`self_hosted_models_readiness_backend`.
+
+
+   .. py:method:: load(*, timeout)
+
+
+.. py:class:: ModelReadinessBackendFactory
+
+   Bases: :py:obj:`Protocol`
+
+
+   Builds the :class:`ModelReadinessBackend` for :meth:`PydanticAIHook.ensure_model_ready`.
+
+   Called with the ``model_name`` without its provider prefix and the connection host as
+   ``base_url`` (``None`` when the connection has no host). ``OllamaBackend`` is one.
+   See :ref:`self_hosted_models_readiness_backend`.
+
+
+   .. py:method:: __call__(*, model_name, base_url)
+
 
 .. py:data:: FALLBACK_CONN_IDS_EXTRA_KEY
    :value: 'fallback_conn_ids'
@@ -218,6 +251,31 @@ Module Contents
       another async call is in flight (from Airflow 3.3.1 it raises ``DeadlockImminentError``
       instead), but only waits its turn from any other thread, so the resolution runs on the
       hook's own worker thread.
+
+
+
+   .. py:method:: ensure_model_ready(*, timeout = 300.0, backend_factory = None)
+
+      Block until this connection's local model is loaded, asking the server to load it if needed.
+
+      Opt-in, blocks the worker slot, and loads only this hook's own connection. Details and
+      limits: :ref:`self_hosted_models_ensure_model_ready`.
+
+      :param timeout: Seconds to wait for the load request, passed to the backend as is.
+      :param backend_factory: Callable that takes the keyword arguments ``model_name`` (the
+          resolved name without its provider prefix) and ``base_url`` (the connection host, or
+          ``None``) and returns an object with ``load()`` (see ModelReadinessBackend). When
+          given, the model prefix and connection host checks are skipped; a missing model still
+          raises ``ValueError``. See :ref:`self_hosted_models_readiness_backend`.
+      :raises ValueError: If *timeout* is not a positive finite number or no model is configured;
+          also from the default ``OllamaBackend`` when neither the connection host nor the
+          ``OLLAMA_BASE_URL`` environment variable is set.
+      :raises NotImplementedError: If *backend_factory* is not given and the model's provider
+          prefix has no built-in backend (only ``ollama`` has one).
+      :raises TimeoutError: If a request times out.
+      :raises httpx2.TransportError: If a request cannot reach the server.
+      :raises httpx2.HTTPStatusError: If the server answers with an error status. The default
+          ``OllamaBackend`` words the message with the model name and the server's error text.
 
 
 

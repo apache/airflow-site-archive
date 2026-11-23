@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -713,7 +713,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NoReturn</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">TypeAdapter</span><span class="p">,</span> <span class="n">ValidationError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_core</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_jsonable_python</span>
@@ -747,24 +747,41 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">resolve_function_tool_failure_error_function</span><span class="p">,</span>
         <span class="n">set_function_tool_failure_error_function</span><span class="p">,</span>
     <span class="p">)</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">openai.types.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResponseFunctionToolCall</span>
 <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
     <span class="k">raise</span> <span class="n">AirflowOptionalProviderFeatureException</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.fingerprint</span><span class="w"> </span><span class="kn">import</span> <span class="n">_digest</span><span class="p">,</span> <span class="n">fingerprint_tool_call</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">_EXECUTING_STEP</span><span class="p">,</span> <span class="n">current_journal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableJournalError</span><span class="p">,</span> <span class="n">UnsupportedToolDeferralError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.mixins.approval</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMApprovalMixin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.tools.openai_agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">_REPLAY_RETRY</span><span class="p">,</span> <span class="n">_RETRY_COUNT</span><span class="p">,</span> <span class="n">_RetryLimitReached</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.coroutines</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_coroutine_sync</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">mask_secrets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span><span class="p">,</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.task_logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Param</span><span class="p">,</span> <span class="n">get_current_context</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_4_PLUS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.python</span><span class="w"> </span><span class="kn">import</span> <span class="n">PythonOperator</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncIterator</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncIterator</span><span class="p">,</span> <span class="n">Callable</span>
 
-    <span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgentOutputSchemaBase</span><span class="p">,</span> <span class="n">Handoff</span><span class="p">,</span> <span class="n">ModelSettings</span><span class="p">,</span> <span class="n">ModelTracing</span><span class="p">,</span> <span class="n">RunResult</span><span class="p">,</span> <span class="n">Tool</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">agents</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">AgentOutputSchemaBase</span><span class="p">,</span>
+        <span class="n">Handoff</span><span class="p">,</span>
+        <span class="n">ModelSettings</span><span class="p">,</span>
+        <span class="n">ModelTracing</span><span class="p">,</span>
+        <span class="n">RunResult</span><span class="p">,</span>
+        <span class="n">RunState</span><span class="p">,</span>
+        <span class="n">Tool</span><span class="p">,</span>
+        <span class="n">ToolApprovalItem</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">agents.items</span><span class="w"> </span><span class="kn">import</span> <span class="n">TResponseInputItem</span><span class="p">,</span> <span class="n">TResponseStreamEvent</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">agents.retry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelRetryAdvice</span><span class="p">,</span> <span class="n">ModelRetryAdviceRequest</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">agents.tool_context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolContext</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.durable.journal</span><span class="w"> </span><span class="kn">import</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">JournalStep</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.utils.hitl</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputResponse</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"run_durably"</span><span class="p">,</span> <span class="s2">"run_durably_sync"</span><span class="p">]</span>
 
@@ -780,6 +797,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="n">MaxTurnsExceeded</span><span class="p">,</span>
     <span class="n">OutputGuardrailTripwireTriggered</span><span class="p">,</span>
     <span class="n">ToolInputGuardrailTripwireTriggered</span><span class="p">,</span>
+    <span class="n">_RetryLimitReached</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># The tool results the SDK hands the model as structured content rather than as text.</span>
@@ -791,6 +809,11 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="c1"># Arguments that keep the conversation on OpenAI's servers, which a replayed model call never reaches.</span>
 <span class="n">_SERVER_SIDE_STATE</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"previous_response_id"</span><span class="p">,</span> <span class="s2">"conversation_id"</span><span class="p">,</span> <span class="s2">"auto_previous_response_id"</span><span class="p">)</span>
+
+<span class="c1"># Set on the copy of a function tool that reports through the journal, so that reserving a position</span>
+<span class="c1"># skips tools nothing wraps, such as those of MCP servers or of a handoff agent with a named model,</span>
+<span class="c1"># and on the copy of an agent whose calls replay, so that only its approvals pause the task.</span>
+<span class="n">_DURABLE_MARKER</span> <span class="o">=</span> <span class="s2">"_airflow_durable"</span>
 
 
 <div class="viewcode-block" id="run_durably">
@@ -836,11 +859,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    function tools of an agent reached through ``handoff()``, and its model too unless the</span>
 <span class="sd">    agent's ``model`` is a model name or not set, and streamed runs. A tool call that fails,</span>
 <span class="sd">    including one whose exception ``failure_error_function`` turns into text for the model,</span>
-<span class="sd">    is not recorded either, so a retry runs it again. A replayed model call reports no</span>
-<span class="sd">    usage, since it costs nothing.</span>
+<span class="sd">    is not recorded either, so a retry runs it again. Once a call has failed the run on two</span>
+<span class="sd">    attempts in a row, the next retry asks the model again from the request that chose it. A</span>
+<span class="sd">    failure the model could correct, which an ``AirflowTools`` tool answers with</span>
+<span class="sd">    ``{"error": ...}``, is recorded, and still counts against the tool's retry limit when it</span>
+<span class="sd">    replays; a run that used that limit up asks the model again from its last request on a</span>
+<span class="sd">    retry. A replayed model call reports no usage, since it costs nothing.</span>
 
 <span class="sd">    A ``session`` makes every retry run live: the SDK adds the failed try's prompt to it</span>
 <span class="sd">    before the first model call, so that call no longer asks what it asked then.</span>
+
+<span class="sd">    A tool call that needs approval (``needs_approval``) is asked with the standard</span>
+<span class="sd">    provider's ``request_input()``, which pauses the task in Required Actions. The answer</span>
+<span class="sd">    resumes the task, the run replays up to the call, and the call is approved, or rejected</span>
+<span class="sd">    with the reviewer's reason as its result. Steps are deleted only once a run ends without</span>
+<span class="sd">    a pending approval.</span>
 
 <span class="sd">    Outside a task there is no journal, and this is ``Runner.run``.</span>
 
@@ -851,6 +884,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :raises ValueError: When ``previous_response_id``, ``conversation_id`` or</span>
 <span class="sd">        ``auto_previous_response_id`` is passed: a replayed call never reaches the</span>
 <span class="sd">        conversation OpenAI keeps for them.</span>
+<span class="sd">    :raises UnsupportedToolDeferralError: When the run stops for a tool call that needs</span>
+<span class="sd">        approval and cannot pause for it: before Airflow 3.4 or without a standard provider</span>
+<span class="sd">        that has ``request_input()``, with a ``session``, or for a call by an agent whose</span>
+<span class="sd">        model is not recorded. The task fails without retrying.</span>
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">journal</span> <span class="o">:=</span> <span class="n">current_journal</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="k">await</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">starting_agent</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">run_config</span><span class="o">=</span><span class="n">run_config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -865,11 +902,25 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">Model</span><span class="p">):</span>
         <span class="n">config</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">_DurableModel</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">)</span>
     <span class="n">agent</span> <span class="o">=</span> <span class="n">_get_durable_agent</span><span class="p">(</span><span class="n">starting_agent</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">,</span> <span class="p">{})</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">run_config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">BaseException</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
-        <span class="n">durable_run</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">model_at_fault</span><span class="o">=</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">_MODEL_AT_FAULT</span><span class="p">))</span>
-        <span class="k">raise</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">run_input</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">TResponseInputItem</span><span class="p">]</span> <span class="o">|</span> <span class="n">RunState</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">RunResult</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="n">Runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="n">run_input</span><span class="p">,</span> <span class="n">run_config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">BaseException</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="n">durable_run</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">model_at_fault</span><span class="o">=</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">_MODEL_AT_FAULT</span><span class="p">))</span>
+            <span class="k">raise</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>
+    <span class="c1"># Each answer comes from a person through Required Actions. Asking pauses the task, which</span>
+    <span class="c1"># then runs again from the top: the run replays up to here and gets the answer back.</span>
+    <span class="n">answered</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">while</span> <span class="n">result</span><span class="o">.</span><span class="n">interruptions</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run</span><span class="p">(</span>
+            <span class="n">_answer_approvals</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">,</span> <span class="n">answered</span><span class="p">,</span> <span class="n">has_session</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"session"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">_answer_left_unread</span><span class="p">(</span><span class="n">durable_run</span><span class="p">,</span> <span class="n">answered</span><span class="p">):</span>
+        <span class="n">_did_not_come_back</span><span class="p">(</span><span class="n">durable_run</span><span class="p">)</span>
+    <span class="c1"># Only now: a run paused for approval replays what it recorded when the task resumes.</span>
     <span class="k">if</span> <span class="n">journal</span><span class="o">.</span><span class="n">clean_up_after_run</span><span class="p">:</span>
         <span class="n">durable_run</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">result</span></div>
@@ -890,11 +941,191 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_answer_approvals</span><span class="p">(</span>
+    <span class="n">result</span><span class="p">:</span> <span class="n">RunResult</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">:</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">answered</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">has_session</span><span class="p">:</span> <span class="nb">bool</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RunState</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Return the run's state with every pending tool call approved or rejected by a person.</span>
+
+<span class="sd">    A call is asked through ``request_input()``, which pauses the task the first time and</span>
+<span class="sd">    returns the answer once the task resumes; its key goes into ``answered``. A call whose</span>
+<span class="sd">    result is already recorded was approved and ran in an earlier run of the task, so it is</span>
+<span class="sd">    approved again without asking.</span>
+
+<span class="sd">    :raises UnsupportedToolDeferralError: When the run cannot pause for the approval.</span>
+<span class="sd">    :raises DurableJournalError: When the task resumed with an answer but the run did not come</span>
+<span class="sd">        back to the call it answers.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">request_input</span> <span class="o">:=</span> <span class="n">_get_request_input</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_cannot_pause</span><span class="p">(</span>
+            <span class="n">result</span><span class="p">,</span>
+            <span class="n">durable_run</span><span class="p">,</span>
+            <span class="s2">"pausing a task for input needs Airflow 3.4+ and a standard provider that has request_input()"</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">reason</span> <span class="o">:=</span> <span class="n">_why_approval_cannot_pause</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">has_session</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_cannot_pause</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">,</span> <span class="n">reason</span><span class="p">)</span>
+    <span class="n">durable_run</span><span class="o">.</span><span class="n">pause</span><span class="p">()</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">to_state</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">interruptions</span><span class="p">:</span>
+        <span class="n">call</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">raw_item</span>
+        <span class="k">if</span> <span class="n">durable_run</span><span class="o">.</span><span class="n">has_recorded</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">call_id</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">"Durable: </span><span class="si">%s</span><span class="s2"> ran after it was approved in an earlier run of this task; approving it again"</span><span class="p">,</span>
+                <span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">state</span><span class="o">.</span><span class="n">approve</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="c1"># The call comes back the same on every resume, as the answer that made it replays.</span>
+        <span class="c1"># Its fingerprint keeps an answer from applying to a different call that reuses its id.</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">durable_run</span><span class="o">.</span><span class="n">key</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">call</span><span class="o">.</span><span class="n">call_id</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">_build_tool_fingerprint</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">call</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span><span class="w"> </span><span class="n">call</span><span class="o">.</span><span class="n">call_id</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">if</span> <span class="n">_answer_left_unread</span><span class="p">(</span><span class="n">durable_run</span><span class="p">,</span> <span class="n">answered</span><span class="p">,</span> <span class="n">asking</span><span class="o">=</span><span class="n">key</span><span class="p">):</span>
+            <span class="c1"># The task resumed with an answer to a call this run never reached; asking about</span>
+            <span class="c1"># this one instead would never end, and request_input() refuses to.</span>
+            <span class="n">_did_not_come_back</span><span class="p">(</span><span class="n">durable_run</span><span class="p">,</span> <span class="n">stopped_at_another_call</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">answer</span> <span class="o">=</span> <span class="n">request_input</span><span class="p">(</span>
+            <span class="n">subject</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">agent</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> wants to call </span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="n">_describe_call</span><span class="p">(</span><span class="n">item</span><span class="p">),</span>
+            <span class="n">options</span><span class="o">=</span><span class="p">[</span><span class="n">LLMApprovalMixin</span><span class="o">.</span><span class="n">APPROVE</span><span class="p">,</span> <span class="n">LLMApprovalMixin</span><span class="o">.</span><span class="n">REJECT</span><span class="p">],</span>
+            <span class="c1"># An empty default, not None: some UI versions show a null one as "[object Object]".</span>
+            <span class="n">params</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"reason"</span><span class="p">:</span> <span class="n">Param</span><span class="p">(</span>
+                    <span class="s2">""</span><span class="p">,</span>
+                    <span class="nb">type</span><span class="o">=</span><span class="p">[</span><span class="s2">"string"</span><span class="p">,</span> <span class="s2">"null"</span><span class="p">],</span>
+                    <span class="n">description</span><span class="o">=</span><span class="s2">"Sent to the agent when you reject the call (optional)."</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">},</span>
+            <span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">answered</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="n">responder</span> <span class="o">=</span> <span class="n">LLMApprovalMixin</span><span class="o">.</span><span class="n">_describe_responder</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">answer</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">answer</span><span class="p">[</span><span class="s2">"chosen_options"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="n">LLMApprovalMixin</span><span class="o">.</span><span class="n">APPROVE</span><span class="p">]:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Durable: </span><span class="si">%s</span><span class="s2"> approved by </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span> <span class="n">responder</span><span class="p">)</span>
+            <span class="n">state</span><span class="o">.</span><span class="n">approve</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Durable: </span><span class="si">%s</span><span class="s2"> rejected by </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span> <span class="n">responder</span><span class="p">)</span>
+            <span class="c1"># A field left empty comes back as None or "", and some UI versions send the param's spec.</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="n">answer</span><span class="p">[</span><span class="s2">"params_input"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"reason"</span><span class="p">)</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="n">reason</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reason</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="s2">""</span>
+            <span class="n">state</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">rejection_message</span><span class="o">=</span><span class="n">reason</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">state</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_answer_left_unread</span><span class="p">(</span><span class="n">durable_run</span><span class="p">:</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">answered</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">asking</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Whether the task resumed with an answer to an approval of this run that the run never asked again for.</span>
+
+<span class="sd">    ``asking`` is the key the run is about to ask for; an answer already given to it is read</span>
+<span class="sd">    by that call rather than left unread.</span>
+<span class="sd">    """</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Optional: the answer log comes with request_input(), newer than the standard provider common.ai requires.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.utils.hitl</span><span class="w"> </span><span class="kn">import</span> <span class="n">answer_log_var</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">answer_log</span> <span class="o">=</span> <span class="n">answer_log_var</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">answer_log</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">answer_log</span><span class="o">.</span><span class="n">latest</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">durable_run</span><span class="o">.</span><span class="n">key</span><span class="si">}</span><span class="s2">:"</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">answer_log</span><span class="o">.</span><span class="n">latest</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">answered</span>
+        <span class="ow">and</span> <span class="p">(</span><span class="n">asking</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">asking</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">answer_log</span><span class="o">.</span><span class="n">answers</span><span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_did_not_come_back</span><span class="p">(</span><span class="n">durable_run</span><span class="p">:</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">stopped_at_another_call</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Fail the task resumed with an answer whose call the run never reached again.</span>
+
+<span class="sd">    ``stopped_at_another_call`` is set when the run stopped at another call that needs approval</span>
+<span class="sd">    (a clear asks about that one), and not when it finished without one (a clear replays the result).</span>
+<span class="sd">    """</span>
+    <span class="n">then</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">"Clear the task to ask about the call it stopped at instead."</span>
+        <span class="k">if</span> <span class="n">stopped_at_another_call</span>
+        <span class="k">else</span> <span class="s2">"It finished without that call; clearing the task replays that result without asking."</span>
+    <span class="p">)</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">DurableJournalError</span><span class="p">(</span>
+        <span class="s2">"The task resumed with an answer to a tool approval, but the agent run did not come back "</span>
+        <span class="s2">"to the call it answers: a step before that call gave a different result this time, such "</span>
+        <span class="s2">"as a tool that always runs live, a prompt built from live data, or a change to the Dag "</span>
+        <span class="sa">f</span><span class="s2">"while the task waited. </span><span class="si">{</span><span class="n">then</span><span class="si">}</span><span class="s2">"</span>
+    <span class="p">)</span>
+    <span class="n">durable_run</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">error</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_request_input</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">InputResponse</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the standard provider's ``request_input()``, or ``None`` where it cannot pause a task."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">AIRFLOW_V_3_4_PLUS</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Optional: request_input() is newer than the standard provider release common.ai requires.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.operators.hitl</span><span class="w"> </span><span class="kn">import</span> <span class="n">request_input</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">request_input</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_cannot_pause</span><span class="p">(</span><span class="n">result</span><span class="p">:</span> <span class="n">RunResult</span><span class="p">,</span> <span class="n">durable_run</span><span class="p">:</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NoReturn</span><span class="p">:</span>
+    <span class="n">tools</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">({</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">agent</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">)"</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">interruptions</span><span class="p">}))</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">UnsupportedToolDeferralError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"The agent stopped to ask for approval to call </span><span class="si">{</span><span class="n">tools</span><span class="si">}</span><span class="s2">, and run_durably() cannot "</span>
+        <span class="sa">f</span><span class="s2">"pause the task for it: </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">. Remove the approval requirement (needs_approval, "</span>
+        <span class="s2">"or require_approval on an MCP server), or call Runner.run and handle "</span>
+        <span class="s2">"result.interruptions yourself."</span>
+    <span class="p">)</span>
+    <span class="c1"># Counted against the model's last answer, so a clear asks the model again from there:</span>
+    <span class="c1"># what was recorded after it, such as an agent tool's answer given while it waited for</span>
+    <span class="c1"># approval, never replays, and the turns before it still do.</span>
+    <span class="n">durable_run</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">model_at_fault</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">error</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_why_approval_cannot_pause</span><span class="p">(</span><span class="n">result</span><span class="p">:</span> <span class="n">RunResult</span><span class="p">,</span> <span class="n">has_session</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">has_session</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="s2">"a run with a session asks the model again on every resume, so the call it paused on "</span>
+            <span class="s2">"never comes back to receive the answer"</span>
+        <span class="p">)</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">interruptions</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">raw_item</span><span class="p">,</span> <span class="n">ResponseFunctionToolCall</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span>
+            <span class="n">item</span><span class="o">.</span><span class="n">agent</span><span class="p">,</span> <span class="n">_DURABLE_MARKER</span><span class="p">,</span> <span class="kc">False</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="si">}</span><span class="s2"> is not a function tool of an agent whose model run_durably() "</span>
+                <span class="s2">"records, such as an agent used through as_tool() or reached through handoff(), "</span>
+                <span class="s2">"so its call would not come back the same when the task resumes"</span>
+            <span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="n">get_current_context</span><span class="p">()[</span><span class="s2">"task"</span><span class="p">]</span>
+    <span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>
+        <span class="c1"># A journal set with journal_scope() outside a running task, such as in a unit test.</span>
+        <span class="k">return</span> <span class="s2">"there is no running task to pause"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">PythonOperator</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"request_input() can pause a @task or PythonOperator, and this is a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">task</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_describe_call</span><span class="p">(</span><span class="n">item</span><span class="p">:</span> <span class="n">ToolApprovalItem</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Describe the call for the reviewer in Markdown: the agent, the tool and its masked arguments."""</span>
+    <span class="n">arguments</span> <span class="o">=</span> <span class="n">dumps_masked</span><span class="p">(</span><span class="n">_parse_arguments</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">raw_item</span><span class="o">.</span><span class="n">arguments</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">tool</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">tool</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">agent</span><span class="o">.</span><span class="n">tools</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">FunctionTool</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tool</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="p">),</span>
+        <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">" — </span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">description</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">tool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tool</span><span class="o">.</span><span class="n">description</span> <span class="k">else</span> <span class="s2">""</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"**Agent:** </span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">agent</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">**Tool:** </span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">tool_name</span><span class="si">}{</span><span class="n">description</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">"</span>
+        <span class="sa">f</span><span class="s2">"**Arguments**</span><span class="se">\n\n</span><span class="s2">```json</span><span class="se">\n</span><span class="si">{</span><span class="n">arguments</span><span class="si">}</span><span class="se">\n</span><span class="s2">```"</span>
+    <span class="p">)</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_durable_agent</span><span class="p">(</span><span class="n">agent</span><span class="p">:</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">durable_run</span><span class="p">:</span> <span class="n">DurableRun</span><span class="p">,</span> <span class="n">seen</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">Agent</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Return a copy of ``agent`` whose model, function tools and handoff agents go through the journal."""</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">done</span> <span class="o">:=</span> <span class="n">seen</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">agent</span><span class="p">)))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">done</span>
     <span class="n">durable_agent</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+    <span class="c1"># Its calls replay the same on resume, so an approval it asks for can pause the task.</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">durable_agent</span><span class="p">,</span> <span class="n">_DURABLE_MARKER</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
     <span class="c1"># Recorded before the handoffs are copied, so agents that hand off to each other copy once.</span>
     <span class="n">seen</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">agent</span><span class="p">)]</span> <span class="o">=</span> <span class="n">durable_agent</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">agent</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">Model</span><span class="p">):</span>
@@ -914,6 +1145,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">return</span> <span class="n">tool</span>
     <span class="c1"># A shallow copy, not dataclasses.replace: the tool's schema is already prepared.</span>
     <span class="n">durable_tool</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">durable_tool</span><span class="p">,</span> <span class="n">_DURABLE_MARKER</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
     <span class="n">invoke</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">on_invoke_tool</span>
     <span class="c1"># Exceptions a custom failure_error_function turned into text, by tool call.</span>
     <span class="n">handled</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
@@ -928,27 +1160,31 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">set_function_tool_failure_error_function</span><span class="p">(</span><span class="n">durable_tool</span><span class="p">,</span> <span class="n">remember</span><span class="p">)</span>
         <span class="n">invoke</span> <span class="o">=</span> <span class="n">bind</span><span class="p">(</span><span class="n">durable_tool</span><span class="p">)</span>
 
+    <span class="c1"># An AirflowTools tool, whose correctable failures count against its retry limit.</span>
+    <span class="n">replay_retry</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">_REPLAY_RETRY</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">on_invoke_tool</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">arguments</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">_is_inside_a_call</span><span class="p">(</span><span class="n">durable_run</span><span class="p">):</span>
             <span class="k">return</span> <span class="k">await</span> <span class="n">invoke</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">arguments</span><span class="p">)</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">parsed</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">arguments</span><span class="p">)</span> <span class="k">if</span> <span class="n">arguments</span> <span class="k">else</span> <span class="p">{}</span>
-        <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
-            <span class="n">parsed</span> <span class="o">=</span> <span class="n">arguments</span>
-        <span class="n">fingerprint</span> <span class="o">=</span> <span class="n">fingerprint_tool_call</span><span class="p">(</span>
-            <span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-            <span class="c1"># As recorded model answers are masked, so a replayed call's arguments can be too.</span>
-            <span class="n">mask_secrets</span><span class="p">(</span><span class="n">parsed</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"arguments"</span><span class="p">:</span> <span class="n">parsed</span><span class="p">}),</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">step</span> <span class="o">=</span> <span class="n">durable_run</span><span class="o">.</span><span class="n">claim</span><span class="p">(</span><span class="sa">f</span><span class="s2">"tool:</span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"tool"</span><span class="p">,</span> <span class="n">fingerprint</span><span class="o">=</span><span class="n">fingerprint</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"tool:</span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span>
+        <span class="n">fingerprint</span> <span class="o">=</span> <span class="n">_build_tool_fingerprint</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">arguments</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">)</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="n">durable_run</span><span class="o">.</span><span class="n">claim_reserved</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">tool_call_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"tool"</span><span class="p">,</span> <span class="n">fingerprint</span><span class="o">=</span><span class="n">fingerprint</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">replayed</span><span class="p">:</span>
+            <span class="c1"># Such a tool's result is text, so a dict is one recorded with the count it left in the</span>
+            <span class="c1"># tool's retry budget. Restored, so the retry limit spans attempts.</span>
+            <span class="k">if</span> <span class="n">replay_retry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">await</span> <span class="n">replay_retry</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s2">"retry"</span><span class="p">])</span>
+                <span class="k">return</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s2">"output"</span><span class="p">]</span>
             <span class="k">return</span> <span class="n">step</span><span class="o">.</span><span class="n">payload</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">with</span> <span class="n">step</span><span class="o">.</span><span class="n">executing</span><span class="p">():</span>
                 <span class="n">output</span> <span class="o">=</span> <span class="k">await</span> <span class="n">invoke</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">arguments</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
-            <span class="n">step</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+            <span class="c1"># The model's answers used this tool's retry limit up, not this call, so the run fails</span>
+            <span class="c1"># on the model's account and a retry asks it again from its last request. The limit of</span>
+            <span class="c1"># a tool inside an agent this one calls through as_tool is that call's failure.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">replay_retry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">_RetryLimitReached</span><span class="p">)):</span>
+                <span class="n">step</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
             <span class="k">raise</span>
         <span class="c1"># A failure the SDK turned into text for the model is not recorded, so a retry runs the</span>
         <span class="c1"># call again, as it does a call that raised.</span>
@@ -956,11 +1192,32 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">step</span><span class="o">.</span><span class="n">fail</span><span class="p">(</span><span class="n">handled_error</span><span class="p">)</span>
         <span class="k">elif</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">_DEFAULT_FAILURE_HANDLED</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="c1"># Secrets must not reach the journal any more than the model.</span>
-            <span class="n">step</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">mask_secrets</span><span class="p">(</span><span class="n">_as_sent</span><span class="p">(</span><span class="n">output</span><span class="p">)))</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">mask_secrets</span><span class="p">(</span><span class="n">_as_sent</span><span class="p">(</span><span class="n">output</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">replay_retry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="p">(</span><span class="n">retry</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">_RETRY_COUNT</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"output"</span><span class="p">:</span> <span class="n">payload</span><span class="p">,</span> <span class="s2">"retry"</span><span class="p">:</span> <span class="n">retry</span><span class="p">}</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">output</span>
 
     <span class="n">durable_tool</span><span class="o">.</span><span class="n">on_invoke_tool</span> <span class="o">=</span> <span class="n">on_invoke_tool</span>
     <span class="k">return</span> <span class="n">durable_tool</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_parse_arguments</span><span class="p">(</span><span class="n">arguments</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a tool call's arguments as the model sent them: parsed JSON, or the raw text when it is not JSON."""</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">arguments</span><span class="p">)</span> <span class="k">if</span> <span class="n">arguments</span> <span class="k">else</span> <span class="p">{}</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">arguments</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_tool_fingerprint</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">arguments</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">call_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">parsed</span> <span class="o">=</span> <span class="n">_parse_arguments</span><span class="p">(</span><span class="n">arguments</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">fingerprint_tool_call</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">,</span>
+        <span class="c1"># As recorded model answers are masked, so a replayed call's arguments can be too.</span>
+        <span class="n">mask_secrets</span><span class="p">(</span><span class="n">parsed</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"arguments"</span><span class="p">:</span> <span class="n">parsed</span><span class="p">}),</span>
+        <span class="n">call_id</span><span class="p">,</span>
+    <span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_as_sent</span><span class="p">(</span><span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
@@ -1040,13 +1297,16 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">replayed</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">ModelResponse</span><span class="p">(</span>
+                <span class="n">replayed</span> <span class="o">=</span> <span class="n">ModelResponse</span><span class="p">(</span>
                     <span class="n">output</span><span class="o">=</span><span class="n">_OUTPUT_ITEMS</span><span class="o">.</span><span class="n">validate_python</span><span class="p">(</span><span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="s2">"output"</span><span class="p">]),</span>
                     <span class="n">usage</span><span class="o">=</span><span class="n">Usage</span><span class="p">(),</span>
                     <span class="n">response_id</span><span class="o">=</span><span class="n">step</span><span class="o">.</span><span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"response_id"</span><span class="p">),</span>
                 <span class="p">)</span>
             <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">durable_run</span><span class="o">.</span><span class="n">reject</span><span class="p">(</span><span class="n">step</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="sa">f</span><span class="s2">"the recorded model response cannot be read: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_reserve_tool_steps</span><span class="p">(</span><span class="n">replayed</span><span class="p">,</span> <span class="n">tools</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">replayed</span>
 
         <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ModelResponse</span><span class="p">:</span>
             <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">wrapped</span><span class="o">.</span><span class="n">get_response</span><span class="p">(</span>
@@ -1054,10 +1314,34 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="p">)</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="k">return</span> <span class="k">await</span> <span class="n">step</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">call</span><span class="p">,</span> <span class="n">to_record</span><span class="o">=</span><span class="n">_record_response</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">step</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">call</span><span class="p">,</span> <span class="n">to_record</span><span class="o">=</span><span class="n">_record_response</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">failed_step</span> <span class="o">=</span> <span class="n">step</span>
             <span class="k">raise</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reserve_tool_steps</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">tools</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">response</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reserve_tool_steps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">ModelResponse</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Tool</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Claim a position for each of the response's tool calls, in the order the model made them.</span>
+
+<span class="sd">        A call whose tool never runs (held for approval, stopped by a guardrail) leaves its position</span>
+<span class="sd">        empty, which a retry runs live without disturbing the positions after it. The steps the</span>
+<span class="sd">        previous response reserved and no tool took are dropped.</span>
+<span class="sd">        """</span>
+        <span class="n">durable_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">tool</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tool</span><span class="p">,</span> <span class="n">_DURABLE_MARKER</span><span class="p">,</span> <span class="kc">False</span><span class="p">)}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">durable_run</span><span class="o">.</span><span class="n">reserve</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">(</span>
+                    <span class="n">item</span><span class="o">.</span><span class="n">call_id</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">"tool:</span><span class="si">{</span><span class="n">item</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                    <span class="n">_build_tool_fingerprint</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">call_id</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">output</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">ResponseFunctionToolCall</span><span class="p">)</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">durable_names</span>
+            <span class="p">],</span>
+            <span class="n">kind</span><span class="o">=</span><span class="s2">"tool"</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_retried</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fingerprint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JournalStep</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""</span>
@@ -1431,7 +1715,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

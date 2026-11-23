@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -514,7 +514,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -860,11 +860,27 @@ transient or not)</p></td>
 vendor can answer the same prompt now; a bad prompt, an exhausted quota on every vendor, or
 a permanent data error still has to be decided by the retry policy.</p>
 <p>Adding a chain changes what the retry layer sees. When every connection in the chain
-fails, the exception the task raises is <code class="docutils literal notranslate"><span class="pre">pydantic_ai.exceptions.FallbackExceptionGroup</span></code>,
-not the last provider’s own exception, so retry rules matched against a provider-specific
-exception type stop matching. Before adding a chain to a connection that Dags already use,
-read <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a> – the section “When the connection also carries a fallback
-chain” spells out what to check.</p>
+fails, the task raises a <code class="docutils literal notranslate"><span class="pre">pydantic_ai.exceptions.FallbackExceptionGroup</span></code>, not the last
+provider’s own exception. Which one depends on how the agent runs:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LLMOperator</span></code>, <code class="docutils literal notranslate"><span class="pre">AgentOperator</span></code>, their subclasses, and the matching <code class="docutils literal notranslate"><span class="pre">&#64;task.llm</span></code> and
+<code class="docutils literal notranslate"><span class="pre">&#64;task.agent</span></code> decorators raise
+<a class="reference internal" href="_api/airflow/providers/common/ai/fallback_exceptions/index.html#airflow.providers.common.ai.fallback_exceptions.FallbackChainExhaustedError" title="airflow.providers.common.ai.fallback_exceptions.FallbackChainExhaustedError"><code class="xref py py-class docutils literal notranslate"><span class="pre">FallbackChainExhaustedError</span></code></a>, a
+subclass of <code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code>. The error each connection raised is in its
+<code class="docutils literal notranslate"><span class="pre">member_errors</span></code>, and with <code class="docutils literal notranslate"><span class="pre">durable=True</span></code> its <code class="docutils literal notranslate"><span class="pre">replayed_steps</span></code> and <code class="docutils literal notranslate"><span class="pre">recorded_steps</span></code>
+say how far the attempt got.</p></li>
+<li><p>In a plain <code class="docutils literal notranslate"><span class="pre">&#64;task</span></code> that builds an agent with <code class="docutils literal notranslate"><span class="pre">PydanticAIHook</span></code> and runs it, the task
+raises pydantic-ai’s own <code class="docutils literal notranslate"><span class="pre">FallbackExceptionGroup</span></code>. It has no <code class="docutils literal notranslate"><span class="pre">member_errors</span></code>,
+<code class="docutils literal notranslate"><span class="pre">replayed_steps</span></code> or <code class="docutils literal notranslate"><span class="pre">recorded_steps</span></code>; read each connection’s error from the group’s
+<code class="docutils literal notranslate"><span class="pre">.exceptions</span></code>. An <code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">FallbackChainExhaustedError</span></code> there never matches.</p></li>
+</ul>
+<p>On both paths <code class="docutils literal notranslate"><span class="pre">LLMRetryPolicy</span></code> and <code class="docutils literal notranslate"><span class="pre">ClassifierRetryPolicy</span></code> match their
+<code class="docutils literal notranslate"><span class="pre">fallback_rules</span></code> against the chain’s error and then against the last connection’s error,
+so a rule written for a provider-specific exception type keeps matching. A plain
+<code class="docutils literal notranslate"><span class="pre">ExceptionRetryPolicy</span></code>, or any other policy that compares one exception type, sees only
+the group, and a rule written for a provider-specific exception type stops matching there.
+Before adding a chain to a connection that Dags already use, read <a class="reference internal" href="retry_policies.html"><span class="doc">Retry policies</span></a> –
+the section “When the connection also carries a fallback chain” spells out what to check.</p>
 </section>
 <section id="costs-to-know-before-configuring-a-long-chain">
 <h2>Costs to know before configuring a long chain<a class="headerlink" href="#costs-to-know-before-configuring-a-long-chain" title="Link to this heading">¶</a></h2>
@@ -1256,7 +1272,7 @@ returns, and LlamaIndex has none.</p>
     <script src="_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=fd6eb6e6"></script>
         <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="_static/clipboard.min.js?v=a7894cd8"></script>

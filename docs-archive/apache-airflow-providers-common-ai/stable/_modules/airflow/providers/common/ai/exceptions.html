@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -748,7 +748,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    Raised when a run paused for tool approval cannot resume safely.</span>
 
 <span class="sd">    The saved transcript, or the agent's rendered toolset ids, no longer match what the</span>
-<span class="sd">    reviewer saw. A retry starts a fresh run.</span>
+<span class="sd">    reviewer saw. A retry runs the agent again and asks the reviewer again; on Airflow 3.3,</span>
+<span class="sd">    where a task instance asks once, the retry fails instead.</span>
 <span class="sd">    """</span></div>
 
 
@@ -771,12 +772,43 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/common/ai/exceptions/index.html#airflow.providers.common.ai.exceptions.UnsupportedToolDeferralError">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">UnsupportedToolDeferralError</span><span class="p">(</span><span class="n">AirflowFailException</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
-<span class="sd">    Raised when an agent defers a tool call that ``AgentOperator`` cannot resolve.</span>
+<span class="sd">    Raised when an agent defers a tool call that nothing in the task can resolve.</span>
 
-<span class="sd">    Either the tool hands its work to an external system, or it needs approval where</span>
-<span class="sd">    approval is not available (before Airflow 3.3, or with ``durable``,</span>
-<span class="sd">    ``enable_hitl_review``, code mode or a ``SandboxToolset``). A retry would repeat</span>
-<span class="sd">    the same call, so the task fails without retrying.</span>
+<span class="sd">    In ``AgentOperator``, either the tool hands its work to an external system, or it needs</span>
+<span class="sd">    approval where approval is not available (before Airflow 3.3, or with</span>
+<span class="sd">    ``enable_hitl_review``, code mode or a ``SandboxToolset``). In ``run_durably`` for the</span>
+<span class="sd">    OpenAI Agents SDK, a tool call needs approval and the run cannot pause the task for it,</span>
+<span class="sd">    such as before Airflow 3.4 or with a ``session``. A retry would repeat the same call, so</span>
+<span class="sd">    the task fails without retrying.</span>
+<span class="sd">    """</span></div>
+
+
+
+<div class="viewcode-block" id="SQLToolsetConnectionError">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/common/ai/exceptions/index.html#airflow.providers.common.ai.exceptions.SQLToolsetConnectionError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SQLToolsetConnectionError</span><span class="p">(</span><span class="n">AirflowException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Raised when a ``SQLToolset`` tool cannot reach its database.</span>
+
+<span class="sd">    The connection is not defined or does not supply a ``DbApiHook``, connecting fails, or</span>
+<span class="sd">    SQLAlchemy cannot be set up or loses the connection. No change to the SQL fixes it, so</span>
+<span class="sd">    the attempt fails for Airflow to retry instead of the model getting the error. Match it</span>
+<span class="sd">    in a retry policy to treat an unreachable database differently from other failures.</span>
+
+<span class="sd">    When the driver's message carries a secret the masker cannot remove from the exception,</span>
+<span class="sd">    the toolset raises a ``RuntimeError`` with the masked message instead.</span>
+<span class="sd">    """</span></div>
+
+
+
+<div class="viewcode-block" id="DurableToolMetadataError">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/common/ai/exceptions/index.html#airflow.providers.common.ai.exceptions.DurableToolMetadataError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">DurableToolMetadataError</span><span class="p">(</span><span class="n">AirflowFailException</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Raised when a tool's ``airflow`` metadata is not ``True``, ``False`` or ``None``.</span>
+
+<span class="sd">    Durable execution checks it when the agent lists its tools, before the first model</span>
+<span class="sd">    request. Every attempt would fail the same way, so the task fails without retrying.</span>
 <span class="sd">    """</span></div>
 
 
@@ -788,8 +820,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    Raised when durable execution cannot record or replay a step.</span>
 
 <span class="sd">    A step's result is not JSON-serializable, or the journal holds a result this version</span>
-<span class="sd">    cannot replay. The same step fails the same way on every attempt, so the task fails</span>
-<span class="sd">    without retrying.</span>
+<span class="sd">    cannot replay. Or a task resumed with the answer to an approval, and the run, which</span>
+<span class="sd">    took a different path this time, never came back to the call the answer is for. The</span>
+<span class="sd">    same step fails the same way on every attempt, and an answer cannot be matched to a</span>
+<span class="sd">    call nobody was asked about, so the task fails without retrying.</span>
 <span class="sd">    """</span></div>
 
 
@@ -1271,7 +1305,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

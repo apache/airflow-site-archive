@@ -22,7 +22,7 @@
             <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../genindex.html" />
             <link rel="search" title="Search" href="../search.html" />
-            <link rel="next" title="Sandboxed execution for agents" href="../sandbox/index.html" />
+            <link rel="next" title="Sandboxes" href="../sandbox/index.html" />
             <link rel="prev" title="MCPHook" href="../hooks/mcp.html" />
 
     <link rel="canonical" href="https://airflow.apache.org/docs/apache-airflow-providers-common-ai/stable/toolsets/skills.html" />
@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -436,7 +436,7 @@
 <li class="toctree-l2"><a class="reference internal" href="datafusion.html">Files with DataFusion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mcp.html">MCP servers</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Agent Skills</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../sandbox/index.html">Sandboxed execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sandbox/index.html">Sandboxes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="managed_agent.html">Vendor-managed agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="langchain.html">LangChain tools</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.html">Tool call logging</a></li>
@@ -517,7 +517,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -584,7 +584,7 @@
 <li class="toctree-l2"><a class="reference internal" href="datafusion.html">Files with DataFusion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mcp.html">MCP servers</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Agent Skills</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../sandbox/index.html">Sandboxed execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sandbox/index.html">Sandboxes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="managed_agent.html">Vendor-managed agents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="langchain.html">LangChain tools</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.html">Tool call logging</a></li>
@@ -796,7 +796,7 @@ cloned repositories are removed when the run ends.</p>
 </div>
 </div>
 <p>For a private repository, point <code class="docutils literal notranslate"><span class="pre">conn_id</span></code> at a
-<a class="reference external" href="/docs/apache-airflow-providers-git/stable/connections/git.html" title="(in apache-airflow-providers-git v1.0.1)"><span class="xref std std-doc">git connection</span></a>; credentials
+<a class="reference external" href="/docs/apache-airflow-providers-git/stable/connections/git.html" title="(in apache-airflow-providers-git v1.1.0)"><span class="xref std std-doc">git connection</span></a>; credentials
 are resolved through the Git provider’s <code class="docutils literal notranslate"><span class="pre">GitHook</span></code> (an HTTPS token in the
 connection password, or an SSH key in the connection’s extra). A plain <code class="docutils literal notranslate"><span class="pre">http://</span></code>
 URL with <code class="docutils literal notranslate"><span class="pre">conn_id</span></code> is rejected so a credential is never sent in cleartext, and a
@@ -877,10 +877,21 @@ the <code class="docutils literal notranslate"><span class="pre">branch</span></
 from an earlier one can be traced to a change in the skill between two commits.</p>
 <p>The <a class="reference internal" href="../observability.html#howto-observability-model-tab"><span class="std std-ref">AI Model tab</span></a> shows this list, loaded skills
 first, with a link to the skill’s folder at that commit for a repository on GitHub or
-GitLab. The counts cover the whole conversation, so calls made before a tool-approval
-pause, a human-review regeneration or a durable retry still count. Several skills toolsets
-on one agent, each wrapped with <code class="docutils literal notranslate"><span class="pre">prefixed()</span></code> to keep their tool names apart, share the
-same list. Nothing is published when the task sets <code class="docutils literal notranslate"><span class="pre">do_xcom_push=False</span></code>.</p>
+GitLab, and says so when the sources held no skills. Calls made before a tool-approval
+pause or a human-review regeneration still count, and so do calls a durable retry replays.
+Only calls the tool answered count: a denied, retried, failed or interrupted call does not,
+while a script that exits with an error still does, since <code class="docutils literal notranslate"><span class="pre">run_skill_script</span></code> returns its
+output. A <code class="docutils literal notranslate"><span class="pre">message_history</span></code> seeded from another task does not add that task’s calls, and
+calls that a history processor or compaction removes from the transcript are not counted.
+<code class="docutils literal notranslate"><span class="pre">calls</span></code> totals <code class="docutils literal notranslate"><span class="pre">calls_by_run</span></code>, which keeps the calls of each agent run that made any
+under its pydantic-ai run id.
+A run resumed from a tool-approval pause and a human-review regeneration each clone the
+repository again, so the source shows the commit the latest run cloned. A toolset built by
+a function, which the agent wraps in pydantic-ai’s <code class="docutils literal notranslate"><span class="pre">DynamicToolset</span></code>, is built and cloned
+again on every model step unless you pass <code class="docutils literal notranslate"><span class="pre">DynamicToolset(fn,</span> <span class="pre">per_run_step=False)</span></code>.
+Several skills toolsets on one agent, each wrapped with <code class="docutils literal notranslate"><span class="pre">prefixed()</span></code> to keep their tool
+names apart, share the same list. Nothing is published when the task sets
+<code class="docutils literal notranslate"><span class="pre">do_xcom_push=False</span></code>.</p>
 </section>
 <section id="parameters">
 <h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
@@ -970,7 +981,7 @@ and any script execution happen on the worker.</p>
             <a rel="prev" title="MCPHook" href="../hooks/mcp.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="p">Previous</button>
             </a>
-            <a rel="next" title="Sandboxed execution for agents" href="../sandbox/index.html" >
+            <a rel="next" title="Sandboxes" href="../sandbox/index.html" >
                 <button class="btn-hollow btn-blue bodytext__medium--cerulean-blue" accesskey="n">Next</button>
             </a>
     </div>
@@ -1265,7 +1276,7 @@ and any script execution happen on the worker.</p>
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

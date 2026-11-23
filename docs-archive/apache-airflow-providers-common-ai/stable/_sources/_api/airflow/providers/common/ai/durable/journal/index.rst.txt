@@ -20,7 +20,9 @@ airflow.providers.common.ai.durable.journal
    history, the tool arguments). The first mismatch means the run took a different path
    from the previous attempt, so that step and every step after it run live. So does
    everything the previous attempt did after a step that raised, and, when the previous
-   attempt failed on the model's answers, everything from the model's last request on.
+   attempt failed on the model's answers, everything from the model's last request on. A
+   tool call that raised on two attempts in a row counts as such an answer: the next retry
+   asks the model again from the request that chose the call.
 
    A :class:`DurableJournal` belongs to one task attempt. Each agent run in it is a
    :class:`DurableRun`, numbered in the order the runs start, with positions of its own,
@@ -36,6 +38,9 @@ airflow.providers.common.ai.durable.journal
      ``await run.run(name, kind=..., fingerprint=..., body=...)``.
    * :meth:`DurableRun.claim` and :meth:`JournalStep.record` split it in two, for a
      framework whose hooks see a step's input and its output in separate callbacks.
+
+   An adapter that stops the task to wait for input (``request_input()``) calls
+   :meth:`DurableRun.pause` first, so that the resumed task replays what this attempt recorded.
 
 
 
@@ -53,6 +58,7 @@ Classes
 
 .. autoapisummary::
 
+   airflow.providers.common.ai.durable.journal.Unrecordable
    airflow.providers.common.ai.durable.journal.JournalStep
    airflow.providers.common.ai.durable.journal.JournalStats
    airflow.providers.common.ai.durable.journal.DurableRun
@@ -66,6 +72,7 @@ Functions
 
    airflow.providers.common.ai.durable.journal.build_task_storage
    airflow.providers.common.ai.durable.journal.journal_scope
+   airflow.providers.common.ai.durable.journal.find_active_journal
    airflow.providers.common.ai.durable.journal.current_journal
 
 
@@ -77,6 +84,22 @@ Module Contents
 .. py:data:: StepKind
 
    What a step is, for the end-of-run summary and for adapters that treat model steps specially.
+
+
+.. py:class:: Unrecordable
+
+   A step result an adapter could not encode as JSON: the live value, and why.
+
+   A step body returns it in place of the payload; :meth:`JournalStep.run` passes it to
+   :meth:`JournalStep.cannot_record` instead of recording it, and returns it to the adapter.
+
+
+   .. py:attribute:: value
+      :type:  Any
+
+
+   .. py:attribute:: error
+      :type:  Exception
 
 
 .. py:class:: JournalStep
@@ -133,6 +156,15 @@ Module Contents
 
 
 
+   .. py:method:: count_as_replayed()
+
+      Count this step as replayed, once.
+
+      For a step from :meth:`DurableRun.reserve`, which :meth:`DurableRun.claim_reserved` does;
+      a step from :meth:`DurableRun.claim` is already counted.
+
+
+
    .. py:method:: run(body, *, to_record = None)
       :async:
 
@@ -164,6 +196,15 @@ Module Contents
 
 
 
+   .. py:method:: cannot_record(error)
+
+      Note that the step's result has no form the journal can hold, such as a value with no JSON form.
+
+      :raises DurableJournalError: When the journal fails on such results, as it does by default.
+          Otherwise the step is left unrecorded, as when storage skips a write, and runs again on retry.
+
+
+
    .. py:method:: fail(error)
 
       Note that the step raised ``error``.
@@ -176,7 +217,7 @@ Module Contents
 
 .. py:class:: JournalStats
 
-   What one task attempt replayed and recorded, by step kind.
+   What one task attempt replayed and recorded, by step kind; a review counts each regeneration on its own.
 
 
    .. py:attribute:: replayed
@@ -193,13 +234,14 @@ Module Contents
 
 
 
-.. py:class:: DurableRun(journal, key)
+.. py:class:: DurableRun(journal, key, *, started_before = True)
 
    One agent run's steps in the journal.
 
    Positions are handed out in the order steps are claimed. A step must be claimed
-   before its first ``await``, so concurrent steps (parallel tool calls) take their
-   positions in the order they were started rather than the order they finish.
+   before its first ``await``, so concurrent steps take their positions in the order they
+   were started rather than the order they finish. An adapter whose concurrent steps can
+   be delayed before their claim must claim them itself in a deterministic order.
 
    Besides its steps, a run keeps one entry about itself: where the last attempt that
    failed stopped being trustworthy, and the furthest position any attempt reached, so
@@ -229,8 +271,36 @@ Module Contents
 
       Return the entry the previous attempt recorded at ``position``, without claiming it.
 
-      ``None`` when nothing usable was recorded there, or the run has already diverged.
-      The entry is a dict with ``name``, ``kind``, ``fingerprint`` and ``payload``.
+      ``None`` when nothing usable was recorded there, no earlier attempt started the run, or
+      the run has already diverged. The entry is a dict with ``name``, ``kind``,
+      ``fingerprint`` and ``payload``.
+
+
+
+   .. py:method:: reserve(calls, *, kind)
+
+      Take a position for each of ``calls`` in order, and keep them for :meth:`claim_reserved`.
+
+      For an adapter that has to number steps before it knows whether they will run. Each call
+      is ``(call_id, name, fingerprint)``. A replay counts in the stats only once the step is
+      taken. Replaces what an earlier ``reserve`` left unclaimed, and a call whose id is
+      already in ``calls`` takes no position. Like :meth:`claim`, call it before the first ``await``.
+
+
+
+   .. py:method:: has_recorded(call_id)
+
+      Whether the step :meth:`reserve` kept for ``call_id`` holds a result an earlier attempt recorded.
+
+
+
+   .. py:method:: claim_reserved(call_id, name, *, kind, fingerprint)
+
+      Take the step :meth:`reserve` kept for ``call_id``, counting its replay.
+
+      A call whose id was not reserved, or whose reservation is already taken or belongs to
+      another call sharing the id (some non-OpenAI adapters), takes a new position as
+      :meth:`claim` does. Call it before the first ``await``.
 
 
 
@@ -245,8 +315,9 @@ Module Contents
           fingerprinted. A step without one replays on a matching name, and only right
           after a step that replayed.
       :param replayable: ``False`` for a step that must always run live, such as a tool
-          whose effect Airflow cannot observe. It still takes a position, so the steps
-          after it keep theirs, but nothing is looked up or recorded for it.
+          whose effect Airflow cannot observe or one its metadata opts out. It still takes
+          a position, so the steps after it keep theirs, but nothing is looked up or
+          recorded for it.
 
 
 
@@ -278,6 +349,53 @@ Module Contents
           failure on every retry, so the retry asks the model again from its last request.
           Ignored when a step raised ``error``: that step decides where the retry runs live.
 
+      A tool call that raises ``error`` on two attempts in a row, with the same arguments, is
+      treated as a failure the model caused as well: the first retry runs the call again in
+      case its failure was transient, and the next asks the model again from the request that
+      chose the call, rather than replay that choice into the same failure.
+
+
+
+   .. py:method:: pause()
+
+      Record that the task is about to pause, so that resuming it replays what this attempt recorded.
+
+      An adapter calls this before it stops the task to wait for input. Where an earlier
+      attempt's failure, or a different path this attempt took, left entries that must not
+      replay, this attempt has run live from there: what it recorded becomes trusted, and
+      the earlier entries at positions it left empty (a call still waiting for approval, a
+      tool that raised) are deleted. Positions from here on still run live after the pause.
+      Otherwise it only notes how far this attempt got, when that is further than any before.
+
+
+
+   .. py:method:: complete()
+
+      Note that the run succeeded, for a task that keeps the journal after it, such as for a review.
+
+      An earlier attempt that failed left a note saying where a retry stops replaying. Once a
+      run succeeds, a later attempt must replay what this one recorded instead, as for a pause,
+      and not an entry an earlier attempt left at a position this one ran without recording,
+      or past where this one ended. Also notes how far the run went, and where its last model
+      request was, when a step it ran is not in the journal (a tool set to run on every attempt,
+      say), as a later reader cannot find either past such a gap; and rewrites that note when
+      this attempt's last model request is elsewhere. Writes nothing on a first attempt that
+      recorded every step, or a retry that replayed every step, when no earlier attempt left a
+      note and none went further. A retry that ran a step live always writes the note: an
+      attempt that was killed leaves none, and may have recorded steps past where this run
+      ended. Reads back each stale entry it deletes, so that one the storage failed to delete
+      is not trusted.
+
+
+
+   .. py:method:: ask_model_again()
+
+      Make a retry ask the model again for this run's final answer, which succeeded but was turned down.
+
+      For a run whose answer a reviewer rejected, possibly in a later process than the run's: a
+      retry replays the run's steps up to its last model request, then asks the model again from
+      there. A run with no model step recorded runs again from its start.
+
 
 
    .. py:method:: cleanup()
@@ -295,7 +413,7 @@ Module Contents
 
 
 
-.. py:class:: DurableJournal(storage, *, clean_up_after_run = False)
+.. py:class:: DurableJournal(storage, *, clean_up_after_run = False, fail_on_unrecordable = True, first_run = 0)
 
    One task attempt's view of the durable journal.
 
@@ -303,6 +421,12 @@ Module Contents
    :param clean_up_after_run: Delete a run's steps as soon as it succeeds. A journal the
        operator manages leaves this off and calls :meth:`cleanup` itself after the
        task's own post-run work has succeeded.
+   :param fail_on_unrecordable: Fail the task on a step result the journal cannot hold
+       (see :meth:`JournalStep.cannot_record`). With ``False`` the step is logged and runs
+       again on retry instead.
+   :param first_run: The number of the first top-level run this journal starts, for a task that
+       starts later runs in a later process than the runs before them, such as a regeneration
+       after a review round.
 
 
    .. py:attribute:: storage
@@ -313,7 +437,21 @@ Module Contents
 
 
 
+   .. py:attribute:: fail_on_unrecordable
+      :value: True
+
+
+
    .. py:attribute:: stats
+
+
+   .. py:method:: find_executing_tool_steps()
+
+      Return the tool calls of this journal whose work is running now, in any thread.
+
+      It sees a call from code that runs in another thread without a copy of the call's
+      context, such as an agent the tool runs with ``loop.run_in_executor``.
+
 
 
    .. py:method:: get_run_id(*, default)
@@ -337,6 +475,32 @@ Module Contents
 
       A run started while a step of this journal executes (an agent a tool calls) is
       numbered under that step; any other run takes the next top-level number.
+
+
+
+   .. py:method:: ask_model_again(number)
+
+      Make a retry ask the model again for the final answer of top-level run ``number``.
+
+      See :meth:`DurableRun.ask_model_again`. The top-level runs after it followed from that
+      answer, so they are deleted: a retry starts them over.
+
+
+
+   .. py:method:: drop_runs_from(number)
+
+      Delete top-level run ``number`` and every later one, with the runs started inside them.
+
+      For runs that followed from an answer that no longer stands, such as the regenerations
+      after a review round the reviewer answered again: a later run with that number starts over.
+
+
+
+   .. py:property:: next_run_number
+      :type: int
+
+
+      The number the next top-level run started outside any step takes.
 
 
 
@@ -366,6 +530,16 @@ Module Contents
    Make ``journal`` the active journal for the code in the ``with`` block.
 
 
+.. py:function:: find_active_journal()
+
+   Return the journal already recording this run, without creating one.
+
+   A journal set with :func:`journal_scope` wins. Otherwise, inside a running task, this
+   returns the task attempt's journal if something already created it. ``None`` means no
+   journal is recording: outside a task, or inside one where nothing has used durable
+   execution yet.
+
+
 .. py:function:: current_journal()
 
    Return the active journal, or ``None`` outside an Airflow task.
@@ -373,6 +547,7 @@ Module Contents
    A journal set with :func:`journal_scope` wins. Otherwise, inside a running task,
    this returns the task attempt's own journal, created on first use, which deletes the
    steps of each run as soon as it succeeds. Outside a task there is nothing to replay
-   into, so durable execution is off and the agent runs as it would without it.
+   into, so durable execution is off and the agent runs as it would without it. To read
+   the journal without creating it, use :func:`find_active_journal`.
 
 

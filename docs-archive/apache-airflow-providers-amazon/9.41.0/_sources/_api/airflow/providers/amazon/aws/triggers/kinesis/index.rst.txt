@@ -1,0 +1,122 @@
+airflow.providers.amazon.aws.triggers.kinesis
+=============================================
+
+.. py:module:: airflow.providers.amazon.aws.triggers.kinesis
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.amazon.aws.triggers.kinesis.KinesisTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: KinesisTrigger(stream_name, aws_conn_id = 'aws_default', shard_iterator_type = 'LATEST', batch_size = 100, waiter_delay = 10, region_name = None, verify = None, botocore_config = None)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseEventTrigger`
+
+
+   Wait asynchronously for records on an Amazon Kinesis Data Stream.
+
+   The trigger is long-running and emits one event for each non-empty shard response. Record data is
+   base64-encoded in the event payload and must be decoded by the consumer. Delivery is best-effort:
+   a triggerer failure can cause records to be repeated or missed around the failure window.
+
+   When Airflow provides an asset state store for a single watched asset, the trigger checkpoints the
+   last sequence number read from each shard. The same asset and stream identity share one logical cursor;
+   do not configure multiple watchers that require independent progress for the same stream on one asset.
+
+   :param stream_name: Name of the Kinesis Data Stream to watch.
+   :param aws_conn_id: AWS connection id.
+   :param shard_iterator_type: Position used when a shard has no checkpoint. ``LATEST`` only sees records
+       that arrive after the watcher starts; ``TRIM_HORIZON`` starts from the oldest retained record.
+       Only these types are supported because ``AT_TIMESTAMP`` requires a timestamp and sequence-number
+       types require a starting sequence number for each shard. Checkpoints handle resuming each shard.
+   :param batch_size: Maximum records per ``GetRecords`` call and trigger event. Must be between 1 and
+       10,000. Record data is base64-encoded before it is stored in the metadata database, so use a
+       conservative value for large records.
+   :param waiter_delay: Seconds between complete polling sweeps. Must be less than the five-minute
+       shard iterator lifetime. Kinesis permits at most five ``GetRecords`` calls per second per shard.
+       When reading a backlog with ``TRIM_HORIZON``, draining ``N`` records from one shard takes roughly
+       ``ceil(N / batch_size) * waiter_delay`` seconds when calls return full batches; with the defaults,
+       10,000 records take about 1,000 seconds.
+   :param region_name: AWS region for the Kinesis client.
+   :param verify: Whether to verify SSL certificates, or the path to a CA bundle.
+   :param botocore_config: Botocore configuration passed to the Kinesis client.
+
+
+   .. py:attribute:: stream_name
+
+
+   .. py:attribute:: aws_conn_id
+      :value: 'aws_default'
+
+
+
+   .. py:attribute:: shard_iterator_type
+      :value: 'LATEST'
+
+
+
+   .. py:attribute:: batch_size
+      :value: 100
+
+
+
+   .. py:attribute:: waiter_delay
+      :value: 10
+
+
+
+   .. py:attribute:: region_name
+      :value: None
+
+
+
+   .. py:attribute:: verify
+      :value: None
+
+
+
+   .. py:attribute:: botocore_config
+      :value: None
+
+
+
+   .. py:method:: serialize()
+
+      Return the information needed to reconstruct this Trigger.
+
+      :return: Tuple of (class path, keyword arguments needed to re-instantiate).
+
+
+
+   .. py:property:: hook
+      :type: airflow.providers.amazon.aws.hooks.kinesis.KinesisHook
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the trigger in an asynchronous context.
+
+      The trigger should yield an Event whenever it wants to fire off
+      an event, and return None if it is finished. Single-event triggers
+      should thus yield and then immediately return.
+
+      If it yields, it is likely that it will be resumed very quickly,
+      but it may not be (e.g. if the workload is being moved to another
+      triggerer process, or a multi-event trigger was being used for a
+      single-event task defer).
+
+      In either case, Trigger classes should assume they will be persisted,
+      and then rely on cleanup() being called when they are no longer needed.
+
+
+

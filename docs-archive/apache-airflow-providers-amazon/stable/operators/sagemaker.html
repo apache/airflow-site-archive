@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -497,7 +497,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -788,6 +788,57 @@ Otherwise use the specified value instead of the connection value. Default: <cod
 </pre></div>
 </div>
 </div>
+<section id="durable-execution">
+<h4>Durable execution<a class="headerlink" href="#durable-execution" title="Link to this heading">¶</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">SageMakerTrainingOperator</span></code> submits a training job and then polls it to completion on the
+worker. By default the operator runs in a <em>durable</em> mode that makes this crash-safe: the training
+job name is persisted to <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/task-state-store.html" title="(in apache-airflow v3.5.0)"><span class="xref std std-doc">task state store</span></a>
+before polling begins, so if the worker crashes or is preempted and the task is retried, the
+operator reconnects to the job that is already running in SageMaker instead of starting a new one.</p>
+<p>On retry the operator checks the prior job’s status:</p>
+<ul class="simple">
+<li><p>if it is <code class="docutils literal notranslate"><span class="pre">InProgress</span></code>, the operator reconnects and continues polling</p></li>
+<li><p>if it is <code class="docutils literal notranslate"><span class="pre">Completed</span></code>, the operator returns its result without resubmitting</p></li>
+<li><p>if it is <code class="docutils literal notranslate"><span class="pre">Failed</span></code>, <code class="docutils literal notranslate"><span class="pre">Stopped</span></code> or <code class="docutils literal notranslate"><span class="pre">Stopping</span></code>, or the name is no longer found, the operator
+submits a new job</p></li>
+</ul>
+<p>Unlike Glue, a job that is still <code class="docutils literal notranslate"><span class="pre">Stopping</span></code> gets a new submit rather than a reconnect. With
+<code class="docutils literal notranslate"><span class="pre">print_log=False</span></code>, the wait treats <code class="docutils literal notranslate"><span class="pre">Stopped</span></code> as done, so reconnecting would let the task succeed
+without a finished training run. <code class="docutils literal notranslate"><span class="pre">cancel_on_kill</span></code> leaves the job in exactly that state when a
+timed out attempt is killed. A new submit is renamed with a timestamp suffix when
+<code class="docutils literal notranslate"><span class="pre">check_if_job_exists=True</span></code> and <code class="docutils literal notranslate"><span class="pre">action_if_job_exists=&quot;timestamp&quot;</span></code> (both defaults), because the
+earlier job still holds its name. With <code class="docutils literal notranslate"><span class="pre">check_if_job_exists=False</span></code>, SageMaker rejects the new
+submit.
+Spot training resume through <code class="docutils literal notranslate"><span class="pre">CheckpointConfig</span></code> is unaffected, since the checkpoint
+<code class="docutils literal notranslate"><span class="pre">S3Uri</span></code> does not depend on the job name.</p>
+<p>On Airflow 3.3, clearing a task keeps the stored job name, so the next attempt is treated the same
+as a retry. A task whose job already completed returns the existing result without starting a new
+job.</p>
+<p>From Airflow 3.4, clearing a single task instance (UI, REST API or <code class="docutils literal notranslate"><span class="pre">airflowctl</span></code>) deletes the
+stored job name by default, so the next attempt submits a new job. Set <code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> when
+clearing to keep it, and the next attempt then reconnects to the job or returns its result. Clearing
+a whole Dag run, marking a task as failed or success, and <code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">tasks</span> <span class="pre">clear</span></code> /
+<code class="docutils literal notranslate"><span class="pre">airflow</span> <span class="pre">dags</span> <span class="pre">clear</span></code> still keep the job name before Airflow 3.5. From Airflow 3.5, every way of
+clearing deletes it by default.</p>
+<p>Clearing a running task leaves its job running by default, so the next attempt starts a second one
+and both are billed. To avoid that, set <code class="docutils literal notranslate"><span class="pre">keep_task_state</span></code> when clearing to reconnect, or set
+<code class="docutils literal notranslate"><span class="pre">cancel_on_kill=True</span></code> to stop the old job.</p>
+<p>See <a class="reference external" href="/docs/apache-airflow/stable/core-concepts/resumable-tasks.html" title="(in apache-airflow v3.5.0)"><span>Resumable Tasks</span></a> for the ways of clearing, and for the
+<code class="docutils literal notranslate"><span class="pre">[state_store]</span> <span class="pre">clear_on_success</span></code> setting.</p>
+<p>To opt out and always start a new job on retry, set <code class="docutils literal notranslate"><span class="pre">durable=False</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">training</span> <span class="o">=</span> <span class="n">SageMakerTrainingOperator</span><span class="p">(</span>
+    <span class="n">task_id</span><span class="o">=</span><span class="s2">"train_model"</span><span class="p">,</span>
+    <span class="n">config</span><span class="o">=</span><span class="n">training_config</span><span class="p">,</span>
+    <span class="n">durable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Durable execution applies to the synchronous path. When <code class="docutils literal notranslate"><span class="pre">deferrable=True</span></code> and
+<code class="docutils literal notranslate"><span class="pre">wait_for_completion=True</span></code> are both set, <code class="docutils literal notranslate"><span class="pre">durable</span></code> has no effect.</p>
+<p>Durable execution requires Airflow 3.3 or newer, since it relies on the task state store. Below
+3.3, <code class="docutils literal notranslate"><span class="pre">durable</span></code> has no effect either way: setting it explicitly only emits a warning, and the
+operator always starts a new job on retry, exactly as before this feature existed.</p>
+</section>
 </section>
 <section id="create-an-amazon-sagemaker-model">
 <span id="howto-operator-sagemakermodeloperator"></span><h3>Create an Amazon SageMaker model<a class="headerlink" href="#create-an-amazon-sagemaker-model" title="Link to this heading">¶</a></h3>
@@ -1273,7 +1324,10 @@ you can use <a class="reference internal" href="../_api/airflow/providers/amazon
 <li><a class="reference internal" href="#generic-parameters">Generic Parameters</a></li>
 <li><a class="reference internal" href="#operators">Operators</a><ul>
 <li><a class="reference internal" href="#create-an-amazon-sagemaker-processing-job">Create an Amazon SageMaker processing job</a></li>
-<li><a class="reference internal" href="#create-an-amazon-sagemaker-training-job">Create an Amazon SageMaker training job</a></li>
+<li><a class="reference internal" href="#create-an-amazon-sagemaker-training-job">Create an Amazon SageMaker training job</a><ul>
+<li><a class="reference internal" href="#durable-execution">Durable execution</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#create-an-amazon-sagemaker-model">Create an Amazon SageMaker model</a></li>
 <li><a class="reference internal" href="#start-a-hyperparameter-tuning-job">Start a hyperparameter tuning job</a></li>
 <li><a class="reference internal" href="#delete-an-amazon-sagemaker-model">Delete an Amazon SageMaker model</a></li>
@@ -1522,7 +1576,7 @@ you can use <a class="reference internal" href="../_api/airflow/providers/amazon
     <script src="../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../_static/clipboard.min.js?v=a7894cd8"></script>

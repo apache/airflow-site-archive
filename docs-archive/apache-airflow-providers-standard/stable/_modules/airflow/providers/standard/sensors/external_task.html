@@ -14,11 +14,11 @@
             <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=b86133f3" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main.min.css?v=b5695b71" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=8331e40e" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/_gen/css/main-custom.min.css?v=63a05bb6" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/css/pagefind.css" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
             <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=fb71bbff" />
+            <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css?v=b9dc6846" />
             <link rel="index" title="Index" href="../../../../../genindex.html" />
             <link rel="search" title="Search" href="../../../../../search.html" />
 
@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.21.0</span>
+        <span class="version-label">Version: </span><span class="version">1.22.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -475,7 +475,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.21.0</span>
+        <span class="version-label">Version: </span><span class="version">1.22.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -661,6 +661,10 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Collection</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">ClassVar</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urljoin</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">pendulum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jinja2</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemplateSyntaxError</span><span class="p">,</span> <span class="n">nodes</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowProviderDeprecationWarning</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.dag</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagModel</span>
@@ -668,6 +672,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">AirflowSkipException</span><span class="p">,</span>
     <span class="n">BaseOperatorLink</span><span class="p">,</span>
     <span class="n">BaseSensorOperator</span><span class="p">,</span>
+    <span class="n">XCom</span><span class="p">,</span>
     <span class="n">conf</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.standard.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -699,10 +704,29 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="k">else</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.models.dagbag</span><span class="w"> </span><span class="kn">import</span> <span class="n">DagBag</span>  <span class="c1"># type: ignore[attr-defined, no-redef]</span>
 
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExternalClearTarget</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># Airflow without cross-Dag clear targets</span>
+<div class="viewcode-block" id="ExternalClearTarget">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalClearTarget">[docs]</a>
+    <span class="n">ExternalClearTarget</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># type: ignore[assignment,misc]</span></div>
+
+
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">jinja2</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span><span class="p">,</span> <span class="n">TaskInstanceKey</span>
+
+<div class="viewcode-block" id="XCOM_EXTERNAL_RUN_IDS">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.XCOM_EXTERNAL_RUN_IDS">[docs]</a>
+<span class="n">XCOM_EXTERNAL_RUN_IDS</span> <span class="o">=</span> <span class="s2">"external_run_ids"</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_airflow_ui_url</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"api"</span><span class="p">,</span> <span class="s2">"base_url"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="s2">"/"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">urljoin</span><span class="p">(</span><span class="n">base_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"/"</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="ExternalDagLink">
@@ -743,9 +767,12 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
                 <span class="n">external_dag_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">template_fields</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"external_dag_id"</span><span class="p">,</span> <span class="n">operator</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">)</span>  <span class="c1"># type: ignore[no-redef]</span>
 
         <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_airflow_dagrun_url</span>
-
-            <span class="k">return</span> <span class="n">build_airflow_dagrun_url</span><span class="p">(</span><span class="n">dag_id</span><span class="o">=</span><span class="n">external_dag_id</span><span class="p">,</span> <span class="n">run_id</span><span class="o">=</span><span class="n">ti_key</span><span class="o">.</span><span class="n">run_id</span><span class="p">)</span>
+            <span class="n">external_run_ids</span> <span class="o">=</span> <span class="n">XCom</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">ti_key</span><span class="o">=</span><span class="n">ti_key</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">XCOM_EXTERNAL_RUN_IDS</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">external_run_ids</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_build_airflow_ui_url</span><span class="p">(</span><span class="sa">f</span><span class="s2">"dags/</span><span class="si">{</span><span class="n">external_dag_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">external_run_ids</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">_build_airflow_ui_url</span><span class="p">(</span><span class="sa">f</span><span class="s2">"dags/</span><span class="si">{</span><span class="n">external_dag_id</span><span class="si">}</span><span class="s2">/runs"</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_build_airflow_ui_url</span><span class="p">(</span><span class="sa">f</span><span class="s2">"dags/</span><span class="si">{</span><span class="n">external_dag_id</span><span class="si">}</span><span class="s2">/runs/</span><span class="si">{</span><span class="n">external_run_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.utils.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_airflow_url_with_query</span>  <span class="c1"># type:ignore[attr-defined]</span>
 
         <span class="n">query</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"dag_id"</span><span class="p">:</span> <span class="n">external_dag_id</span><span class="p">,</span> <span class="s2">"run_id"</span><span class="p">:</span> <span class="n">ti_key</span><span class="o">.</span><span class="n">run_id</span><span class="p">}</span>
@@ -1079,16 +1106,43 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">failed_states</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">=</span> <span class="n">_get_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">failed_states</span><span class="p">)</span>
             <span class="n">count_failed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_count</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">count_failed</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_push_external_run_ids</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle_failed_states</span><span class="p">(</span><span class="n">count_failed</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skipped_states</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">=</span> <span class="n">_get_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skipped_states</span><span class="p">)</span>
             <span class="n">count_skipped</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_count</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">count_skipped</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_push_external_run_ids</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle_skipped_states</span><span class="p">(</span><span class="n">count_skipped</span><span class="p">)</span>
 
         <span class="n">count</span> <span class="o">=</span> <span class="n">_get_count</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allowed_states</span><span class="p">)</span>
         <span class="n">count_allowed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_count</span><span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">count_allowed</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">dttm_filter</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">count_allowed</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dttm_filter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_push_external_run_ids</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_push_external_run_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Store the run IDs of the external Dag runs matched by ``dttm_filter`` for ExternalDagLink."""</span>
+        <span class="c1"># Runs before the sensor raises or returns its result, so a failure here must not replace that</span>
+        <span class="c1"># result. Without the XCom, ExternalDagLink falls back to the external Dag page.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># The Execution API has no lookup from logical date to run ID; the task states map is keyed by run ID.</span>
+            <span class="n">task_states</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">get_task_states</span><span class="p">(</span>
+                <span class="n">dag_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
+                <span class="n">task_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">task_group_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_group_id</span><span class="p">,</span>
+                <span class="n">logical_dates</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">dttm_filter</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">"ti"</span><span class="p">]</span><span class="o">.</span><span class="n">xcom_push</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">XCOM_EXTERNAL_RUN_IDS</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span><span class="n">task_states</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">"Could not store the matched run IDs of external Dag </span><span class="si">%s</span><span class="s2"> for the External DAG link"</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
+                <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Calculate the normalized count based on the type of check."""</span>
@@ -1229,7 +1283,11 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
             <span class="k">raise</span> <span class="n">ExternalTaskNotFoundError</span><span class="p">(</span><span class="s2">"No event received from trigger"</span><span class="p">)</span>
 
         <span class="c1"># Re-set as attribute after coming back from deferral - to be used by listeners</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">external_dates_filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_dttm_filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_dttm_filter</span><span class="p">(</span><span class="n">context</span><span class="p">))</span>
+        <span class="n">dttm_filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_dttm_filter</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">external_dates_filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_serialize_dttm_filter</span><span class="p">(</span><span class="n">dttm_filter</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span> <span class="ow">and</span> <span class="n">event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"success"</span><span class="p">,</span> <span class="s2">"skipped"</span><span class="p">,</span> <span class="s2">"failed"</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_push_external_run_ids</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">dttm_filter</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">event</span><span class="p">[</span><span class="s2">"status"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"success"</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"External tasks </span><span class="si">%s</span><span class="s2"> has executed successfully."</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_ids</span><span class="p">)</span>
@@ -1371,6 +1429,26 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_literal_text</span><span class="p">(</span><span class="n">env</span><span class="p">:</span> <span class="n">jinja2</span><span class="o">.</span><span class="n">Environment</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the text of a template field that holds no template syntax, otherwise ``None``."""</span>
+    <span class="c1"># Anything but a string (a callable, a ``literal()`` wrapper) is left to render on a worker.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">body</span>
+    <span class="k">except</span> <span class="n">TemplateSyntaxError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">body</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">nodes</span><span class="o">.</span><span class="n">Output</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">nodes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">part</span><span class="p">,</span> <span class="n">nodes</span><span class="o">.</span><span class="n">TemplateData</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">text</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">part</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="ExternalTaskMarker">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ExternalTaskMarker</span><span class="p">(</span><span class="n">EmptyOperator</span><span class="p">):</span>
@@ -1384,6 +1462,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param external_dag_id: The dag_id that contains the dependent task that needs to be cleared.</span>
 <span class="sd">    :param external_task_id: The task_id of the dependent task that needs to be cleared.</span>
 <span class="sd">    :param logical_date: The logical date of the dependent task execution that needs to be cleared.</span>
+<span class="sd">        Defaults to the logical date of this task's own run; a run without one clears nothing.</span>
 <span class="sd">    :param recursion_depth: The maximum level of transitive dependencies allowed. Default is 10.</span>
 <span class="sd">        This is mostly used for preventing cyclic dependencies. It is fine to increase</span>
 <span class="sd">        this number if necessary. However, too many levels of transitive dependencies will make</span>
@@ -1414,7 +1493,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="o">*</span><span class="p">,</span>
         <span class="n">external_dag_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">external_task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">logical_date</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">"{{ logical_date.isoformat() }}"</span><span class="p">,</span>
+        <span class="n">logical_date</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">recursion_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
@@ -1427,10 +1506,17 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.external_task_id">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">external_task_id</span> <span class="o">=</span> <span class="n">external_task_id</span></div>
 
+<div class="viewcode-block" id="ExternalTaskMarker.logical_date">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.logical_date">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span></div>
+
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logical_date</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span> <span class="o">=</span> <span class="n">logical_date</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">logical_date</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span> <span class="o">=</span> <span class="n">logical_date</span>
+        <span class="k">elif</span> <span class="n">logical_date</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Airflow 2's webserver renders this template when clearing; Airflow 3 reads the run's date.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">AIRFLOW_V_3_0_PLUS</span> <span class="k">else</span> <span class="s2">"{{ logical_date.isoformat() }}"</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Expected str or datetime.datetime type for logical_date. Got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">logical_date</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
@@ -1444,6 +1530,69 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="ExternalTaskMarker.recursion_depth">
 <a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.recursion_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">recursion_depth</span> <span class="o">=</span> <span class="n">recursion_depth</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ExternalTaskMarker.inherits_from_empty_operator">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.inherits_from_empty_operator">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">inherits_from_empty_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>  <span class="c1"># type: ignore[override]</span>
+        <span class="c1"># The marker only needs a worker when Airflow can follow a target and has to render it first.</span>
+        <span class="k">return</span> <span class="n">ExternalClearTarget</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_clear_target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ExternalTaskMarker.external_clear_target">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.external_clear_target">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">external_clear_target</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ExternalClearTarget</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""The target when no field needs rendering, so Airflow stores it with the Dag version."""</span>
+        <span class="k">if</span> <span class="n">ExternalClearTarget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">env</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_template_env</span><span class="p">()</span>
+        <span class="n">dag_id</span> <span class="o">=</span> <span class="n">_literal_text</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">)</span>
+        <span class="n">task_id</span> <span class="o">=</span> <span class="n">_literal_text</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">external_task_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dag_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">task_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">logical_date</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">literal</span> <span class="o">:=</span> <span class="n">_literal_text</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">parsed</span> <span class="o">=</span> <span class="n">pendulum</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">literal</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="c1"># Left to the worker, which fails the task with the bad value.</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">logical_date</span> <span class="o">=</span> <span class="n">parsed</span>
+        <span class="k">return</span> <span class="n">ExternalClearTarget</span><span class="p">(</span>
+            <span class="n">dag_id</span><span class="o">=</span><span class="n">dag_id</span><span class="p">,</span> <span class="n">task_id</span><span class="o">=</span><span class="n">task_id</span><span class="p">,</span> <span class="n">logical_date</span><span class="o">=</span><span class="n">logical_date</span><span class="p">,</span> <span class="n">recursion_depth</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">recursion_depth</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ExternalTaskMarker.get_external_clear_target">
+<a class="viewcode-back" href="../../../../../_api/airflow/providers/standard/sensors/external_task/index.html#airflow.providers.standard.sensors.external_task.ExternalTaskMarker.get_external_clear_target">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_external_clear_target</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ExternalClearTarget</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">rendered</span><span class="p">:</span> <span class="nb">object</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">logical_date</span>
+        <span class="k">if</span> <span class="n">rendered</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># The run's own logical date, filled in by the task runner.</span>
+            <span class="k">return</span> <span class="n">ExternalClearTarget</span><span class="p">(</span>
+                <span class="n">dag_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_id</span><span class="p">,</span>
+                <span class="n">recursion_depth</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">recursion_depth</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rendered</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">rendered</span> <span class="o">=</span> <span class="n">pendulum</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">rendered</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"logical_date must render to a date and time, got </span><span class="si">{</span><span class="n">rendered</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rendered</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"logical_date must render to a date and time, got </span><span class="si">{</span><span class="n">rendered</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ExternalClearTarget</span><span class="p">(</span>
+            <span class="n">dag_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_dag_id</span><span class="p">,</span>
+            <span class="n">task_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">external_task_id</span><span class="p">,</span>
+            <span class="n">logical_date</span><span class="o">=</span><span class="n">rendered</span><span class="p">,</span>
+            <span class="n">recursion_depth</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">recursion_depth</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
     <span class="nd">@classmethod</span>
@@ -1715,7 +1864,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=5bbbbfae"></script>
+        <script src="../../../../../_static/documentation_options.js?v=c9c46145"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

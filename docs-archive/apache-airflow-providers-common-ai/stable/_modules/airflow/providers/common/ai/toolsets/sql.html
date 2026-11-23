@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -500,7 +500,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -707,10 +707,13 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">suppress</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span>
 
 <span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.exc</span><span class="w"> </span><span class="kn">import</span> <span class="n">DBAPIError</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.sql_validation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
         <span class="n">SQLSafetyError</span><span class="p">,</span>
         <span class="n">collect_table_references</span><span class="p">,</span>
@@ -729,23 +732,34 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolDefinition</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai.toolsets.abstract</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolsetTool</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLToolsetConnectionError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.masking</span><span class="w"> </span><span class="kn">import</span> <span class="n">dumps_masked</span><span class="p">,</span> <span class="n">mask_secrets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.query_results</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">DEFAULT_MAX_COLUMNS</span><span class="p">,</span>
     <span class="n">DEFAULT_MAX_RESULT_BYTES</span><span class="p">,</span>
-    <span class="n">GET_SCHEMA_TOOL_DESCRIPTION</span> <span class="k">as</span> <span class="n">_GET_SCHEMA_DESCRIPTION</span><span class="p">,</span>
     <span class="n">QUERY_TOOL_DESCRIPTION</span> <span class="k">as</span> <span class="n">_QUERY_DESCRIPTION</span><span class="p">,</span>
+    <span class="n">build_get_schema_description</span><span class="p">,</span>
     <span class="n">build_query_result</span><span class="p">,</span>
     <span class="n">build_schema_result</span><span class="p">,</span>
+    <span class="n">truncate_comment</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_definition</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_args_validator</span><span class="p">,</span> <span class="n">return_schema_kwargs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.tool_prefix</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolPrefixMixin</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.toolset_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">AirflowToolset</span><span class="p">,</span> <span class="n">validate_max_retries</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseHook</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Sequence</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_ai._run_context</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunContext</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.engine.reflection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Inspector</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.ai.utils.sql_search</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLTableSearchBackend</span><span class="p">,</span> <span class="n">TableEntry</span>
+
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.log">[docs]</a>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
 
 
 <span class="c1"># Sentinel distinguishing "caller did not pass ``allowed_tables``" (expose every</span>
@@ -776,6 +790,26 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"table_name"</span><span class="p">],</span>
 <span class="p">}</span>
 
+<span class="n">_DEFAULT_SEARCH_LIMIT</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">_MAX_SEARCH_LIMIT</span> <span class="o">=</span> <span class="mi">50</span>
+
+<span class="n">_SEARCH_TABLES_SCHEMA</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+    <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">"query"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"Words describing the data you are looking for, matched against table names and comments."</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s2">"limit"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"integer"</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"Maximum number of tables to return (default 10, at most 50)."</span><span class="p">,</span>
+            <span class="s2">"minimum"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">"maximum"</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+    <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"query"</span><span class="p">],</span>
+<span class="p">}</span>
+
 <span class="n">_QUERY_SCHEMA</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
     <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span>
@@ -791,6 +825,33 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <span class="p">},</span>
     <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"sql"</span><span class="p">],</span>
 <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_connection_error</span><span class="p">(</span><span class="n">conn_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SQLToolsetConnectionError</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">SQLToolsetConnectionError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Could not reach the database of connection </span><span class="si">{</span><span class="n">conn_id</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_raise_connection_failures</span><span class="p">(</span><span class="n">get_conn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Any</span><span class="p">],</span> <span class="n">conn_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Wrap a hook's ``get_conn`` so a failure to connect is told apart from a failing statement."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">get_conn</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">_build_connection_error</span><span class="p">(</span><span class="n">conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+
+    <span class="k">return</span> <span class="n">wrapper</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_lost_connection</span><span class="p">(</span><span class="n">error</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Whether SQLAlchemy reports ``error`` as a connection failure rather than a failing statement.</span>
+
+<span class="sd">    ``list_tables`` and ``get_schema`` go through the SQLAlchemy inspector, which raises a</span>
+<span class="sd">    failure to connect without a statement and marks a connection lost mid-statement as</span>
+<span class="sd">    invalidated.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">DBAPIError</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">statement</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">error</span><span class="o">.</span><span class="n">connection_invalidated</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_trusted_row_count</span><span class="p">(</span><span class="n">cursor</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fetched</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
@@ -864,7 +925,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
 <div class="viewcode-block" id="SQLToolset">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">SQLToolset</span><span class="p">(</span><span class="n">AirflowToolset</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SQLToolset</span><span class="p">(</span><span class="n">ToolPrefixMixin</span><span class="p">,</span> <span class="n">AirflowToolset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Curated toolset that gives an LLM agent safe access to a SQL database.</span>
 
@@ -874,12 +935,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    Uses a :class:`~airflow.providers.common.sql.hooks.sql.DbApiHook` resolved</span>
 <span class="sd">    lazily from the given ``db_conn_id``.</span>
 
-<span class="sd">    When a tool fails, the database's error message is returned to the agent as a</span>
-<span class="sd">    retry (:class:`pydantic_ai.ModelRetry`) so the model can correct its SQL within</span>
-<span class="sd">    the run instead of failing the task. ``pydantic-ai`` bounds this by the tool's</span>
-<span class="sd">    ``max_retries``, so an unrecoverable error -- a bad connection or an auth</span>
-<span class="sd">    failure -- exhausts the retries and fails the task for Airflow to retry. The</span>
-<span class="sd">    toolset does not inspect the error type or message.</span>
+<span class="sd">    When the statement fails, the database's error message is returned to the agent as</span>
+<span class="sd">    a retry (:class:`pydantic_ai.ModelRetry`) so the model can correct its SQL within</span>
+<span class="sd">    the run, bounded by the tool's ``max_retries``. When the toolset cannot reach the</span>
+<span class="sd">    database -- the connection is missing or misconfigured, the host is unreachable,</span>
+<span class="sd">    the credentials are rejected, or SQLAlchemy reports the connection lost -- the</span>
+<span class="sd">    error is raised instead, failing the attempt for Airflow to retry: no change to</span>
+<span class="sd">    the SQL can fix it. Under durable execution a raised call is not recorded, so the</span>
+<span class="sd">    retry runs it against the database again rather than replaying the failure.</span>
 
 <span class="sd">    :param db_conn_id: Airflow connection ID for the database. Templated when the</span>
 <span class="sd">        toolset is passed to ``AgentOperator`` / ``@task.agent``, so each task</span>
@@ -957,9 +1020,28 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">        the full list is replaced by a bounded summary (column count, a type histogram, a</span>
 <span class="sd">        sample of columns) that points the agent at the ``name_contains`` filter, so a</span>
 <span class="sd">        several-thousand-column table cannot exhaust the context before a query is written.</span>
+<span class="sd">    :param tool_prefix: Optional prefix joined to each tool name with an underscore</span>
+<span class="sd">        (e.g. ``"pg"`` produces ``"pg_query"``). Must be a valid Python identifier. Set it</span>
+<span class="sd">        when one agent has another toolset with the same tool names, such as a second</span>
+<span class="sd">        ``SQLToolset``, since duplicate tool names are rejected.</span>
 <span class="sd">    :param max_retries: How many times the model may correct a failed call to one of these</span>
 <span class="sd">        tools before the run fails. ``None`` (the default) uses the agent's tool retry</span>
 <span class="sd">        budget, its ``retries``, as pydantic-ai's own toolsets do.</span>
+<span class="sd">    :param include_table_comments: When ``True``, ``list_tables`` returns</span>
+<span class="sd">        ``{"name": ..., "comment": ...}`` objects instead of bare names, with ``comment``</span>
+<span class="sd">        present only for tables that have one (each capped to 200 characters). Without a</span>
+<span class="sd">        ``search_backend`` the list has no size limit: the total is not bound by</span>
+<span class="sd">        ``max_result_bytes``. Default ``False`` keeps the list of names. ``get_schema`` always</span>
+<span class="sd">        returns table and column comments where the database reports them, regardless of this flag.</span>
+<span class="sd">    :param search_backend: Registers a ``search_tables`` tool that finds tables by a free-text</span>
+<span class="sd">        query, for databases with too many tables to list. Pass</span>
+<span class="sd">        :class:`~airflow.providers.common.ai.utils.sql_search.KeywordTableSearchBackend` for a</span>
+<span class="sd">        keyword match over table names and comments, or any object implementing</span>
+<span class="sd">        :class:`~airflow.providers.common.ai.utils.sql_search.SQLTableSearchBackend`. Whatever it</span>
+<span class="sd">        returns is filtered through ``allowed_tables``. ``None`` (the default) registers no search tool.</span>
+<span class="sd">    :param max_listed_tables: With a ``search_backend``, ``list_tables`` returns only the number of</span>
+<span class="sd">        tables and a pointer to ``search_tables`` once there are more than this many. Default ``100``.</span>
+<span class="sd">        Without a ``search_backend`` there is no limit.</span>
 <span class="sd">    """</span>
 
     <span class="c1"># Rendered, on a copy, by AgentOperator. Deliberately not ``template_fields``, which</span>
@@ -980,9 +1062,14 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">max_rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
         <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_RESULT_BYTES</span><span class="p">,</span>
         <span class="n">max_columns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_COLUMNS</span><span class="p">,</span>
+        <span class="n">tool_prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
         <span class="n">max_retries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">include_table_comments</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">search_backend</span><span class="p">:</span> <span class="n">SQLTableSearchBackend</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_listed_tables</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_retries</span> <span class="o">=</span> <span class="n">validate_max_retries</span><span class="p">(</span><span class="n">max_retries</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_tool_prefix</span><span class="p">(</span><span class="n">tool_prefix</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_allowed_tables</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">allowed_tables</span> <span class="ow">is</span> <span class="n">_UNSET</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_allowed_tables</span> <span class="o">=</span> <span class="kc">None</span>
@@ -1006,6 +1093,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_rows</span> <span class="o">=</span> <span class="n">max_rows</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_result_bytes</span> <span class="o">=</span> <span class="n">max_result_bytes</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_max_columns</span> <span class="o">=</span> <span class="n">max_columns</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_include_table_comments</span> <span class="o">=</span> <span class="n">include_table_comments</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="o">=</span> <span class="n">search_backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_max_listed_tables</span> <span class="o">=</span> <span class="n">max_listed_tables</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableEntry</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span><span class="p">:</span> <span class="n">DbApiHook</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># Canonical ``(catalog, schema, table)`` view of allowed_tables for membership</span>
@@ -1065,7 +1156,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="SQLToolset.id">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/common/ai/toolsets/sql/index.html#airflow.providers.common.ai.toolsets.sql.SQLToolset.id">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">"sql-</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="si">}</span><span class="s2">"</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"sql-</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_tool_prefix_id_suffix</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span></div>
 
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -1074,15 +1165,29 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_db_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DbApiHook</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">connection</span> <span class="o">=</span> <span class="n">BaseHook</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">)</span>
-            <span class="n">hook</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">get_hook</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">hook</span> <span class="o">=</span> <span class="n">BaseHook</span><span class="o">.</span><span class="n">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">)</span><span class="o">.</span><span class="n">get_hook</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">_build_connection_error</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="n">DbApiHook</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="k">raise</span> <span class="n">SQLToolsetConnectionError</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">"Connection </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="si">!r}</span><span class="s2"> does not provide a DbApiHook. "</span>
                     <span class="sa">f</span><span class="s2">"Got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">."</span>
                 <span class="p">)</span>
+            <span class="c1"># DbApiHook.run and every in-tree override connect through get_conn, so this is</span>
+            <span class="c1"># where the query tool's connection failures surface.</span>
+            <span class="n">hook</span><span class="o">.</span><span class="n">get_conn</span> <span class="o">=</span> <span class="n">_raise_connection_failures</span><span class="p">(</span><span class="n">hook</span><span class="o">.</span><span class="n">get_conn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">)</span>  <span class="c1"># type: ignore[method-assign]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span> <span class="o">=</span> <span class="n">hook</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hook</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_inspector</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Inspector</span><span class="p">:</span>
+        <span class="n">hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_db_hook</span><span class="p">()</span>
+        <span class="c1"># Building the inspector fetches credentials (Databricks), loads the SQLAlchemy dialect</span>
+        <span class="c1"># and connects, none of which goes through get_conn.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">hook</span><span class="o">.</span><span class="n">inspector</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">_build_connection_error</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># AbstractToolset interface</span>
@@ -1094,17 +1199,36 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">max_retries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_tool_max_retries</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
         <span class="n">tools</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ToolsetTool</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="n">definitions</span> <span class="o">=</span> <span class="p">[</span>
             <span class="p">(</span><span class="s2">"list_tables"</span><span class="p">,</span> <span class="s2">"List available table names in the database."</span><span class="p">,</span> <span class="n">_LIST_TABLES_SCHEMA</span><span class="p">),</span>
-            <span class="p">(</span><span class="s2">"get_schema"</span><span class="p">,</span> <span class="n">_GET_SCHEMA_DESCRIPTION</span><span class="p">,</span> <span class="n">_GET_SCHEMA_SCHEMA</span><span class="p">),</span>
+            <span class="p">(</span>
+                <span class="s2">"get_schema"</span><span class="p">,</span>
+                <span class="n">build_get_schema_description</span><span class="p">(</span>
+                    <span class="n">tool_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s2">"get_schema"</span><span class="p">),</span> <span class="n">include_comments</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">),</span>
+                <span class="n">_GET_SCHEMA_SCHEMA</span><span class="p">,</span>
+            <span class="p">),</span>
             <span class="p">(</span><span class="s2">"query"</span><span class="p">,</span> <span class="n">_QUERY_DESCRIPTION</span><span class="p">,</span> <span class="n">_QUERY_SCHEMA</span><span class="p">),</span>
             <span class="p">(</span><span class="s2">"check_query"</span><span class="p">,</span> <span class="s2">"Validate SQL syntax without executing it."</span><span class="p">,</span> <span class="n">_CHECK_QUERY_SCHEMA</span><span class="p">),</span>
-        <span class="p">):</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">definitions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">(</span>
+                    <span class="s2">"search_tables"</span><span class="p">,</span>
+                    <span class="s2">"Find tables by words describing the data you need, matched against table names "</span>
+                    <span class="s2">"and comments. Returns JSON of the form "</span>
+                    <span class="s1">'{"tables": [{"name": ..., "comment": ...}, ...]}; pass a returned name to '</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'get_schema'</span><span class="p">)</span><span class="si">}</span><span class="s2">."</span><span class="p">,</span>
+                    <span class="n">_SEARCH_TABLES_SCHEMA</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">for</span> <span class="n">base</span><span class="p">,</span> <span class="n">description</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="n">definitions</span><span class="p">:</span>
             <span class="c1"># sequential=True keeps pydantic-ai from running these calls concurrently</span>
             <span class="c1"># within a turn; run_blocking's process-wide lock serializes them with the</span>
             <span class="c1"># blocking calls of the other toolsets that use it.</span>
             <span class="c1"># return_schema is "string": every tool returns a JSON-encoded string</span>
             <span class="c1"># (json.dumps), so code mode renders `-&gt; str` instead of `-&gt; Any`.</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
             <span class="n">tool_def</span> <span class="o">=</span> <span class="n">ToolDefinition</span><span class="p">(</span>
                 <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
@@ -1131,26 +1255,40 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">ctx</span><span class="p">:</span> <span class="n">RunContext</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
         <span class="n">tool</span><span class="p">:</span> <span class="n">ToolsetTool</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"list_tables"</span><span class="p">,</span> <span class="s2">"get_schema"</span><span class="p">,</span> <span class="s2">"query"</span><span class="p">,</span> <span class="s2">"check_query"</span><span class="p">):</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_base_tool_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">base</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_tool_names</span><span class="p">():</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown tool: </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_blocking</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_tool</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">)</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">run_blocking</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_run_tool</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">SQLToolsetConnectionError</span><span class="p">:</span>
+            <span class="c1"># Handed to the model as a retry, a connection failure makes it give up and</span>
+            <span class="c1"># answer without data, or spend its retries on something no SQL can fix.</span>
+            <span class="k">raise</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="c1"># Hand the database's own error back to the agent as a retry so it can</span>
-            <span class="c1"># read the message and fix its SQL within the run. pydantic-ai bounds</span>
-            <span class="c1"># this by the tool's max_retries, so an unrecoverable error (a bad</span>
-            <span class="c1"># connection, an auth failure) exhausts the budget and fails the task</span>
-            <span class="c1"># for Airflow to retry, rather than being silently worked around.</span>
+            <span class="k">if</span> <span class="n">_is_lost_connection</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">_build_connection_error</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+            <span class="c1"># The statement failed: hand the database's own error back to the agent so it</span>
+            <span class="c1"># can fix its SQL within the run, bounded by the tool's max_retries.</span>
             <span class="k">raise</span> <span class="n">ModelRetry</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"The </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> tool failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
-                <span class="s2">"Use the list_tables and get_schema tools to inspect the database, "</span>
-                <span class="s2">"then fix the query and try again."</span>
+                <span class="sa">f</span><span class="s2">"Use the </span><span class="si">{</span><span class="s1">' and '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">_get_discovery_tool_names</span><span class="p">())</span><span class="si">}</span><span class="s2"> tools "</span>
+                <span class="s2">"to inspect the database, then fix the query and try again."</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_tool_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"list_tables"</span><span class="p">,</span> <span class="s2">"get_schema"</span><span class="p">,</span> <span class="s2">"query"</span><span class="p">,</span> <span class="s2">"check_query"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="o">*</span><span class="n">names</span><span class="p">,</span> <span class="s2">"search_tables"</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">names</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_discovery_tool_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"list_tables"</span><span class="p">,</span> <span class="s2">"get_schema"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="o">*</span><span class="n">names</span><span class="p">,</span> <span class="s2">"search_tables"</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">names</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_run_tool</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tool_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"list_tables"</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_list_tables</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"search_tables"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_tables</span><span class="p">(</span><span class="n">tool_args</span><span class="p">[</span><span class="s2">"query"</span><span class="p">],</span> <span class="n">tool_args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"limit"</span><span class="p">))</span>
         <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"get_schema"</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_schema</span><span class="p">(</span><span class="n">tool_args</span><span class="p">[</span><span class="s2">"table_name"</span><span class="p">],</span> <span class="n">tool_args</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name_contains"</span><span class="p">))</span>
         <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"query"</span><span class="p">:</span>
@@ -1168,9 +1306,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">table_name</span>
         <span class="k">return</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_list_tables</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="n">hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_db_hook</span><span class="p">()</span>
-        <span class="n">tables</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_find_allowed_tables</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">"""Introspect the exposed schemas; return ``(schema, name, display name)`` per allowed table."""</span>
+        <span class="n">inspector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_inspector</span><span class="p">()</span>
+        <span class="n">tables</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># Dedupe by (schema, table) so a table reachable both qualified and via the</span>
         <span class="c1"># default schema (e.g. "public.users" and "users" with schema="public") is</span>
         <span class="c1"># listed once. Case-folded because databases reflect identifiers in their case.</span>
@@ -1180,39 +1319,146 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_canonical_ref</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ref_allowed</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
                 <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-                <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">display</span><span class="p">)</span>
+                <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">display</span><span class="p">))</span>
 
         <span class="c1"># Schemas referenced by qualified allowed_tables entries: introspect each</span>
         <span class="c1"># and return matching tables fully qualified so they round-trip to get_schema.</span>
         <span class="k">for</span> <span class="n">schema</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_qualified_schemas</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">hook</span><span class="o">.</span><span class="n">inspector</span><span class="o">.</span><span class="n">get_table_names</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">inspector</span><span class="o">.</span><span class="n">get_table_names</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">):</span>
                 <span class="n">add</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="c1"># Default schema: used for allow-all and unqualified allowed_tables entries.</span>
         <span class="c1"># Names stay bare to preserve the single-schema behaviour.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_default_schema</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">hook</span><span class="o">.</span><span class="n">inspector</span><span class="o">.</span><span class="n">get_table_names</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">inspector</span><span class="o">.</span><span class="n">get_table_names</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">):</span>
                 <span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tables</span>
 
-        <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_list_tables</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">tables</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_find_allowed_tables</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_listed_tables</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">"table_count"</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">),</span>
+                    <span class="s2">"hint"</span><span class="p">:</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"There are </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span><span class="si">}</span><span class="s2"> tables, too many to list (the limit is "</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_listed_tables</span><span class="si">}</span><span class="s2">). Use </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'search_tables'</span><span class="p">)</span><span class="si">}</span><span class="s2"> to find the ones you need."</span>
+                    <span class="p">),</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_table_comments</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">([</span><span class="n">display</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">display</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="p">({</span><span class="s2">"comment"</span><span class="p">:</span> <span class="n">truncate_comment</span><span class="p">(</span><span class="n">comment</span><span class="p">)}</span> <span class="k">if</span> <span class="n">comment</span> <span class="k">else</span> <span class="p">{})}</span>
+                <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">comment</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_table_entries</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_table_entries</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tables</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableEntry</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Pair each table's display name with its full comment, registered secrets masked, read once per schema."""</span>
+        <span class="n">inspector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_inspector</span><span class="p">()</span>
+        <span class="n">names_by_schema</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">table_schema</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">:</span>
+            <span class="n">names_by_schema</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">table_schema</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="c1"># Names come from `tables` (as reflected), not from allowed_tables: SQLAlchemy's</span>
+        <span class="c1"># filter_names match is case-sensitive while allowed_tables matching is not.</span>
+        <span class="n">comments</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">table_schema</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_table_comments</span><span class="p">(</span>
+                <span class="n">inspector</span><span class="p">,</span> <span class="n">table_schema</span><span class="p">,</span> <span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_allowed_canonical</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">names</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">table_schema</span><span class="p">,</span> <span class="n">names</span> <span class="ow">in</span> <span class="n">names_by_schema</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="c1"># Full text so search sees the whole comment; masked because the catalog is handed to `search_backend`.</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">display</span><span class="p">,</span> <span class="n">mask_secrets</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span> <span class="k">if</span> <span class="p">(</span><span class="n">comment</span> <span class="o">:=</span> <span class="n">comments</span><span class="p">[</span><span class="n">table_schema</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">))</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">table_schema</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">display</span> <span class="ow">in</span> <span class="n">tables</span>
+        <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_catalog</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">TableEntry</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return the exposed tables with comments, introspected on first use and kept for this toolset."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_table_entries</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_find_allowed_tables</span><span class="p">())</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_search_tables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"search_tables requires a search_backend"</span><span class="p">)</span>
+        <span class="c1"># The schema's maximum is only advice to the model; the cap has to hold here.</span>
+        <span class="n">limit</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">_DEFAULT_SEARCH_LIMIT</span> <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">limit</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">_MAX_SEARCH_LIMIT</span><span class="p">)</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_search_backend</span><span class="o">.</span><span class="n">search_tables</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">get_catalog</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_catalog</span><span class="p">)</span>
+        <span class="n">tables</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">display</span><span class="p">,</span> <span class="n">comment</span> <span class="ow">in</span> <span class="n">found</span><span class="p">:</span>
+            <span class="n">schema</span><span class="p">,</span> <span class="n">table</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_table_identifier</span><span class="p">(</span><span class="n">display</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ref_allowed</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">tables</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">"name"</span><span class="p">:</span> <span class="n">display</span><span class="p">,</span> <span class="o">**</span><span class="p">({</span><span class="s2">"comment"</span><span class="p">:</span> <span class="n">truncate_comment</span><span class="p">(</span><span class="n">comment</span><span class="p">)}</span> <span class="k">if</span> <span class="n">comment</span> <span class="k">else</span> <span class="p">{})})</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span> <span class="o">==</span> <span class="n">limit</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">({</span><span class="s2">"tables"</span><span class="p">:</span> <span class="n">tables</span><span class="p">})</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_table_comments</span><span class="p">(</span>
+        <span class="n">inspector</span><span class="p">:</span> <span class="n">Inspector</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">table_names</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return ``{table name: comment}`` for a schema in one call; empty when the dialect has none.</span>
+
+<span class="sd">        ``table_names`` limits the read to those tables; ``None`` reads the whole schema.</span>
+<span class="sd">        """</span>
+        <span class="c1"># SQLAlchemy 1.4, which common-sql still supports, has no get_multi_table_comment.</span>
+        <span class="c1"># Reading comments one table at a time instead would cost a query per table, so</span>
+        <span class="c1"># on 1.4 the tables simply come back without comments.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">get_comments</span> <span class="o">:=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">inspector</span><span class="p">,</span> <span class="s2">"get_multi_table_comment"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">reflected</span> <span class="o">=</span> <span class="n">get_comments</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">filter_names</span><span class="o">=</span><span class="n">table_names</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">NotImplementedError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># A lost connection is not degraded: the result is cached by the search catalog.</span>
+            <span class="k">if</span> <span class="n">_is_lost_connection</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
+                <span class="k">raise</span>
+            <span class="c1"># Unreadable comments (a role without access to the comment catalog, a driver</span>
+            <span class="c1"># error) must not take the table names down with them.</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Could not read the table comments of schema </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">text</span> <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">name</span><span class="p">),</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">reflected</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="p">(</span><span class="n">text</span> <span class="o">:=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"text"</span><span class="p">))}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_schema</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">name_contains</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">schema</span><span class="p">,</span> <span class="n">table</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_table_identifier</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_ref_allowed</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">dumps_masked</span><span class="p">({</span><span class="s2">"error"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"Table </span><span class="si">{</span><span class="n">table_name</span><span class="si">!r}</span><span class="s2"> is not in the allowed tables list."</span><span class="p">})</span>
+        <span class="c1"># Called only for its side effect: SQLAlchemy setup failures surface here as</span>
+        <span class="c1"># SQLToolsetConnectionError; dropping it lets them escape the hook as plain errors.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_get_inspector</span><span class="p">()</span>
         <span class="n">hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_db_hook</span><span class="p">()</span>
-        <span class="n">columns</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_table_schema</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">)</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_table_columns_with_comments</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">)</span>
+        <span class="n">table_comment</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Broad on purpose: a hook-level failure reading only the comment must not</span>
+        <span class="c1"># take get_schema down when the columns were read fine.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">table_comment</span> <span class="o">=</span> <span class="n">hook</span><span class="o">.</span><span class="n">get_table_comment</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Could not read the comment of table </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">build_schema_result</span><span class="p">(</span>
             <span class="n">columns</span><span class="p">,</span>
             <span class="n">max_columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_columns</span><span class="p">,</span>
             <span class="n">max_result_bytes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_result_bytes</span><span class="p">,</span>
             <span class="n">name_contains</span><span class="o">=</span><span class="n">name_contains</span><span class="p">,</span>
+            <span class="n">tool_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s2">"get_schema"</span><span class="p">),</span>
+            <span class="n">table_comment</span><span class="o">=</span><span class="n">table_comment</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_dialect_for_validation</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Resolve the hook's sqlglot dialect so DESCRIBE/SHOW validate correctly."""</span>
         <span class="n">hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_db_hook</span><span class="p">()</span>
-        <span class="k">return</span> <span class="n">resolve_sqlglot_dialect</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s2">"dialect_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="c1"># dialect_name builds the hook's URI, which can fetch credentials (Databricks).</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">dialect_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s2">"dialect_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">_build_connection_error</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_db_conn_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+        <span class="k">return</span> <span class="n">resolve_sqlglot_dialect</span><span class="p">(</span><span class="n">dialect_name</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">hook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_db_hook</span><span class="p">()</span>
@@ -1296,7 +1542,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">raise</span> <span class="n">SQLSafetyError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Query uses a data source that cannot be checked against allowed_tables: "</span>
                 <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">'; '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">scan</span><span class="o">.</span><span class="n">unverifiable_sources</span><span class="p">)</span><span class="si">}</span><span class="s2">. Query the allowed tables directly: "</span>
-                <span class="sa">f</span><span class="s2">"use list_tables to see them."</span>
+                <span class="sa">f</span><span class="s2">"use </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'list_tables'</span><span class="p">)</span><span class="si">}</span><span class="s2"> to see them."</span>
             <span class="p">)</span>
         <span class="n">disallowed</span> <span class="o">=</span> <span class="p">[</span>
             <span class="s2">"."</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">part</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span> <span class="k">if</span> <span class="n">part</span><span class="p">)</span>
@@ -1306,7 +1552,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="k">if</span> <span class="n">disallowed</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">SQLSafetyError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Query references tables that are not in the allowed tables list: "</span>
-                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">disallowed</span><span class="p">)))</span><span class="si">}</span><span class="s2">. Use list_tables to see the allowed tables."</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">disallowed</span><span class="p">)))</span><span class="si">}</span><span class="s2">. Use </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_build_tool_name</span><span class="p">(</span><span class="s1">'list_tables'</span><span class="p">)</span><span class="si">}</span><span class="s2"> to see the allowed tables."</span>
             <span class="p">)</span></div>
 
 </pre></div>
@@ -1568,7 +1814,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

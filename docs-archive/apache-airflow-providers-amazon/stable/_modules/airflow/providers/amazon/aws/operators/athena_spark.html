@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -701,7 +701,9 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">WaiterMaxAttemptsError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.hooks.athena</span><span class="w"> </span><span class="kn">import</span> <span class="n">AthenaHook</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.operators.base_aws</span><span class="w"> </span><span class="kn">import</span> <span class="n">AwsBaseOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.triggers.athena</span><span class="w"> </span><span class="kn">import</span> <span class="n">AthenaSparkTrigger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.utils.mixins</span><span class="w"> </span><span class="kn">import</span> <span class="n">aws_template_fields</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">conf</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
@@ -728,6 +730,8 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <span class="sd">    :param waiter_delay: Seconds to wait between status checks. Defaults to 30.</span>
 <span class="sd">    :param waiter_max_attempts: Maximum number of polling attempts before timing out. Defaults to 120.</span>
 <span class="sd">        To limit total task time, use execution_timeout on the task as well.</span>
+<span class="sd">    :param deferrable: Whether to wait asynchronously using the triggerer.</span>
+<span class="sd">        Defaults to the ``operators.default_deferrable`` configuration value (False).</span>
 <span class="sd">    :param log_query: Whether to log submission details. Defaults to True.</span>
 <span class="sd">    :param aws_conn_id: The Airflow connection used for AWS credentials. Defaults to ``aws_default``.</span>
 <span class="sd">    :param region_name: AWS region. If not set, default boto3 behavior is used. Defaults to None.</span>
@@ -765,6 +769,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
         <span class="n">client_request_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">waiter_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
         <span class="n">waiter_max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">120</span><span class="p">,</span>
+        <span class="n">deferrable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">conf</span><span class="o">.</span><span class="n">getboolean</span><span class="p">(</span><span class="s2">"operators"</span><span class="p">,</span> <span class="s2">"default_deferrable"</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
         <span class="n">log_query</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">aws_conn_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">"aws_default"</span><span class="p">,</span>
         <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -803,6 +808,10 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/athena_spark/index.html#airflow.providers.amazon.aws.operators.athena_spark.AthenaSparkOperator.waiter_max_attempts">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span> <span class="o">=</span> <span class="n">waiter_max_attempts</span></div>
 
+<div class="viewcode-block" id="AthenaSparkOperator.deferrable">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/athena_spark/index.html#airflow.providers.amazon.aws.operators.athena_spark.AthenaSparkOperator.deferrable">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span> <span class="o">=</span> <span class="n">deferrable</span></div>
+
 <div class="viewcode-block" id="AthenaSparkOperator.log_query">
 <a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/athena_spark/index.html#airflow.providers.amazon.aws.operators.athena_spark.AthenaSparkOperator.log_query">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">log_query</span> <span class="o">=</span> <span class="n">log_query</span></div>
@@ -829,6 +838,21 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Calculation submitted. CalculationExecutionId: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">calculation_execution_id</span><span class="p">)</span>
 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">deferrable</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">defer</span><span class="p">(</span>
+                <span class="n">trigger</span><span class="o">=</span><span class="n">AthenaSparkTrigger</span><span class="p">(</span>
+                    <span class="n">calculation_execution_id</span><span class="o">=</span><span class="n">calculation_execution_id</span><span class="p">,</span>
+                    <span class="n">waiter_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_delay</span><span class="p">,</span>
+                    <span class="n">waiter_max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="p">,</span>
+                    <span class="n">aws_conn_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aws_conn_id</span><span class="p">,</span>
+                    <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
+                    <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verify</span><span class="p">,</span>
+                    <span class="n">botocore_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">botocore_config</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">method_name</span><span class="o">=</span><span class="s2">"execute_complete"</span><span class="p">,</span>
+                <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">"calculation_execution_id"</span><span class="p">:</span> <span class="n">calculation_execution_id</span><span class="p">},</span>
+            <span class="p">)</span>
+
         <span class="k">try</span><span class="p">:</span>
             <span class="n">final_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">poll_spark_calculation_status</span><span class="p">(</span>
                 <span class="n">calculation_execution_id</span><span class="p">,</span>
@@ -848,6 +872,37 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Polling timed out after </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">waiter_max_attempts</span><span class="si">}</span><span class="s2"> attempts for calculation "</span>
                 <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">calculation_execution_id</span><span class="si">}</span><span class="s2">."</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_terminal_state</span><span class="p">(</span><span class="n">calculation_execution_id</span><span class="p">,</span> <span class="n">final_state</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AthenaSparkOperator.execute_complete">
+<a class="viewcode-back" href="../../../../../../_api/airflow/providers/amazon/aws/operators/athena_spark/index.html#airflow.providers.amazon.aws.operators.athena_spark.AthenaSparkOperator.execute_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute_complete</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+        <span class="n">calculation_execution_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Handle the trigger result and return calculation metadata."""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_calculation_execution_id</span> <span class="o">=</span> <span class="n">calculation_execution_id</span>
+
+        <span class="k">if</span> <span class="n">event</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"status"</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">"success"</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stop_calculation</span><span class="p">(</span><span class="n">calculation_execution_id</span><span class="p">)</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="s2">"event is None"</span> <span class="k">if</span> <span class="n">event</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"message"</span><span class="p">,</span> <span class="s2">"Unknown trigger error."</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Error waiting for Athena Spark calculation </span><span class="si">{</span><span class="n">calculation_execution_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2">"</span>
+            <span class="p">)</span>
+
+        <span class="n">execution_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">get_spark_calculation_info</span><span class="p">(</span><span class="n">calculation_execution_id</span><span class="p">)</span>
+        <span class="n">final_state</span> <span class="o">=</span> <span class="n">execution_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Status"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"State"</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">final_state</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">AthenaHook</span><span class="o">.</span><span class="n">SPARK_TERMINAL_STATES</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stop_calculation</span><span class="p">(</span><span class="n">calculation_execution_id</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Expected a terminal state for calculation "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">calculation_execution_id</span><span class="si">}</span><span class="s2">, received </span><span class="si">{</span><span class="n">final_state</span><span class="si">!r}</span><span class="s2">."</span>
             <span class="p">)</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_terminal_state</span><span class="p">(</span><span class="n">calculation_execution_id</span><span class="p">,</span> <span class="n">final_state</span><span class="p">)</span></div>
@@ -1183,7 +1238,7 @@ window.PAGEFIND_PATH = '../../../../../../_pagefind/pagefind.js';
     <script src="../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../../../../../../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

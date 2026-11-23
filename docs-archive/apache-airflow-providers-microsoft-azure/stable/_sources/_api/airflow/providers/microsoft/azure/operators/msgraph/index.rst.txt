@@ -17,6 +17,7 @@ Functions
 
 .. autoapisummary::
 
+   airflow.providers.microsoft.azure.operators.msgraph.build_start_trigger_args
    airflow.providers.microsoft.azure.operators.msgraph.default_event_handler
    airflow.providers.microsoft.azure.operators.msgraph.execute_callable
 
@@ -24,11 +25,27 @@ Functions
 Module Contents
 ---------------
 
+.. py:function:: build_start_trigger_args(trigger, next_method, timeout = None)
+
+   Build the arguments which start a task from the triggerer with the given trigger, when that is possible.
+
+   The trigger is the one the task would defer to on a worker, built from its arguments before they are
+   rendered, so both paths send the same first request.  The triggerer renders the templated fields of
+   that trigger itself, and it only gets what the serialized Dag holds: it never resolves an ``XComArg``,
+   and a callable or a file-like object cannot be serialized.  None is returned in those cases, and on
+   Airflow before 3.4, so the task starts on a worker instead.  Before 3.4 the XComs of an earlier try
+   are not cleared for a task the scheduler deferred, and the operator would read them back.
+
+   :param trigger: The trigger which sends the first request.
+   :param next_method: The method of the task which handles the event of the trigger.
+   :param timeout: How long the trigger may run before the task times out (default is None).
+
+
 .. py:function:: default_event_handler(event = None, **context)
 
 .. py:function:: execute_callable(func, value, context, message)
 
-.. py:class:: MSGraphAsyncOperator(*, url, response_type = None, path_parameters = None, url_template = None, method = 'GET', query_parameters = None, headers = None, data = None, conn_id = KiotaRequestAdapterHook.default_conn_name, key = XCOM_RETURN_KEY, timeout = None, proxies = None, scopes = None, api_version = None, pagination_function = None, result_processor = lambda result, **context: result, event_handler = None, serializer = ResponseSerializer, durable = False, **kwargs)
+.. py:class:: MSGraphAsyncOperator(*, url, response_type = None, path_parameters = None, url_template = None, method = 'GET', query_parameters = None, headers = None, data = None, conn_id = KiotaRequestAdapterHook.default_conn_name, key = XCOM_RETURN_KEY, timeout = None, proxies = None, scopes = None, api_version = None, pagination_function = None, result_processor = lambda result, **context: result, event_handler = None, serializer = ResponseSerializer, durable = False, start_from_trigger = False, **kwargs)
 
    Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`
 
@@ -70,6 +87,10 @@ Module Contents
        are removed from the store once the result is returned. Pages are stored as they are, so pages
        larger than the store's ``max_value_storage_bytes`` need a state store backend that offloads
        large values. Needs Airflow 3.3 or later.
+   :param start_from_trigger: Start the task directly from the triggerer, without first running it on a
+       worker (default is False).  This requires Airflow 3.4 or later, and arguments which only hold plain
+       values: when an argument is an ``XComArg``, a callable or a file-like object, or when ``durable`` is
+       set, the task starts on a worker as usual.  The templated fields are then rendered by the triggerer.
 
 
    .. py:attribute:: template_fields
@@ -162,6 +183,14 @@ Module Contents
    .. py:attribute:: durable
       :value: False
 
+
+
+   .. py:attribute:: start_trigger_args
+      :value: None
+
+
+
+   .. py:attribute:: start_from_trigger
 
 
    .. py:method:: execute(context)

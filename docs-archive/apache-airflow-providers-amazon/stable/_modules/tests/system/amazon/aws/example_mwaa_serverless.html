@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -494,7 +494,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">9.40.0</span>
+        <span class="version-label">Version: </span><span class="version">9.41.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -693,6 +693,8 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.operators.mwaa_serverless</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">MwaaServerlessCreateWorkflowOperator</span><span class="p">,</span>
     <span class="n">MwaaServerlessDeleteWorkflowOperator</span><span class="p">,</span>
@@ -706,7 +708,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <span class="n">S3DeleteBucketOperator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.amazon.aws.sensors.mwaa_serverless</span><span class="w"> </span><span class="kn">import</span> <span class="n">MwaaServerlessWorkflowRunSensor</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">chain</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">airflow.providers.common.compat.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">DAG</span><span class="p">,</span> <span class="n">chain</span><span class="p">,</span> <span class="n">task</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">system.amazon.aws.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_ID_KEY</span><span class="p">,</span> <span class="n">SystemTestContextBuilder</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">tests_common.test_utils.version_compat</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_V_3_0_PLUS</span>
@@ -765,6 +767,23 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="sys_test_context_task">
 <a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_mwaa_serverless/index.html#tests.system.amazon.aws.example_mwaa_serverless.sys_test_context_task">[docs]</a>
 <span class="n">sys_test_context_task</span> <span class="o">=</span> <span class="n">SystemTestContextBuilder</span><span class="p">()</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="n">ROLE_ARN_KEY</span><span class="p">)</span><span class="o">.</span><span class="n">build</span><span class="p">()</span></div>
+
+
+
+<span class="nd">@task</span><span class="p">(</span><span class="n">trigger_rule</span><span class="o">=</span><span class="n">TriggerRule</span><span class="o">.</span><span class="n">ALL_DONE</span><span class="p">)</span>
+<div class="viewcode-block" id="print_and_delete_workflow_logs">
+<a class="viewcode-back" href="../../../../../_api/tests/system/amazon/aws/example_mwaa_serverless/index.html#tests.system.amazon.aws.example_mwaa_serverless.print_and_delete_workflow_logs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_and_delete_workflow_logs</span><span class="p">(</span><span class="n">workflow_arn</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Copy the workflow logs into this task's log, then delete their CloudWatch log group."""</span>
+    <span class="c1"># The service names the log group after the workflow ID, the last ARN segment, which ends in</span>
+    <span class="c1"># a generated suffix. The name is therefore only known once the workflow exists.</span>
+    <span class="n">log_group_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"/aws/mwaa-serverless/</span><span class="si">{</span><span class="n">workflow_arn</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">'/'</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">/"</span>
+    <span class="n">logs_client</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s2">"logs"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="n">logs_client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s2">"filter_log_events"</span><span class="p">)</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="n">log_group_name</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">page</span><span class="p">[</span><span class="s2">"events"</span><span class="p">]:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"message"</span><span class="p">])</span>
+    <span class="n">logs_client</span><span class="o">.</span><span class="n">delete_log_group</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="n">log_group_name</span><span class="p">)</span></div>
+
 
 
 <span class="k">with</span> <span class="n">DAG</span><span class="p">(</span>
@@ -903,6 +922,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
         <span class="c1"># TEST TEARDOWN</span>
         <span class="n">delete_workflow</span><span class="p">,</span>
         <span class="n">delete_bucket</span><span class="p">,</span>
+        <span class="n">print_and_delete_workflow_logs</span><span class="p">(</span><span class="n">workflow_arn</span><span class="p">),</span>
     <span class="p">)</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">tests_common.test_utils.watcher</span><span class="w"> </span><span class="kn">import</span> <span class="n">watcher</span>
@@ -1174,7 +1194,7 @@ window.PAGEFIND_PATH = '../../../../../_pagefind/pagefind.js';
     <script src="../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../_static/documentation_options.js?v=65c8ccfd"></script>
+        <script src="../../../../../_static/documentation_options.js?v=141d86a4"></script>
         <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

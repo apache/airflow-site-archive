@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -457,6 +457,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -536,7 +537,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -624,6 +625,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -783,8 +785,9 @@ as base64.  So a value that is not a JSON type but renders the same way on every
 attempt – a <code class="docutils literal notranslate"><span class="pre">datetime</span></code> or <code class="docutils literal notranslate"><span class="pre">Decimal</span></code> tool argument, a dataclass in
 <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> – still produces a usable fingerprint.
 The <code class="docutils literal notranslate"><span class="pre">capability_id</span></code> of a tool from a capability without an <code class="docutils literal notranslate"><span class="pre">id</span></code> is left out
-of the request parameters, since it is random per run, and so is
-<code class="docutils literal notranslate"><span class="pre">deferred_capability_ids</span></code> (see <code class="docutils literal notranslate"><span class="pre">_normalize_params</span></code>).</p>
+of the request parameters, since it is random per run, and so are
+<code class="docutils literal notranslate"><span class="pre">deferred_capability_ids</span></code> and the <code class="docutils literal notranslate"><span class="pre">airflow</span></code> key of a tool’s metadata, which
+only decides whether the tool replays (see <code class="docutils literal notranslate"><span class="pre">_normalize_params</span></code>).</p>
 <p>That rendering is hashed as it is, with two exceptions.  Both are found by
 dumping the payload a second time in pydantic’s python mode, which has the same
 shape as the JSON rendering but keeps sets as sets and dict keys as they are, and
@@ -840,6 +843,9 @@ fingerprinted.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call" title="airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fingerprint_tool_call</span></code></a>(name, tool_args, tool_call_id, *)</p></td>
 <td><p>Fingerprint a tool call: tool name, arguments, and the model-issued call id.</p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests" title="airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fingerprint_deferred_tool_requests</span></code></a>(requests)</p></td>
+<td><p>Fingerprint tool calls waiting to be settled, such as approved, from each call's <a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call" title="airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call"><code class="xref py py-func docutils literal notranslate"><span class="pre">fingerprint_tool_call()</span></code></a>.</p></td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -857,7 +863,7 @@ fingerprinted.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">ModelRequestParameters</span></code> object is hashed (tool definitions, output
 mode and schema, native tools, …) so any change to what is sent to the
 model invalidates the cached response; only each tool’s <code class="docutils literal notranslate"><span class="pre">capability_id</span></code> and
-<code class="docutils literal notranslate"><span class="pre">deferred_capability_ids</span></code> are left out.</p>
+<code class="docutils literal notranslate"><span class="pre">airflow</span></code> metadata key, and <code class="docutils literal notranslate"><span class="pre">deferred_capability_ids</span></code>, are left out.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when the request cannot be fingerprinted. The journal then
 replays the step without verification, and only right after a step that
 replayed. Model settings, the tool definitions in the request parameters and
@@ -882,6 +888,17 @@ live objects pydantic has already validated, and the tool has not run yet,
 so they are rendered from copies (see <code class="docutils literal notranslate"><span class="pre">_render</span></code>): hashing must neither order
 a <code class="docutils literal notranslate"><span class="pre">set</span></code> unpredictably nor consume a lazily validated <code class="docutils literal notranslate"><span class="pre">Iterable</span></code> the tool
 has not read, and must not change what the tool will see.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.fingerprint.</span></span><span class="sig-name descname"><span class="pre">fingerprint_deferred_tool_requests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">requests</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/fingerprint.html#fingerprint_deferred_tool_requests"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests" title="Link to this definition">¶</a></dt>
+<dd><p>Fingerprint tool calls waiting to be settled, such as approved, from each call’s <a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call" title="airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call"><code class="xref py py-func docutils literal notranslate"><span class="pre">fingerprint_tool_call()</span></code></a>.</p>
+<p>The answer recorded for these calls then replays only for calls with the same names,
+arguments and call ids, which a replayed model response keeps. <code class="docutils literal notranslate"><span class="pre">None</span></code> when any call
+cannot be fingerprinted.</p>
 <dl class="field-list simple">
 </dl>
 </dd></dl>
@@ -971,6 +988,7 @@ has not read, and must not change what the tool will see.</p>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.log"><code class="docutils literal notranslate"><span class="pre">log</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_model_request"><code class="docutils literal notranslate"><span class="pre">fingerprint_model_request()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_tool_call"><code class="docutils literal notranslate"><span class="pre">fingerprint_tool_call()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.fingerprint.fingerprint_deferred_tool_requests"><code class="docutils literal notranslate"><span class="pre">fingerprint_deferred_tool_requests()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1154,7 +1172,7 @@ has not read, and must not change what the tool will see.</p>
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

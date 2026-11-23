@@ -366,7 +366,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.21.0</span>
+        <span class="version-label">Version: </span><span class="version">2.21.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -486,7 +486,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">2.21.0</span>
+        <span class="version-label">Version: </span><span class="version">2.21.1</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -687,12 +687,14 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <span class="sd">  ``SYSTEM_TESTS_OL_API_PASSWORD`` are used: exchanged for a token on Airflow 3, as basic auth on Airflow 2.</span>
 
 <span class="sd">The REST API version follows the Airflow version the task runs on: ``/api/v2`` on Airflow 3, ``/api/v1`` on 2.</span>
+<span class="sd">A request that times out is retried a few times, as the API server may be behind a proxy that sometimes hangs.</span>
 <span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
@@ -704,6 +706,11 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">system.openlineage.expected_events</span><span class="w"> </span><span class="kn">import</span> <span class="n">AIRFLOW_VERSION</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">system.openlineage.operator</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_validation_error</span>
+
+<div class="viewcode-block" id="log">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/manual_state/index.html#tests.system.openlineage.manual_state.log">[docs]</a>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span></div>
+
 
 <span class="c1"># An empty value (e.g. an unset Docker build arg) counts as unset</span>
 <div class="viewcode-block" id="API_URL">
@@ -721,6 +728,10 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 <div class="viewcode-block" id="TOKEN_ATTEMPTS">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/manual_state/index.html#tests.system.openlineage.manual_state.TOKEN_ATTEMPTS">[docs]</a>
 <span class="n">TOKEN_ATTEMPTS</span> <span class="o">=</span> <span class="mi">10</span></div>
+
+<div class="viewcode-block" id="REQUEST_ATTEMPTS">
+<a class="viewcode-back" href="../../../../_api/tests/system/openlineage/manual_state/index.html#tests.system.openlineage.manual_state.REQUEST_ATTEMPTS">[docs]</a>
+<span class="n">REQUEST_ATTEMPTS</span> <span class="o">=</span> <span class="mi">4</span></div>
 
 <div class="viewcode-block" id="FINISHED_DAG_RUN_STATES">
 <a class="viewcode-back" href="../../../../_api/tests/system/openlineage/manual_state/index.html#tests.system.openlineage.manual_state.FINISHED_DAG_RUN_STATES">[docs]</a>
@@ -770,13 +781,22 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_request</span><span class="p">(</span><span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-    <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">request</span><span class="p">(</span>
-        <span class="n">method</span><span class="p">,</span>
-        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">API_URL</span><span class="si">}</span><span class="s2">/api/</span><span class="si">{</span><span class="s1">'v2'</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">IS_API_V2</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">'v1'</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-        <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">_get_auth</span><span class="p">(),</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">REQUEST_ATTEMPTS</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">request</span><span class="p">(</span>
+                <span class="n">method</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">API_URL</span><span class="si">}</span><span class="s2">/api/</span><span class="si">{</span><span class="s1">'v2'</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">IS_API_V2</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">'v1'</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">_get_auth</span><span class="p">(),</span>
+                <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">break</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ReadTimeout</span><span class="p">:</span>
+            <span class="c1"># Reaching the API server through a proxy or an ingress, as a deployment other than the e2e one does,</span>
+            <span class="c1"># a request sometimes hangs until its timeout: a new connection usually gets through</span>
+            <span class="k">if</span> <span class="n">attempt</span> <span class="o">==</span> <span class="n">REQUEST_ATTEMPTS</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2"> timed out (attempt </span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">), retrying"</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">attempt</span><span class="p">,</span> <span class="n">REQUEST_ATTEMPTS</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">response</span><span class="o">.</span><span class="n">ok</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> failed with </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
@@ -924,6 +944,16 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
         <span class="n">body</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">region_id</span><span class="o">=</span><span class="n">task_instance</span><span class="p">[</span><span class="s2">"region_id"</span><span class="p">],</span> <span class="n">region_index</span><span class="o">=</span><span class="n">task_instance</span><span class="p">[</span><span class="s2">"region_index"</span><span class="p">])</span>
     <span class="k">elif</span> <span class="n">task_instance</span><span class="p">[</span><span class="s2">"map_index"</span><span class="p">]</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
         <span class="n">path</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"/</span><span class="si">{</span><span class="n">task_instance</span><span class="p">[</span><span class="s1">'map_index'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">AIRFLOW_VERSION</span><span class="o">.</span><span class="n">major</span><span class="p">,</span> <span class="n">AIRFLOW_VERSION</span><span class="o">.</span><span class="n">minor</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">include_upstream</span> <span class="ow">or</span> <span class="n">include_downstream</span><span class="p">):</span>
+        <span class="c1"># Airflow 3.0 notifies listeners for only one changed TI; non running first so none starts meanwhile</span>
+        <span class="n">affected</span> <span class="o">=</span> <span class="n">_request</span><span class="p">(</span><span class="s2">"PATCH"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/dry_run"</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">body</span><span class="p">)[</span><span class="s2">"task_instances"</span><span class="p">]</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="n">get_task_instances</span><span class="p">(</span><span class="n">dag_id</span><span class="p">,</span> <span class="n">run_id</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">_find_task_instance</span><span class="p">(</span><span class="n">current</span><span class="p">,</span> <span class="n">ti</span><span class="p">[</span><span class="s2">"task_id"</span><span class="p">],</span> <span class="n">ti</span><span class="p">[</span><span class="s2">"map_index"</span><span class="p">])</span> <span class="ow">or</span> <span class="n">ti</span> <span class="k">for</span> <span class="n">ti</span> <span class="ow">in</span> <span class="n">affected</span><span class="p">),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">ti</span><span class="p">:</span> <span class="n">ti</span><span class="p">[</span><span class="s2">"state"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"running"</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="n">mark_task_instance</span><span class="p">(</span><span class="n">ti</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+        <span class="k">return</span>
     <span class="n">_request</span><span class="p">(</span><span class="s2">"PATCH"</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">body</span><span class="p">)</span></div>
 
 
@@ -1405,7 +1435,7 @@ window.PAGEFIND_PATH = '../../../../_pagefind/pagefind.js';
     <script src="../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../_static/documentation_options.js?v=210d0441"></script>
+        <script src="../../../../_static/documentation_options.js?v=85758058"></script>
         <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -684,9 +684,9 @@ Module Contents
 
 
 
-.. py:class:: SageMakerTrainingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, check_if_job_exists = True, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), cancel_on_kill = False, **kwargs)
+.. py:class:: SageMakerTrainingOperator(*, config, wait_for_completion = True, print_log = True, check_interval = CHECK_INTERVAL_SECOND, max_attempts = None, max_ingestion_time = None, check_if_job_exists = True, action_if_job_exists = 'timestamp', deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), cancel_on_kill = False, durable = None, **kwargs)
 
-   Bases: :py:obj:`SageMakerBaseOperator`
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.ResumableJobMixin`, :py:obj:`SageMakerBaseOperator`
 
 
    Starts a model training job.
@@ -726,11 +726,20 @@ Module Contents
        This is only relevant if check_if_job_exists is True.
    :param deferrable: Run operator in the deferrable mode. This is only effective if wait_for_completion is
        set to True.
+   :param durable: If True (the default), the training job name is persisted to the task state store
+       before polling, and a retry reconnects to that job instead of submitting a new one. Only applies
+       to the synchronous path; a deferrable run is unaffected. Needs Airflow 3.3 or later, below it the
+       operator behaves as with ``durable=False``.
    :param cancel_on_kill: If True, the training job is stopped when the task is killed.
        Without it the job keeps running, and billing, after the task is gone. A deferred task is
        stopped from the Triggerer, which needs Airflow 3.3 or later; below that the flag only
        applies while the task holds a worker slot.
    :return Dict: Returns The ARN of the training job created in Amazon SageMaker.
+
+
+   .. py:attribute:: external_id_key
+      :value: 'sagemaker_training_job_name'
+
 
 
    .. py:attribute:: wait_for_completion
@@ -789,6 +798,51 @@ Module Contents
       as when rendering jinja templates.
 
       Refer to get_template_context for more context.
+
+
+
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the raw job status; a job name SageMaker no longer knows degrades to NOT_FOUND.
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
 
 
 

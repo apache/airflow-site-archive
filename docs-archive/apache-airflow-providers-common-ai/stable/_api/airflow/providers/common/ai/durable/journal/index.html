@@ -369,7 +369,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -457,6 +457,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -536,7 +537,7 @@
 <div id="docs-version-selector" class="docs-version-selector sidebar__version-selector">
     <a class="dropdown-toggle" href="#" id="versionDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true"
        aria-expanded="false">
-        <span class="version-label">Version: </span><span class="version">1.1.0</span>
+        <span class="version-label">Version: </span><span class="version">1.2.0</span>
     </a>
     <div class="dropdown-menu" aria-labelledby="versionDropdown">
         <div class="version-filter-wrapper">
@@ -624,6 +625,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../example_dags/index.html">airflow.providers.common.ai.example_dags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../exceptions/index.html">airflow.providers.common.ai.exceptions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../fallback_exceptions/index.html">airflow.providers.common.ai.fallback_exceptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../get_provider_info/index.html">airflow.providers.common.ai.get_provider_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../hooks/index.html">airflow.providers.common.ai.hooks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../managed_agents/index.html">airflow.providers.common.ai.managed_agents</a></li>
@@ -770,7 +772,9 @@ fingerprint, computed by the framework adapter, says what it was asked (the mess
 history, the tool arguments). The first mismatch means the run took a different path
 from the previous attempt, so that step and every step after it run live. So does
 everything the previous attempt did after a step that raised, and, when the previous
-attempt failed on the model’s answers, everything from the model’s last request on.</p>
+attempt failed on the model’s answers, everything from the model’s last request on. A
+tool call that raised on two attempts in a row counts as such an answer: the next retry
+asks the model again from the request that chose the call.</p>
 <p>A <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal" title="airflow.providers.common.ai.durable.journal.DurableJournal"><code class="xref py py-class docutils literal notranslate"><span class="pre">DurableJournal</span></code></a> belongs to one task attempt. Each agent run in it is a
 <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun" title="airflow.providers.common.ai.durable.journal.DurableRun"><code class="xref py py-class docutils literal notranslate"><span class="pre">DurableRun</span></code></a>, numbered in the order the runs start, with positions of its own,
 so a task that runs several agents replays each of them independently.</p>
@@ -785,6 +789,8 @@ journal for pydantic-ai. Another framework’s adapter starts a run with
 <li><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim" title="airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.claim()</span></code></a> and <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.record" title="airflow.providers.common.ai.durable.journal.JournalStep.record"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JournalStep.record()</span></code></a> split it in two, for a
 framework whose hooks see a step’s input and its output in separate callbacks.</p></li>
 </ul>
+<p>An adapter that stops the task to wait for input (<code class="docutils literal notranslate"><span class="pre">request_input()</span></code>) calls
+<a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.pause" title="airflow.providers.common.ai.durable.journal.DurableRun.pause"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.pause()</span></code></a> first, so that the resumed task replays what this attempt recorded.</p>
 <section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
@@ -802,16 +808,19 @@ framework whose hooks see a step’s input and its output in separate callbacks.
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep" title="airflow.providers.common.ai.durable.journal.JournalStep"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JournalStep</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.Unrecordable" title="airflow.providers.common.ai.durable.journal.Unrecordable"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Unrecordable</span></code></a></p></td>
+<td><p>A step result an adapter could not encode as JSON: the live value, and why.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep" title="airflow.providers.common.ai.durable.journal.JournalStep"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JournalStep</span></code></a></p></td>
 <td><p>One position in a run, claimed by <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim" title="airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.claim()</span></code></a>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStats" title="airflow.providers.common.ai.durable.journal.JournalStats"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JournalStats</span></code></a></p></td>
-<td><p>What one task attempt replayed and recorded, by step kind.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStats" title="airflow.providers.common.ai.durable.journal.JournalStats"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JournalStats</span></code></a></p></td>
+<td><p>What one task attempt replayed and recorded, by step kind; a review counts each regeneration on its own.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun" title="airflow.providers.common.ai.durable.journal.DurableRun"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DurableRun</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun" title="airflow.providers.common.ai.durable.journal.DurableRun"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DurableRun</span></code></a></p></td>
 <td><p>One agent run's steps in the journal.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal" title="airflow.providers.common.ai.durable.journal.DurableJournal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DurableJournal</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal" title="airflow.providers.common.ai.durable.journal.DurableJournal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DurableJournal</span></code></a></p></td>
 <td><p>One task attempt's view of the durable journal.</p></td>
 </tr>
 </tbody>
@@ -827,7 +836,10 @@ framework whose hooks see a step’s input and its output in separate callbacks.
 <tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.journal_scope" title="airflow.providers.common.ai.durable.journal.journal_scope"><code class="xref py py-obj docutils literal notranslate"><span class="pre">journal_scope</span></code></a>(journal)</p></td>
 <td><p>Make <code class="docutils literal notranslate"><span class="pre">journal</span></code> the active journal for the code in the <code class="docutils literal notranslate"><span class="pre">with</span></code> block.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.current_journal" title="airflow.providers.common.ai.durable.journal.current_journal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">current_journal</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.find_active_journal" title="airflow.providers.common.ai.durable.journal.find_active_journal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_active_journal</span></code></a>()</p></td>
+<td><p>Return the journal already recording this run, without creating one.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.current_journal" title="airflow.providers.common.ai.durable.journal.current_journal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">current_journal</span></code></a>()</p></td>
 <td><p>Return the active journal, or <code class="docutils literal notranslate"><span class="pre">None</span></code> outside an Airflow task.</p></td>
 </tr>
 </tbody>
@@ -844,6 +856,24 @@ framework whose hooks see a step’s input and its output in separate callbacks.
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.StepKind">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">StepKind</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#StepKind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.StepKind" title="Link to this definition">¶</a></dt>
 <dd><p>What a step is, for the end-of-run summary and for adapters that treat model steps specially.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.Unrecordable">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">Unrecordable</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#Unrecordable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.Unrecordable" title="Link to this definition">¶</a></dt>
+<dd><p>A step result an adapter could not encode as JSON: the live value, and why.</p>
+<p>A step body returns it in place of the payload; <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.run" title="airflow.providers.common.ai.durable.journal.JournalStep.run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JournalStep.run()</span></code></a> passes it to
+<a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.cannot_record" title="airflow.providers.common.ai.durable.journal.JournalStep.cannot_record"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JournalStep.cannot_record()</span></code></a> instead of recording it, and returns it to the adapter.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.Unrecordable.value">
+<span class="sig-name descname"><span class="pre">value</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Any</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#Unrecordable.value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.Unrecordable.value" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.Unrecordable.error">
+<span class="sig-name descname"><span class="pre">error</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#Exception" title="(in Python v3.15)"><span class="pre">Exception</span></a></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#Unrecordable.error"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.Unrecordable.error" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
@@ -900,6 +930,16 @@ caller runs the step inside <a class="reference internal" href="#airflow.provide
 <dd></dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStep.count_as_replayed">
+<span class="sig-name descname"><span class="pre">count_as_replayed</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStep.count_as_replayed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStep.count_as_replayed" title="Link to this definition">¶</a></dt>
+<dd><p>Count this step as replayed, once.</p>
+<p>For a step from <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.reserve" title="airflow.providers.common.ai.durable.journal.DurableRun.reserve"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.reserve()</span></code></a>, which <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved" title="airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.claim_reserved()</span></code></a> does;
+a step from <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim" title="airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.claim()</span></code></a> is already counted.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStep.run">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_record</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStep.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStep.run" title="Link to this definition">¶</a></dt>
 <dd><p>Run a step that was not replayed and record what <code class="docutils literal notranslate"><span class="pre">body</span></code> returns, or that it raised.</p>
@@ -941,6 +981,18 @@ and one claimed with <code class="docutils literal notranslate"><span class="pre
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStep.cannot_record">
+<span class="sig-name descname"><span class="pre">cannot_record</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">error</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStep.cannot_record"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStep.cannot_record" title="Link to this definition">¶</a></dt>
+<dd><p>Note that the step’s result has no form the journal can hold, such as a value with no JSON form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../exceptions/index.html#airflow.providers.common.ai.exceptions.DurableJournalError" title="airflow.providers.common.ai.exceptions.DurableJournalError"><strong>DurableJournalError</strong></a> – When the journal fails on such results, as it does by default.
+Otherwise the step is left unrecorded, as when storage skips a write, and runs again on retry.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStep.fail">
 <span class="sig-name descname"><span class="pre">fail</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">error</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStep.fail"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStep.fail" title="Link to this definition">¶</a></dt>
 <dd><p>Note that the step raised <code class="docutils literal notranslate"><span class="pre">error</span></code>.</p>
@@ -956,7 +1008,7 @@ already started when it failed; a run that recovers from the error is unaffected
 <dl class="py class">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStats">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">JournalStats</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStats" title="Link to this definition">¶</a></dt>
-<dd><p>What one task attempt replayed and recorded, by step kind.</p>
+<dd><p>What one task attempt replayed and recorded, by step kind; a review counts each regeneration on its own.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.JournalStats.replayed">
 <span class="sig-name descname"><span class="pre">replayed</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/collections.html#collections.Counter" title="(in Python v3.15)"><span class="pre">collections.Counter</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.StepKind" title="airflow.providers.common.ai.durable.journal.StepKind"><span class="pre">StepKind</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#JournalStats.replayed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.JournalStats.replayed" title="Link to this definition">¶</a></dt>
@@ -976,11 +1028,12 @@ already started when it failed; a run that recovers from the error is unaffected
 
 <dl class="py class">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">DurableRun</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">journal</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">DurableRun</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">journal</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">started_before</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun" title="Link to this definition">¶</a></dt>
 <dd><p>One agent run’s steps in the journal.</p>
 <p>Positions are handed out in the order steps are claimed. A step must be claimed
-before its first <code class="docutils literal notranslate"><span class="pre">await</span></code>, so concurrent steps (parallel tool calls) take their
-positions in the order they were started rather than the order they finish.</p>
+before its first <code class="docutils literal notranslate"><span class="pre">await</span></code>, so concurrent steps take their positions in the order they
+were started rather than the order they finish. An adapter whose concurrent steps can
+be delayed before their claim must claim them itself in a deterministic order.</p>
 <p>Besides its steps, a run keeps one entry about itself: where the last attempt that
 failed stopped being trustworthy, and the furthest position any attempt reached, so
 a successful run deletes every step an earlier attempt left behind.</p>
@@ -1013,8 +1066,40 @@ a successful run deletes every step an earlier attempt left behind.</p>
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.peek">
 <span class="sig-name descname"><span class="pre">peek</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">position</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.peek"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.peek" title="Link to this definition">¶</a></dt>
 <dd><p>Return the entry the previous attempt recorded at <code class="docutils literal notranslate"><span class="pre">position</span></code>, without claiming it.</p>
-<p><code class="docutils literal notranslate"><span class="pre">None</span></code> when nothing usable was recorded there, or the run has already diverged.
-The entry is a dict with <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">kind</span></code>, <code class="docutils literal notranslate"><span class="pre">fingerprint</span></code> and <code class="docutils literal notranslate"><span class="pre">payload</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">None</span></code> when nothing usable was recorded there, no earlier attempt started the run, or
+the run has already diverged. The entry is a dict with <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">kind</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fingerprint</span></code> and <code class="docutils literal notranslate"><span class="pre">payload</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.reserve">
+<span class="sig-name descname"><span class="pre">reserve</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calls</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.reserve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.reserve" title="Link to this definition">¶</a></dt>
+<dd><p>Take a position for each of <code class="docutils literal notranslate"><span class="pre">calls</span></code> in order, and keep them for <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved" title="airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved"><code class="xref py py-meth docutils literal notranslate"><span class="pre">claim_reserved()</span></code></a>.</p>
+<p>For an adapter that has to number steps before it knows whether they will run. Each call
+is <code class="docutils literal notranslate"><span class="pre">(call_id,</span> <span class="pre">name,</span> <span class="pre">fingerprint)</span></code>. A replay counts in the stats only once the step is
+taken. Replaces what an earlier <code class="docutils literal notranslate"><span class="pre">reserve</span></code> left unclaimed, and a call whose id is
+already in <code class="docutils literal notranslate"><span class="pre">calls</span></code> takes no position. Like <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim" title="airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="xref py py-meth docutils literal notranslate"><span class="pre">claim()</span></code></a>, call it before the first <code class="docutils literal notranslate"><span class="pre">await</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.has_recorded">
+<span class="sig-name descname"><span class="pre">has_recorded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">call_id</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.has_recorded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.has_recorded" title="Link to this definition">¶</a></dt>
+<dd><p>Whether the step <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.reserve" title="airflow.providers.common.ai.durable.journal.DurableRun.reserve"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reserve()</span></code></a> kept for <code class="docutils literal notranslate"><span class="pre">call_id</span></code> holds a result an earlier attempt recorded.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved">
+<span class="sig-name descname"><span class="pre">claim_reserved</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">call_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fingerprint</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.claim_reserved"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved" title="Link to this definition">¶</a></dt>
+<dd><p>Take the step <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.reserve" title="airflow.providers.common.ai.durable.journal.DurableRun.reserve"><code class="xref py py-meth docutils literal notranslate"><span class="pre">reserve()</span></code></a> kept for <code class="docutils literal notranslate"><span class="pre">call_id</span></code>, counting its replay.</p>
+<p>A call whose id was not reserved, or whose reservation is already taken or belongs to
+another call sharing the id (some non-OpenAI adapters), takes a new position as
+<a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim" title="airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="xref py py-meth docutils literal notranslate"><span class="pre">claim()</span></code></a> does. Call it before the first <code class="docutils literal notranslate"><span class="pre">await</span></code>.</p>
 <dl class="field-list simple">
 </dl>
 </dd></dl>
@@ -1033,8 +1118,9 @@ same step, and should differ between steps that are not interchangeable.</p></li
 fingerprinted. A step without one replays on a matching name, and only right
 after a step that replayed.</p></li>
 <li><p><strong>replayable</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – <code class="docutils literal notranslate"><span class="pre">False</span></code> for a step that must always run live, such as a tool
-whose effect Airflow cannot observe. It still takes a position, so the steps
-after it keep theirs, but nothing is looked up or recorded for it.</p></li>
+whose effect Airflow cannot observe or one its metadata opts out. It still takes
+a position, so the steps after it keep theirs, but nothing is looked up or
+recorded for it.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1072,6 +1158,55 @@ failure on every retry, so the retry asks the model again from its last request.
 Ignored when a step raised <code class="docutils literal notranslate"><span class="pre">error</span></code>: that step decides where the retry runs live.</p>
 </dd>
 </dl>
+<p>A tool call that raises <code class="docutils literal notranslate"><span class="pre">error</span></code> on two attempts in a row, with the same arguments, is
+treated as a failure the model caused as well: the first retry runs the call again in
+case its failure was transient, and the next asks the model again from the request that
+chose the call, rather than replay that choice into the same failure.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.pause">
+<span class="sig-name descname"><span class="pre">pause</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.pause"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.pause" title="Link to this definition">¶</a></dt>
+<dd><p>Record that the task is about to pause, so that resuming it replays what this attempt recorded.</p>
+<p>An adapter calls this before it stops the task to wait for input. Where an earlier
+attempt’s failure, or a different path this attempt took, left entries that must not
+replay, this attempt has run live from there: what it recorded becomes trusted, and
+the earlier entries at positions it left empty (a call still waiting for approval, a
+tool that raised) are deleted. Positions from here on still run live after the pause.
+Otherwise it only notes how far this attempt got, when that is further than any before.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.complete">
+<span class="sig-name descname"><span class="pre">complete</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.complete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.complete" title="Link to this definition">¶</a></dt>
+<dd><p>Note that the run succeeded, for a task that keeps the journal after it, such as for a review.</p>
+<p>An earlier attempt that failed left a note saying where a retry stops replaying. Once a
+run succeeds, a later attempt must replay what this one recorded instead, as for a pause,
+and not an entry an earlier attempt left at a position this one ran without recording,
+or past where this one ended. Also notes how far the run went, and where its last model
+request was, when a step it ran is not in the journal (a tool set to run on every attempt,
+say), as a later reader cannot find either past such a gap; and rewrites that note when
+this attempt’s last model request is elsewhere. Writes nothing on a first attempt that
+recorded every step, or a retry that replayed every step, when no earlier attempt left a
+note and none went further. A retry that ran a step live always writes the note: an
+attempt that was killed leaves none, and may have recorded steps past where this run
+ended. Reads back each stale entry it deletes, so that one the storage failed to delete
+is not trusted.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableRun.ask_model_again">
+<span class="sig-name descname"><span class="pre">ask_model_again</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableRun.ask_model_again"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableRun.ask_model_again" title="Link to this definition">¶</a></dt>
+<dd><p>Make a retry ask the model again for this run’s final answer, which succeeded but was turned down.</p>
+<p>For a run whose answer a reviewer rejected, possibly in a later process than the run’s: a
+retry replays the run’s steps up to its last model request, then asks the model again from
+there. A run with no model step recorded runs again from its start.</p>
+<dl class="field-list simple">
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -1096,7 +1231,7 @@ matched it, such as one written by a version whose types have changed since.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">DurableJournal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">storage</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">clean_up_after_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">DurableJournal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">storage</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">clean_up_after_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fail_on_unrecordable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">first_run</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal" title="Link to this definition">¶</a></dt>
 <dd><p>One task attempt’s view of the durable journal.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1105,6 +1240,12 @@ matched it, such as one written by a version whose types have changed since.</p>
 <li><p><strong>clean_up_after_run</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – Delete a run’s steps as soon as it succeeds. A journal the
 operator manages leaves this off and calls <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.cleanup" title="airflow.providers.common.ai.durable.journal.DurableJournal.cleanup"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cleanup()</span></code></a> itself after the
 task’s own post-run work has succeeded.</p></li>
+<li><p><strong>fail_on_unrecordable</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – Fail the task on a step result the journal cannot hold
+(see <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.cannot_record" title="airflow.providers.common.ai.durable.journal.JournalStep.cannot_record"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JournalStep.cannot_record()</span></code></a>). With <code class="docutils literal notranslate"><span class="pre">False</span></code> the step is logged and runs
+again on retry instead.</p></li>
+<li><p><strong>first_run</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – The number of the first top-level run this journal starts, for a task that
+starts later runs in a later process than the runs before them, such as a regeneration
+after a review round.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1119,9 +1260,24 @@ task’s own post-run work has succeeded.</p></li>
 <dd></dd></dl>
 
 <dl class="py attribute">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.fail_on_unrecordable">
+<span class="sig-name descname"><span class="pre">fail_on_unrecordable</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.fail_on_unrecordable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.fail_on_unrecordable" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.stats">
 <span class="sig-name descname"><span class="pre">stats</span></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.stats" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.find_executing_tool_steps">
+<span class="sig-name descname"><span class="pre">find_executing_tool_steps</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.find_executing_tool_steps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.find_executing_tool_steps" title="Link to this definition">¶</a></dt>
+<dd><p>Return the tool calls of this journal whose work is running now, in any thread.</p>
+<p>It sees a call from code that runs in another thread without a copy of the call’s
+context, such as an agent the tool runs with <code class="docutils literal notranslate"><span class="pre">loop.run_in_executor</span></code>.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.get_run_id">
@@ -1146,6 +1302,34 @@ first attempt’s task instance id.</p>
 <dd><p>Start an agent run.</p>
 <p>A run started while a step of this journal executes (an agent a tool calls) is
 numbered under that step; any other run takes the next top-level number.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.ask_model_again">
+<span class="sig-name descname"><span class="pre">ask_model_again</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">number</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.ask_model_again"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.ask_model_again" title="Link to this definition">¶</a></dt>
+<dd><p>Make a retry ask the model again for the final answer of top-level run <code class="docutils literal notranslate"><span class="pre">number</span></code>.</p>
+<p>See <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.ask_model_again" title="airflow.providers.common.ai.durable.journal.DurableRun.ask_model_again"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DurableRun.ask_model_again()</span></code></a>. The top-level runs after it followed from that
+answer, so they are deleted: a retry starts them over.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.drop_runs_from">
+<span class="sig-name descname"><span class="pre">drop_runs_from</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">number</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.drop_runs_from"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.drop_runs_from" title="Link to this definition">¶</a></dt>
+<dd><p>Delete top-level run <code class="docutils literal notranslate"><span class="pre">number</span></code> and every later one, with the runs started inside them.</p>
+<p>For runs that followed from an answer that no longer stands, such as the regenerations
+after a review round the reviewer answered again: a later run with that number starts over.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.DurableJournal.next_run_number">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">next_run_number</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><span class="pre">int</span></a></span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#DurableJournal.next_run_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.DurableJournal.next_run_number" title="Link to this definition">¶</a></dt>
+<dd><p>The number the next top-level run started outside any step takes.</p>
 <dl class="field-list simple">
 </dl>
 </dd></dl>
@@ -1188,13 +1372,26 @@ needed. On older versions it is a JSON file under that ObjectStorage path.</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.find_active_journal">
+<span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">find_active_journal</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#find_active_journal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.find_active_journal" title="Link to this definition">¶</a></dt>
+<dd><p>Return the journal already recording this run, without creating one.</p>
+<p>A journal set with <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.journal_scope" title="airflow.providers.common.ai.durable.journal.journal_scope"><code class="xref py py-func docutils literal notranslate"><span class="pre">journal_scope()</span></code></a> wins. Otherwise, inside a running task, this
+returns the task attempt’s journal if something already created it. <code class="docutils literal notranslate"><span class="pre">None</span></code> means no
+journal is recording: outside a task, or inside one where nothing has used durable
+execution yet.</p>
+<dl class="field-list simple">
+</dl>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="airflow.providers.common.ai.durable.journal.current_journal">
 <span class="sig-prename descclassname"><span class="pre">airflow.providers.common.ai.durable.journal.</span></span><span class="sig-name descname"><span class="pre">current_journal</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../../../_modules/airflow/providers/common/ai/durable/journal.html#current_journal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#airflow.providers.common.ai.durable.journal.current_journal" title="Link to this definition">¶</a></dt>
 <dd><p>Return the active journal, or <code class="docutils literal notranslate"><span class="pre">None</span></code> outside an Airflow task.</p>
 <p>A journal set with <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.journal_scope" title="airflow.providers.common.ai.durable.journal.journal_scope"><code class="xref py py-func docutils literal notranslate"><span class="pre">journal_scope()</span></code></a> wins. Otherwise, inside a running task,
 this returns the task attempt’s own journal, created on first use, which deletes the
 steps of each run as soon as it succeeds. Outside a task there is nothing to replay
-into, so durable execution is off and the agent runs as it would without it.</p>
+into, so durable execution is off and the agent runs as it would without it. To read
+the journal without creating it, use <a class="reference internal" href="#airflow.providers.common.ai.durable.journal.find_active_journal" title="airflow.providers.common.ai.durable.journal.find_active_journal"><code class="xref py py-func docutils literal notranslate"><span class="pre">find_active_journal()</span></code></a>.</p>
 <dl class="field-list simple">
 </dl>
 </dd></dl>
@@ -1284,6 +1481,11 @@ into, so durable execution is off and the agent runs as it would without it.</p>
 <li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.log"><code class="docutils literal notranslate"><span class="pre">log</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.StepKind"><code class="docutils literal notranslate"><span class="pre">StepKind</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.Unrecordable"><code class="docutils literal notranslate"><span class="pre">Unrecordable</span></code></a><ul>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.Unrecordable.value"><code class="docutils literal notranslate"><span class="pre">Unrecordable.value</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.Unrecordable.error"><code class="docutils literal notranslate"><span class="pre">Unrecordable.error</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep"><code class="docutils literal notranslate"><span class="pre">JournalStep</span></code></a><ul>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.durable_run"><code class="docutils literal notranslate"><span class="pre">JournalStep.durable_run</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.position"><code class="docutils literal notranslate"><span class="pre">JournalStep.position</span></code></a></li>
@@ -1294,9 +1496,11 @@ into, so durable execution is off and the agent runs as it would without it.</p>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.replayed"><code class="docutils literal notranslate"><span class="pre">JournalStep.replayed</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.payload"><code class="docutils literal notranslate"><span class="pre">JournalStep.payload</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.nested_runs"><code class="docutils literal notranslate"><span class="pre">JournalStep.nested_runs</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.count_as_replayed"><code class="docutils literal notranslate"><span class="pre">JournalStep.count_as_replayed()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.run"><code class="docutils literal notranslate"><span class="pre">JournalStep.run()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.executing"><code class="docutils literal notranslate"><span class="pre">JournalStep.executing()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.record"><code class="docutils literal notranslate"><span class="pre">JournalStep.record()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.cannot_record"><code class="docutils literal notranslate"><span class="pre">JournalStep.cannot_record()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.JournalStep.fail"><code class="docutils literal notranslate"><span class="pre">JournalStep.fail()</span></code></a></li>
 </ul>
 </li>
@@ -1312,10 +1516,16 @@ into, so durable execution is off and the agent runs as it would without it.</p>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.diverged"><code class="docutils literal notranslate"><span class="pre">DurableRun.diverged</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.position"><code class="docutils literal notranslate"><span class="pre">DurableRun.position</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.peek"><code class="docutils literal notranslate"><span class="pre">DurableRun.peek()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.reserve"><code class="docutils literal notranslate"><span class="pre">DurableRun.reserve()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.has_recorded"><code class="docutils literal notranslate"><span class="pre">DurableRun.has_recorded()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim_reserved"><code class="docutils literal notranslate"><span class="pre">DurableRun.claim_reserved()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.claim"><code class="docutils literal notranslate"><span class="pre">DurableRun.claim()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.run"><code class="docutils literal notranslate"><span class="pre">DurableRun.run()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.save"><code class="docutils literal notranslate"><span class="pre">DurableRun.save()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.fail"><code class="docutils literal notranslate"><span class="pre">DurableRun.fail()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.pause"><code class="docutils literal notranslate"><span class="pre">DurableRun.pause()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.complete"><code class="docutils literal notranslate"><span class="pre">DurableRun.complete()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.ask_model_again"><code class="docutils literal notranslate"><span class="pre">DurableRun.ask_model_again()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.cleanup"><code class="docutils literal notranslate"><span class="pre">DurableRun.cleanup()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableRun.reject"><code class="docutils literal notranslate"><span class="pre">DurableRun.reject()</span></code></a></li>
 </ul>
@@ -1323,15 +1533,21 @@ into, so durable execution is off and the agent runs as it would without it.</p>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal"><code class="docutils literal notranslate"><span class="pre">DurableJournal</span></code></a><ul>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.storage"><code class="docutils literal notranslate"><span class="pre">DurableJournal.storage</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.clean_up_after_run"><code class="docutils literal notranslate"><span class="pre">DurableJournal.clean_up_after_run</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.fail_on_unrecordable"><code class="docutils literal notranslate"><span class="pre">DurableJournal.fail_on_unrecordable</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.stats"><code class="docutils literal notranslate"><span class="pre">DurableJournal.stats</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.find_executing_tool_steps"><code class="docutils literal notranslate"><span class="pre">DurableJournal.find_executing_tool_steps()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.get_run_id"><code class="docutils literal notranslate"><span class="pre">DurableJournal.get_run_id()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.start_run"><code class="docutils literal notranslate"><span class="pre">DurableJournal.start_run()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.ask_model_again"><code class="docutils literal notranslate"><span class="pre">DurableJournal.ask_model_again()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.drop_runs_from"><code class="docutils literal notranslate"><span class="pre">DurableJournal.drop_runs_from()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.next_run_number"><code class="docutils literal notranslate"><span class="pre">DurableJournal.next_run_number</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.cleanup"><code class="docutils literal notranslate"><span class="pre">DurableJournal.cleanup()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.DurableJournal.log_summary"><code class="docutils literal notranslate"><span class="pre">DurableJournal.log_summary()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.build_task_storage"><code class="docutils literal notranslate"><span class="pre">build_task_storage()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.journal_scope"><code class="docutils literal notranslate"><span class="pre">journal_scope()</span></code></a></li>
+<li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.find_active_journal"><code class="docutils literal notranslate"><span class="pre">find_active_journal()</span></code></a></li>
 <li><a class="reference internal" href="#airflow.providers.common.ai.durable.journal.current_journal"><code class="docutils literal notranslate"><span class="pre">current_journal()</span></code></a></li>
 </ul>
 </li>
@@ -1516,7 +1732,7 @@ into, so durable execution is off and the agent runs as it would without it.</p>
     <script src="../../../../../../../_static/_gen/external/js/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="../../../../../../../_static/_gen/external/js/popper-2.11.8.min.js"></script>
     <script src="../../../../../../../_static/_gen/external/js/bootstrap-5.3.3.min.js"></script>
-        <script src="../../../../../../../_static/documentation_options.js?v=fc837d61"></script>
+        <script src="../../../../../../../_static/documentation_options.js?v=6efca38a"></script>
         <script src="../../../../../../../_static/doctools.js?v=fd6eb6e6"></script>
         <script src="../../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
         <script src="../../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>

@@ -1,0 +1,89 @@
+airflow.providers.modal.triggers.modal
+======================================
+
+.. py:module:: airflow.providers.modal.triggers.modal
+
+.. autoapi-nested-parse::
+
+   Trigger that waits for a ``@task.modal`` sandbox to exit.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   airflow.providers.modal.triggers.modal.ModalSandboxTrigger
+
+
+Module Contents
+---------------
+
+.. py:class:: ModalSandboxTrigger(sandbox_id, modal_conn_id = ModalHook.default_conn_name)
+
+   Bases: :py:obj:`airflow.triggers.base.BaseTrigger`
+
+
+   Wait for a ``@task.modal`` sandbox to exit, writing its output to the task log.
+
+   The trigger logs the function's output (the sandbox's stderr) line by line, waits for the
+   sandbox to exit, and then fires one event with the exit code. The operator reads the return
+   value in ``execute_complete``. Losing the output stream only stops the logging.
+
+   If the triggerer restarts, the trigger that takes over reads the output again from the
+   oldest part Modal still holds, so the task log can repeat lines logged before the restart.
+
+   :param sandbox_id: The ``sb-...`` id of the sandbox to wait for.
+   :param modal_conn_id: :ref:`Modal connection id <howto/connection:modal>` the sandbox was
+       created through.
+
+
+   .. py:attribute:: sandbox_id
+
+
+   .. py:attribute:: modal_conn_id
+      :value: 'modal_default'
+
+
+
+   .. py:method:: serialize()
+
+      Return the information needed to reconstruct this Trigger.
+
+      :return: Tuple of (class path, keyword arguments needed to re-instantiate).
+
+
+
+   .. py:method:: run()
+      :async:
+
+
+      Run the trigger in an asynchronous context.
+
+      The trigger should yield an Event whenever it wants to fire off
+      an event, and return None if it is finished. Single-event triggers
+      should thus yield and then immediately return.
+
+      If it yields, it is likely that it will be resumed very quickly,
+      but it may not be (e.g. if the workload is being moved to another
+      triggerer process, or a multi-event trigger was being used for a
+      single-event task defer).
+
+      In either case, Trigger classes should assume they will be persisted,
+      and then rely on cleanup() being called when they are no longer needed.
+
+
+
+   .. py:method:: on_kill()
+      :async:
+
+
+      Terminate the sandbox when a user kills the deferred task.
+
+      Runs on Airflow 3.3+, which calls it when a deferred task is marked failed, marked
+      success or cleared; older versions never call it. Without it, a sandbox whose task was
+      killed keeps running, and billing, until its own ``timeout``.
+
+
+

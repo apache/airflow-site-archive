@@ -19,6 +19,10 @@ Attributes
    airflow.providers.databricks.operators.databricks.XCOM_JOB_ID_KEY
    airflow.providers.databricks.operators.databricks.XCOM_RUN_PAGE_URL_KEY
    airflow.providers.databricks.operators.databricks.XCOM_STATEMENT_ID_KEY
+   airflow.providers.databricks.operators.databricks.RUN_NOT_FOUND_STATUS
+   airflow.providers.databricks.operators.databricks.TERMINATING_SETTLE_TIMEOUT_SECONDS
+   airflow.providers.databricks.operators.databricks.MIN_SETTLE_POLL_SECONDS
+   airflow.providers.databricks.operators.databricks.ACTIVE_RUN_LIFE_CYCLE_STATES
 
 
 Classes
@@ -41,6 +45,9 @@ Functions
 
 .. autoapisummary::
 
+   airflow.providers.databricks.operators.databricks.fetch_run_status
+   airflow.providers.databricks.operators.databricks.is_run_active
+   airflow.providers.databricks.operators.databricks.is_run_succeeded
    airflow.providers.databricks.operators.databricks.is_repair_reason_match_exist
    airflow.providers.databricks.operators.databricks.update_job_for_repair
 
@@ -66,6 +73,41 @@ Module Contents
 
 .. py:data:: XCOM_STATEMENT_ID_KEY
    :value: 'statement_id'
+
+
+.. py:data:: RUN_NOT_FOUND_STATUS
+   :value: 'NOT_FOUND:'
+
+
+.. py:data:: TERMINATING_SETTLE_TIMEOUT_SECONDS
+   :value: 60
+
+
+.. py:data:: MIN_SETTLE_POLL_SECONDS
+   :value: 0.1
+
+
+.. py:data:: ACTIVE_RUN_LIFE_CYCLE_STATES
+   :value: ('PENDING', 'QUEUED', 'RUNNING', 'TERMINATING', 'BLOCKED', 'WAITING_FOR_RETRY')
+
+
+.. py:function:: fetch_run_status(hook, run_id, *, poll_interval = 5, settle_timeout = TERMINATING_SETTLE_TIMEOUT_SECONDS)
+
+   Return the encoded status of ``run_id``, or a sentinel if its run history is gone.
+
+   ``TERMINATING`` is waited out because it does not say whether the run is finishing on its own or
+   being cancelled, and ``on_kill`` cancels asynchronously without clearing the stored id. On
+   timeout it is reported as-is, which counts as active: rejoining a slow run beats duplicating it.
+
+
+.. py:function:: is_run_active(status)
+
+   Whether an encoded status means the run is still going and can be reconnected to.
+
+
+.. py:function:: is_run_succeeded(status)
+
+   Whether an encoded status means the run finished successfully.
 
 
 .. py:function:: is_repair_reason_match_exist(operator, run_state)
@@ -1350,9 +1392,9 @@ Module Contents
 
 
 
-.. py:class:: DatabricksTaskBaseOperator(caller = 'DatabricksTaskBaseOperator', databricks_conn_id = 'databricks_default', databricks_task_key = '', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, **kwargs)
+.. py:class:: DatabricksTaskBaseOperator(caller = 'DatabricksTaskBaseOperator', databricks_conn_id = 'databricks_default', databricks_task_key = '', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, durable = None, **kwargs)
 
-   Bases: :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`abc.ABC`
+   Bases: :py:obj:`airflow.providers.common.compat.sdk.ResumableJobMixin`, :py:obj:`airflow.providers.common.compat.sdk.BaseOperator`, :py:obj:`abc.ABC`
 
 
    Base class for operators that are run as Databricks job tasks or tasks within a Databricks workflow.
@@ -1379,6 +1421,13 @@ Module Contents
    :param max_retries: Databricks task retry count. Use ``-1`` for unlimited retries.
    :param min_retry_interval_millis: Minimum interval between Databricks task retries.
    :param retry_on_timeout: Whether Databricks retries timed-out tasks.
+   :param durable: Whether to reconnect to an already-submitted run on retry instead of
+       submitting a new one. Only applies outside a ``DatabricksWorkflowTaskGroup``.
+
+
+   .. py:attribute:: external_id_key
+      :value: 'databricks_task_run_id'
+
 
 
    .. py:attribute:: template_fields
@@ -1486,6 +1535,56 @@ Module Contents
 
 
 
+   .. py:method:: submit_job(context)
+
+      Submit the job to the external system. Return its external ID.
+
+      The returned ID must not be ``None``, a ``None`` return is treated as
+      "no ID available" and the ID will not be persisted to task state.
+
+
+
+   .. py:method:: get_job_status(external_id, context)
+
+      Query the external system for the current job status.
+
+      ``context`` is provided so implementations can use it if needed to implement advanced features such as:
+
+      - cache terminal status to ``task_state_store`` when the remote resource may be
+        ephemeral (e.g. a K8s driver pod that gets garbage-collected after completion),
+
+
+
+   .. py:method:: is_job_active(status)
+
+      Return True if the job is still running and can be reconnected to.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"RUNNING"``, ``"Pending"``, ``"ContainerCreating"``).
+
+
+
+   .. py:method:: is_job_succeeded(status)
+
+      Return True if the job completed successfully.
+
+      ``status`` is a raw string returned by the external system — not an Airflow enum.
+      Its values are backend-specific (e.g. ``"FINISHED"``, ``"Succeeded"``).
+
+
+
+   .. py:method:: poll_until_complete(external_id, context)
+
+      Block until the job reaches a terminal state. Raise on failure.
+
+
+
+   .. py:method:: get_job_result(external_id, context)
+
+      Return the job result after completion. Return None if not applicable.
+
+
+
    .. py:method:: execute(context)
 
       Execute the operator. Launch the job and monitor it if wait_for_termination is set to True.
@@ -1504,7 +1603,7 @@ Module Contents
 
 
 
-.. py:class:: DatabricksNotebookOperator(notebook_path, source, databricks_conn_id = 'databricks_default', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, notebook_packages = None, notebook_params = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, **kwargs)
+.. py:class:: DatabricksNotebookOperator(notebook_path, source, databricks_conn_id = 'databricks_default', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, notebook_packages = None, notebook_params = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, durable = None, **kwargs)
 
    Bases: :py:obj:`DatabricksTaskBaseOperator`
 
@@ -1544,6 +1643,8 @@ Module Contents
    :param max_retries: Databricks task retry count. Use ``-1`` for unlimited retries.
    :param min_retry_interval_millis: Minimum interval between Databricks task retries.
    :param retry_on_timeout: Whether Databricks retries timed-out tasks.
+   :param durable: Whether to reconnect to an already-submitted run on retry instead of
+       submitting a new one. Only applies outside a ``DatabricksWorkflowTaskGroup``.
 
 
    .. py:attribute:: template_fields
@@ -1570,7 +1671,7 @@ Module Contents
    .. py:attribute:: notebook_params
 
 
-.. py:class:: DatabricksTaskOperator(task_config, databricks_conn_id = 'databricks_default', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, **kwargs)
+.. py:class:: DatabricksTaskOperator(task_config, databricks_conn_id = 'databricks_default', databricks_retry_args = None, databricks_retry_delay = 1, databricks_retry_limit = 3, deferrable = conf.getboolean('operators', 'default_deferrable', fallback=False), existing_cluster_id = '', job_cluster_key = '', new_cluster = None, polling_period_seconds = 5, wait_for_termination = True, workflow_run_metadata = None, max_retries = None, min_retry_interval_millis = None, retry_on_timeout = None, durable = None, **kwargs)
 
    Bases: :py:obj:`DatabricksTaskBaseOperator`
 
@@ -1600,6 +1701,8 @@ Module Contents
    :param max_retries: Databricks task retry count, overriding ``task_config`` when set.
    :param min_retry_interval_millis: Minimum retry interval, overriding ``task_config`` when set.
    :param retry_on_timeout: Whether Databricks retries timed-out tasks, overriding ``task_config`` when set.
+   :param durable: Whether to reconnect to an already-submitted run on retry instead of
+       submitting a new one. Only applies outside a ``DatabricksWorkflowTaskGroup``.
 
 
    .. py:attribute:: CALLER
